@@ -19,7 +19,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private const string CommandName = "/pmycommand";
 
-    public Configuration Configuration { get; init; }
+    public Configuration.Configuration Configuration { get; init; }
 
     public readonly WindowSystem WindowSystem = new("TataruLink");
     private ConfigWindow ConfigWindow { get; init; }
@@ -27,35 +27,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public Plugin()
     {
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        // you might normally want to embed resources and load them from the manifest stream
-        var goatImagePath = Path.Combine(PluginInterface.AssemblyLocation.Directory?.FullName!, "goat.png");
-
-        ConfigWindow = new ConfigWindow(this);
-        MainWindow = new MainWindow(this, goatImagePath);
-
-        WindowSystem.AddWindow(ConfigWindow);
-        WindowSystem.AddWindow(MainWindow);
-
-        CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
-        {
-            HelpMessage = "A useful message to display in /xlhelp"
-        });
-
-        PluginInterface.UiBuilder.Draw += DrawUI;
-
-        // This adds a button to the plugin installer entry of this plugin which allows
-        // to toggle the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
-
-        // Adds another button that is doing the same but for the main ui of the plugin
-        PluginInterface.UiBuilder.OpenMainUi += ToggleMainUI;
-
-        // Add a simple message to the log with level set to information
-        // Use /xllog to open the log window in-game
-        // Example Output: 00:57:54.959 | INF | [TataruLink] ===A cool log message from Sample Plugin===
-        Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
     }
 
     public void Dispose()

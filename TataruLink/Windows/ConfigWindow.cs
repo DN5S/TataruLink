@@ -1,59 +1,69 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
+using TataruLink.Windows.Interfaces;
+using TataruLink.Windows.Partials;
 
 namespace TataruLink.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
-    private Configuration Configuration;
+    private readonly Configuration.Configuration configuration;
+    private readonly List<IConfigUIPartial> settingPartials = [];
+    
+    // TODO: Move hardcoded strings to a resource file.
+    private readonly List<string> tabNames = ["General", "Chat Types"];
 
-    // We give this window a constant ID using ###
-    // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
-    // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Plugin plugin) : base("A Wonderful Configuration Window###With a constant ID")
+    public ConfigWindow(Plugin plugin) : base("TataruLink Settings")
     {
-        Flags = ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar |
-                ImGuiWindowFlags.NoScrollWithMouse;
+        this.SizeConstraints = new WindowSizeConstraints
+        {
+            MinimumSize = new Vector2(400, 400),
+            MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
+        };
 
-        Size = new Vector2(232, 90);
-        SizeCondition = ImGuiCond.Always;
+        this.configuration = plugin.Configuration;
 
-        Configuration = plugin.Configuration;
+        // Initialize and add all UI partials
+        this.settingPartials.Add(new GeneralSettingsUI(this.configuration));
+        // TODO: this.settingPartials.Add(new ChatTypesUI(this.configuration));
     }
 
     public void Dispose() { }
 
-    public override void PreDraw()
-    {
-        // Flags must be added or removed before Draw() is being called, or they won't apply
-        if (Configuration.IsConfigWindowMovable)
-        {
-            Flags &= ~ImGuiWindowFlags.NoMove;
-        }
-        else
-        {
-            Flags |= ImGuiWindowFlags.NoMove;
-        }
-    }
-
     public override void Draw()
     {
-        // can't ref a property, so use a local copy
-        var configValue = Configuration.SomePropertyToBeSavedAndWithADefault;
-        if (ImGui.Checkbox("Random Config Bool", ref configValue))
+        var configChanged = false;
+
+        if (ImGui.BeginTabBar("SettingTabs"))
         {
-            Configuration.SomePropertyToBeSavedAndWithADefault = configValue;
-            // can save immediately on change, if you don't want to provide a "Save and Close" button
-            Configuration.Save();
+            // Draw General Tab
+            if (ImGui.BeginTabItem(this.tabNames[0]))
+            {
+                if(this.settingPartials.Count > 0)
+                    configChanged |= this.settingPartials[0].Draw();
+                ImGui.EndTabItem();
+            }
+
+            // Draw Chat Types Tab
+            // TODO: Create ChatTypesUI.cs and uncomment this
+            /*
+            if (ImGui.BeginTabItem(this.tabNames[1]))
+            {
+                if(this.settingPartials.Count > 1)
+                    configChanged |= this.settingPartials[1].Draw();
+                ImGui.EndTabItem();
+            }
+            */
+            
+            ImGui.EndTabBar();
         }
 
-        var movable = Configuration.IsConfigWindowMovable;
-        if (ImGui.Checkbox("Movable Config Window", ref movable))
+        if (configChanged)
         {
-            Configuration.IsConfigWindowMovable = movable;
-            Configuration.Save();
+            configuration.Save();
         }
     }
 }
