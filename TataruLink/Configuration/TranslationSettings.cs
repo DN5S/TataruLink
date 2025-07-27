@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Dalamud.Game.Text;
+using TataruLink.Localization;
 
 namespace TataruLink.Configuration;
 
@@ -58,7 +59,7 @@ public class TranslationSettings
     public Dictionary<string, Dictionary<XivChatType, bool>> CategorizedChatTypes { get; set; } = new()
     {
         // Category: General Communication
-        { "General", new Dictionary<XivChatType, bool>
+        { Strings.CategorizedChatTypes_General, new Dictionary<XivChatType, bool>
             {
                 { XivChatType.Say, true }, { XivChatType.Shout, false }, { XivChatType.Yell, false },
                 { XivChatType.Party, true }, { XivChatType.CrossParty, true }, { XivChatType.Alliance, true },
@@ -69,7 +70,7 @@ public class TranslationSettings
         },
         
         // Category: Linkshells
-        { "Linkshells", new Dictionary<XivChatType, bool>
+        { Strings.CategorizedChatTypes_Linkshells, new Dictionary<XivChatType, bool>
             {
                 { XivChatType.Ls1, false }, { XivChatType.Ls2, false }, { XivChatType.Ls3, false }, { XivChatType.Ls4, false },
                 { XivChatType.Ls5, false }, { XivChatType.Ls6, false }, { XivChatType.Ls7, false }, { XivChatType.Ls8, false }
@@ -77,7 +78,7 @@ public class TranslationSettings
         },
 
         // Category: Cross-world Linkshells
-        { "Cross-world Linkshells", new Dictionary<XivChatType, bool>
+        { Strings.CategorizedChatTypes_CWLS, new Dictionary<XivChatType, bool>
             {
                 { XivChatType.CrossLinkShell1, false }, { XivChatType.CrossLinkShell2, false }, { XivChatType.CrossLinkShell3, false }, { XivChatType.CrossLinkShell4, false },
                 { XivChatType.CrossLinkShell5, false }, { XivChatType.CrossLinkShell6, false }, { XivChatType.CrossLinkShell7, false }, { XivChatType.CrossLinkShell8, false }
@@ -85,7 +86,7 @@ public class TranslationSettings
         },
 
         // Category: System & Emotes
-        { "System & Emotes", new Dictionary<XivChatType, bool>
+        { Strings.CategorizedChatTypes_System_and_Emotes, new Dictionary<XivChatType, bool>
             {
                 { XivChatType.StandardEmote, false }, { XivChatType.CustomEmote, false },
                 { XivChatType.Echo, true }, { XivChatType.SystemMessage, false }, { XivChatType.SystemError, false },
@@ -96,7 +97,7 @@ public class TranslationSettings
         },
         
         // Category: NPC Dialogue
-        { "NPC", new Dictionary<XivChatType, bool>
+        { Strings.CategorizedChatTypes_NPC, new Dictionary<XivChatType, bool>
             {
                 { XivChatType.NPCDialogue, false }, { XivChatType.NPCDialogueAnnouncements, false }
             }
@@ -110,7 +111,7 @@ public class TranslationSettings
     /// <summary>
     /// Determines whether to translate messages sent by the player.
     /// </summary>
-    public bool TranslateMyOwnMessages { get; set; } = false;
+    public bool TranslateMyOwnMessages { get; set; }
     
     // TODO: Add Rules Here
     

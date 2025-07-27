@@ -60,6 +60,51 @@ namespace TataruLink.Localization {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Cross-world Linkshells.
+        /// </summary>
+        internal static string CategorizedChatTypes_CWLS {
+            get {
+                return ResourceManager.GetString("CategorizedChatTypes_CWLS", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to General.
+        /// </summary>
+        internal static string CategorizedChatTypes_General {
+            get {
+                return ResourceManager.GetString("CategorizedChatTypes_General", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Linkshells.
+        /// </summary>
+        internal static string CategorizedChatTypes_Linkshells {
+            get {
+                return ResourceManager.GetString("CategorizedChatTypes_Linkshells", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to NPC.
+        /// </summary>
+        internal static string CategorizedChatTypes_NPC {
+            get {
+                return ResourceManager.GetString("CategorizedChatTypes_NPC", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System &amp; Emotes.
+        /// </summary>
+        internal static string CategorizedChatTypes_System_and_Emotes {
+            get {
+                return ResourceManager.GetString("CategorizedChatTypes_System_and_Emotes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Chat Types.
         /// </summary>
         internal static string ConfigTabChatTypes {

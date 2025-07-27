@@ -54,4 +54,19 @@
     <data name="GeneralDeepLKey" xml:space="preserve">
         <value>DeepL API Key</value>
     </data>
+    <data name="CategorizedChatTypes_General" xml:space="preserve">
+        <value>General</value>
+    </data>
+    <data name="CategorizedChatTypes_Linkshells" xml:space="preserve">
+        <value>Linkshells</value>
+    </data>
+    <data name="CategorizedChatTypes_CWLS" xml:space="preserve">
+        <value>Cross-world Linkshells</value>
+    </data>
+    <data name="CategorizedChatTypes_System_and_Emotes" xml:space="preserve">
+        <value>System &amp; Emotes</value>
+    </data>
+    <data name="CategorizedChatTypes_NPC" xml:space="preserve">
+        <value>NPC</value>
+    </data>
 </root>
