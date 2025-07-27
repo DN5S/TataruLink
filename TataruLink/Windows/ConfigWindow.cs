@@ -28,7 +28,7 @@ public class ConfigWindow : Window, IDisposable
 
         // Initialize and add all UI partials
         settingPartials.Add(new GeneralSettingsUI(configuration));
-        // TODO: this.settingPartials.Add(new ChatTypesUI(this.configuration));
+        settingPartials.Add(new ChatTypesUI(configuration));
     }
 
     public void Dispose() { }
@@ -40,23 +40,20 @@ public class ConfigWindow : Window, IDisposable
         if (ImGui.BeginTabBar("Setting Tabs"))
         {
             // Draw General Tab
-            if (ImGui.BeginTabItem(this.tabNames[0]))
+            if (ImGui.BeginTabItem(tabNames[0]))
             {
-                if(this.settingPartials.Count > 0)
-                    configChanged |= this.settingPartials[0].Draw();
+                if(settingPartials.Count > 0)
+                    configChanged |= settingPartials[0].Draw();
                 ImGui.EndTabItem();
             }
 
             // Draw Chat Types Tab
-            // TODO: Create ChatTypesUI.cs and uncomment this
-            /*
-            if (ImGui.BeginTabItem(this.tabNames[1]))
+            if (ImGui.BeginTabItem(tabNames[1]))
             {
-                if(this.settingPartials.Count > 1)
-                    configChanged |= this.settingPartials[1].Draw();
+                if(settingPartials.Count > 1)
+                    configChanged |= settingPartials[1].Draw();
                 ImGui.EndTabItem();
             }
-            */
             
             ImGui.EndTabBar();
         }

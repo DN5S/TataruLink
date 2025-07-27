@@ -53,16 +53,54 @@ public class TranslationSettings
     #region Translation Targets
 
     /// <summary>
-    /// Determines whether to translate messages for each chat type.
+    /// Determines whether to translate messages for each chat type, grouped by category.
     /// </summary>
-    public Dictionary<XivChatType, bool> EnabledChatTypes { get; set; } = new()
+    public Dictionary<string, Dictionary<XivChatType, bool>> CategorizedChatTypes { get; set; } = new()
     {
-        { XivChatType.Say, true }, { XivChatType.Party, true }, { XivChatType.Alliance, true },
-        { XivChatType.TellIncoming, true }, { XivChatType.FreeCompany, true },
-        { XivChatType.Yell, false }, { XivChatType.Shout, false }, { XivChatType.Ls1, false },
-        { XivChatType.Ls2, false }, { XivChatType.Ls3, false }, { XivChatType.Ls4, false },
-        { XivChatType.Ls5, false }, { XivChatType.Ls6, false }, { XivChatType.Ls7, false },
-        { XivChatType.Ls8, false }
+        // Category: General Communication
+        { "General", new Dictionary<XivChatType, bool>
+            {
+                { XivChatType.Say, true }, { XivChatType.Shout, false }, { XivChatType.Yell, false },
+                { XivChatType.Party, true }, { XivChatType.CrossParty, true }, { XivChatType.Alliance, true },
+                { XivChatType.TellIncoming, true }, { XivChatType.TellOutgoing, false },
+                { XivChatType.FreeCompany, true }, { XivChatType.NoviceNetwork, false },
+                { XivChatType.PvPTeam, false }
+            }
+        },
+        
+        // Category: Linkshells
+        { "Linkshells", new Dictionary<XivChatType, bool>
+            {
+                { XivChatType.Ls1, false }, { XivChatType.Ls2, false }, { XivChatType.Ls3, false }, { XivChatType.Ls4, false },
+                { XivChatType.Ls5, false }, { XivChatType.Ls6, false }, { XivChatType.Ls7, false }, { XivChatType.Ls8, false }
+            }
+        },
+
+        // Category: Cross-world Linkshells
+        { "Cross-world Linkshells", new Dictionary<XivChatType, bool>
+            {
+                { XivChatType.CrossLinkShell1, false }, { XivChatType.CrossLinkShell2, false }, { XivChatType.CrossLinkShell3, false }, { XivChatType.CrossLinkShell4, false },
+                { XivChatType.CrossLinkShell5, false }, { XivChatType.CrossLinkShell6, false }, { XivChatType.CrossLinkShell7, false }, { XivChatType.CrossLinkShell8, false }
+            }
+        },
+
+        // Category: System & Emotes
+        { "System & Emotes", new Dictionary<XivChatType, bool>
+            {
+                { XivChatType.StandardEmote, false }, { XivChatType.CustomEmote, false },
+                { XivChatType.Echo, true }, { XivChatType.SystemMessage, false }, { XivChatType.SystemError, false },
+                { XivChatType.GatheringSystemMessage, false }, { XivChatType.ErrorMessage, false },
+                { XivChatType.RetainerSale, false }, { XivChatType.Debug, false }, { XivChatType.Notice, false },
+                { XivChatType.Urgent, false }
+            }
+        },
+        
+        // Category: NPC Dialogue
+        { "NPC", new Dictionary<XivChatType, bool>
+            {
+                { XivChatType.NPCDialogue, false }, { XivChatType.NPCDialogueAnnouncements, false }
+            }
+        }
     };
 
     #endregion
