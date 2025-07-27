@@ -1,5 +1,6 @@
 ﻿using System;
 using ImGuiNET;
+using TataruLink.Localization;
 using TataruLink.Configuration;
 using TataruLink.Windows.Interfaces;
 
@@ -15,7 +16,7 @@ public class GeneralSettingsUI(Configuration.Configuration configuration) : ICon
         #region Core Controls
 
         var enableTranslations = translationSettings.EnableTranslations;
-        if (ImGui.Checkbox("Enable Translations", ref enableTranslations))
+        if (ImGui.Checkbox(Strings.GeneralEnableTranslations, ref enableTranslations))
         {
             translationSettings.EnableTranslations = enableTranslations;
             configChanged = true;
@@ -24,14 +25,14 @@ public class GeneralSettingsUI(Configuration.Configuration configuration) : ICon
         ImGui.Separator();
 
         var enableAutomaticChatTranslation = translationSettings.EnableAutomaticChatTranslation;
-        if (ImGui.Checkbox("Enable Automatic Chat Translation", ref enableAutomaticChatTranslation))
+        if (ImGui.Checkbox(Strings.GeneralEnableAutoChat, ref enableAutomaticChatTranslation))
         {
             translationSettings.EnableAutomaticChatTranslation = enableAutomaticChatTranslation;
             configChanged = true;
         }
 
         var translateMyOwnMessages = translationSettings.TranslateMyOwnMessages;
-        if (ImGui.Checkbox("Translate My Own Messages", ref translateMyOwnMessages))
+        if (ImGui.Checkbox(Strings.GeneralTranslateOwn, ref translateMyOwnMessages))
         {
             translationSettings.TranslateMyOwnMessages = translateMyOwnMessages;
             configChanged = true;
@@ -46,7 +47,7 @@ public class GeneralSettingsUI(Configuration.Configuration configuration) : ICon
 
         var engineNames = Enum.GetNames<TranslationEngine>();
         var currentEngineIndex = (int)translationSettings.Engine;
-        if (ImGui.Combo("Engine", ref currentEngineIndex, engineNames, engineNames.Length))
+        if (ImGui.Combo(Strings.GeneralEngine, ref currentEngineIndex, engineNames, engineNames.Length))
         {
             translationSettings.Engine = (TranslationEngine)currentEngineIndex;
             configChanged = true;
@@ -54,14 +55,14 @@ public class GeneralSettingsUI(Configuration.Configuration configuration) : ICon
 
         // TODO: Replace with a real language list from a service or a static list.
         var translateTo = translationSettings.TranslateTo;
-        if (ImGui.InputText("Translate To", ref translateTo, 5))
+        if (ImGui.InputText(Strings.GeneralTranslateTo, ref translateTo, 5))
         {
             translationSettings.TranslateTo = translateTo;
             configChanged = true;
         }
 
         var enableLanguageDetection = translationSettings.EnableLanguageDetection;
-        if (ImGui.Checkbox("Enable Language Detection", ref enableLanguageDetection))
+        if (ImGui.Checkbox(Strings.GeneralEnableLangDetect, ref enableLanguageDetection))
         {
             translationSettings.EnableLanguageDetection = enableLanguageDetection;
             configChanged = true;
@@ -70,7 +71,7 @@ public class GeneralSettingsUI(Configuration.Configuration configuration) : ICon
         if (!translationSettings.EnableLanguageDetection)
         {
             var fromLanguage = translationSettings.FromLanguage;
-            if (ImGui.InputText("From Language", ref fromLanguage, 5))
+            if (ImGui.InputText(Strings.GeneralFromLanguage, ref fromLanguage, 5))
             {
                 translationSettings.FromLanguage = fromLanguage;
                 configChanged = true;
@@ -84,13 +85,15 @@ public class GeneralSettingsUI(Configuration.Configuration configuration) : ICon
 
         #region API Keys
 
-        ImGui.Text("API Keys");
+        ImGui.Text(Strings.GeneralAPIKeys);
 
         var apiSettings = configuration.Apis;
         var deepLKey = apiSettings.DeepLApiKey ?? string.Empty;
-        if (!ImGui.InputText("DeepL API Key", ref deepLKey, 100, ImGuiInputTextFlags.Password)) return configChanged;
-        apiSettings.DeepLApiKey = deepLKey;
-        configChanged = true;
+        if (ImGui.InputText(Strings.GeneralDeepLKey, ref deepLKey, 100, ImGuiInputTextFlags.Password))
+        {
+            apiSettings.DeepLApiKey = deepLKey;
+            configChanged = true;
+        }
 
         #endregion
 

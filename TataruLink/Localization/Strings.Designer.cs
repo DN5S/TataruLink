@@ -58,5 +58,113 @@ namespace TataruLink.Localization {
                 resourceCulture = value;
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Chat Types.
+        /// </summary>
+        internal static string ConfigTabChatTypes {
+            get {
+                return ResourceManager.GetString("ConfigTabChatTypes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to General.
+        /// </summary>
+        internal static string ConfigTabGeneral {
+            get {
+                return ResourceManager.GetString("ConfigTabGeneral", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to TataruLink Settings.
+        /// </summary>
+        internal static string ConfigWindowTitle {
+            get {
+                return ResourceManager.GetString("ConfigWindowTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to API Keys.
+        /// </summary>
+        internal static string GeneralAPIKeys {
+            get {
+                return ResourceManager.GetString("GeneralAPIKeys", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to DeepL API Key.
+        /// </summary>
+        internal static string GeneralDeepLKey {
+            get {
+                return ResourceManager.GetString("GeneralDeepLKey", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enable Automatic Chat Translation.
+        /// </summary>
+        internal static string GeneralEnableAutoChat {
+            get {
+                return ResourceManager.GetString("GeneralEnableAutoChat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enable Language Detection.
+        /// </summary>
+        internal static string GeneralEnableLangDetect {
+            get {
+                return ResourceManager.GetString("GeneralEnableLangDetect", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enable Translations.
+        /// </summary>
+        internal static string GeneralEnableTranslations {
+            get {
+                return ResourceManager.GetString("GeneralEnableTranslations", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Engine.
+        /// </summary>
+        internal static string GeneralEngine {
+            get {
+                return ResourceManager.GetString("GeneralEngine", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to From Language.
+        /// </summary>
+        internal static string GeneralFromLanguage {
+            get {
+                return ResourceManager.GetString("GeneralFromLanguage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Translate My Own Messages.
+        /// </summary>
+        internal static string GeneralTranslateOwn {
+            get {
+                return ResourceManager.GetString("GeneralTranslateOwn", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Translate To.
+        /// </summary>
+        internal static string GeneralTranslateTo {
+            get {
+                return ResourceManager.GetString("GeneralTranslateTo", resourceCulture);
+            }
+        }
     }
 }

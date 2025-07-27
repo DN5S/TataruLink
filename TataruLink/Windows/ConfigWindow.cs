@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
+using TataruLink.Localization;
 using TataruLink.Windows.Interfaces;
 using TataruLink.Windows.Partials;
 
@@ -13,21 +14,20 @@ public class ConfigWindow : Window, IDisposable
     private readonly Configuration.Configuration configuration;
     private readonly List<IConfigUIPartial> settingPartials = [];
     
-    // TODO: Move hardcoded strings to a resource file.
-    private readonly List<string> tabNames = ["General", "Chat Types"];
+    private readonly List<string> tabNames = [Strings.ConfigTabGeneral, Strings.ConfigTabChatTypes];
 
-    public ConfigWindow(Plugin plugin) : base("TataruLink Settings")
+    public ConfigWindow(Plugin plugin) : base(Strings.ConfigWindowTitle)
     {
-        this.SizeConstraints = new WindowSizeConstraints
+        SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = new Vector2(400, 400),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
 
-        this.configuration = plugin.Configuration;
+        configuration = plugin.Configuration;
 
         // Initialize and add all UI partials
-        this.settingPartials.Add(new GeneralSettingsUI(this.configuration));
+        settingPartials.Add(new GeneralSettingsUI(configuration));
         // TODO: this.settingPartials.Add(new ChatTypesUI(this.configuration));
     }
 
@@ -37,7 +37,7 @@ public class ConfigWindow : Window, IDisposable
     {
         var configChanged = false;
 
-        if (ImGui.BeginTabBar("SettingTabs"))
+        if (ImGui.BeginTabBar("Setting Tabs"))
         {
             // Draw General Tab
             if (ImGui.BeginTabItem(this.tabNames[0]))

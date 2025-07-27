@@ -18,4 +18,40 @@
     <resheader name="writer">
         <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
     </resheader>
+    <data name="ConfigWindowTitle" xml:space="preserve">
+        <value>TataruLink Settings</value>
+    </data>
+    <data name="ConfigTabGeneral" xml:space="preserve">
+        <value>General</value>
+    </data>
+    <data name="ConfigTabChatTypes" xml:space="preserve">
+        <value>Chat Types</value>
+    </data>
+    <data name="GeneralEnableTranslations" xml:space="preserve">
+        <value>Enable Translations</value>
+    </data>
+    <data name="GeneralEnableAutoChat" xml:space="preserve">
+        <value>Enable Automatic Chat Translation</value>
+    </data>
+    <data name="GeneralTranslateOwn" xml:space="preserve">
+        <value>Translate My Own Messages</value>
+    </data>
+    <data name="GeneralEngine" xml:space="preserve">
+        <value>Engine</value>
+    </data>
+    <data name="GeneralTranslateTo" xml:space="preserve">
+        <value>Translate To</value>
+    </data>
+    <data name="GeneralEnableLangDetect" xml:space="preserve">
+        <value>Enable Language Detection</value>
+    </data>
+    <data name="GeneralFromLanguage" xml:space="preserve">
+        <value>From Language</value>
+    </data>
+    <data name="GeneralAPIKeys" xml:space="preserve">
+        <value>API Keys</value>
+    </data>
+    <data name="GeneralDeepLKey" xml:space="preserve">
+        <value>DeepL API Key</value>
+    </data>
 </root>
