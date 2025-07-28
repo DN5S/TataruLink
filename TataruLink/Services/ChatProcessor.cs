@@ -20,30 +20,33 @@ public class ChatProcessor(
     : IChatProcessor
 {
     /// <inheritdoc />
-    public async Task<TranslationRecord?> ProcessMessageAsync(XivChatType type, string senderName, string message)
+    public bool FilterMessage(XivChatType type, string senderName, string message)
     {
-        // 1. Apply all filters to determine if this message should be translated
         foreach (var filter in filters)
         {
-            if (!filter.ShouldTranslate(type, senderName, message))
-            {
-                log.Debug($"Message filtered out by {filter.GetType().Name}: \"{message}\"");
-                return null;
-            }
+            // This now runs on the main thread, so SelfMessageFilter is safe.
+            if (filter.ShouldTranslate(type, senderName, message)) continue;
+            log.Debug($"Message filtered out by {filter.GetType().Name}: \"{message}\"");
+            return false;
         }
-        
+        return true;
+    }
+    
+    /// <inheritdoc />
+    public async Task<TranslationRecord?> ProcessMessageAsync(XivChatType type, string senderName, string message)
+    {
         log.Debug($"Message passed all filters. Proceeding to translation: \"{message}\"");
         
-        // 2. Determine translation parameters from configuration
+        // 1. Determine translation parameters from configuration
         var sourceLanguage = configuration.Translation.EnableLanguageDetection 
                                  ? "auto"
                                  : configuration.Translation.FromLanguage;
         var targetLanguage = configuration.Translation.TranslateTo;
 
-        // 3. Execute translation via TranslationService
+        // 2. Execute translation via TranslationService
         var translationResult = await translationService.TranslateAsync(message, sourceLanguage, targetLanguage);
 
-        // 4. If translation is successful, enrich with chat context that only this layer knows
+        // 3. If translation is successful, enrich with chat context that only this layer knows
         if (translationResult != null)
         {
             // Instead of creating a new record, update the existing one with context information
@@ -67,5 +70,4 @@ public class ChatProcessor(
         log.Debug($"Translation failed or returned null for message: \"{message}\"");
         return null;
     }
-
 }

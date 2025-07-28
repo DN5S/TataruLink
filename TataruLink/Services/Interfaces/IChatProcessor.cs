@@ -11,6 +11,13 @@ namespace TataruLink.Services.Interfaces;
 public interface IChatProcessor
 {
     /// <summary>
+    /// Synchronously runs all filters to determine if a message should be translated.
+    /// This method MUST be called from the main framework thread.
+    /// </summary>
+    /// <returns>True if the message passed all filters, otherwise false.</returns>
+    bool FilterMessage(XivChatType type, string senderName, string message);
+    
+    /// <summary>
     /// Processes a raw chat message to determine if it needs translation and performs it if necessary.
     /// </summary>
     /// <param name="type">The type of the chat message.</param>

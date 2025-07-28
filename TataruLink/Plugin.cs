@@ -180,6 +180,11 @@ public sealed class Plugin : IDalamudPlugin
         var senderText = sender.TextValue;
         var messageText = message.TextValue;
         
+        if (!chatProcessor.FilterMessage(type, senderText, messageText))
+        {
+            return; // Message was filtered out, do nothing further.
+        }
+        
         Task.Run(async () =>
         {
             try
