@@ -1,19 +1,13 @@
-﻿using System.Linq;
+﻿// File: TataruLink/Windows/Partials/ChatTypesUI.cs
+using System.Linq;
 using ImGuiNET;
 using TataruLink.Localization;
 using TataruLink.Windows.Interfaces;
 
 namespace TataruLink.Windows.Partials;
 
-public class ChatTypesUI : IConfigUIPartial
+public class ChatTypesWindow(Configuration.Configuration configuration) : IConfigWindowPartial
 {
-    private readonly Configuration.Configuration configuration;
-
-    public ChatTypesUI(Configuration.Configuration configuration)
-    {
-        this.configuration = configuration;
-    }
-
     public bool Draw()
     {
         var configChanged = false;

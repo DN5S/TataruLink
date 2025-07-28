@@ -1,15 +1,23 @@
-﻿using System;
+﻿// File: TataruLink/Configuration/TranslationSettings.cs
+using System;
 using System.Collections.Generic;
 using Dalamud.Game.Text;
 using TataruLink.Localization;
 
 namespace TataruLink.Configuration;
 
+
 public enum TranslationEngine
 {
     Google,
     DeepL
     // TODO: Add other translation engines.
+}
+
+[Serializable]
+public class ApiSettings
+{
+    public string? DeepLApiKey { get; set; }
 }
 
 [Serializable]

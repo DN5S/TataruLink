@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: TataruLink/Windows/ConfigWindow.cs
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
@@ -12,7 +13,7 @@ namespace TataruLink.Windows;
 public class ConfigWindow : Window, IDisposable
 {
     private readonly Configuration.Configuration configuration;
-    private readonly List<IConfigUIPartial> settingPartials = [];
+    private readonly List<IConfigWindowPartial> settingPartials = [];
     
     private readonly List<string> tabNames = [Strings.ConfigTabGeneral, Strings.ConfigTabChatTypes];
 
@@ -27,8 +28,8 @@ public class ConfigWindow : Window, IDisposable
         configuration = plugin.Configuration;
 
         // Initialize and add all UI partials
-        settingPartials.Add(new GeneralSettingsUI(configuration));
-        settingPartials.Add(new ChatTypesUI(configuration));
+        settingPartials.Add(new GeneralSettingsWindow(configuration));
+        settingPartials.Add(new ChatTypesWindow(configuration));
     }
 
     public void Dispose() { }

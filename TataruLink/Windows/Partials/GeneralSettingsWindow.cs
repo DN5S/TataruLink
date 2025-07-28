@@ -1,4 +1,5 @@
-﻿using System;
+﻿// TataruLink/Windows/Partials/GeneralSettingsUI.cs
+using System;
 using ImGuiNET;
 using TataruLink.Localization;
 using TataruLink.Configuration;
@@ -6,7 +7,7 @@ using TataruLink.Windows.Interfaces;
 
 namespace TataruLink.Windows.Partials;
 
-public class GeneralSettingsUI(Configuration.Configuration configuration) : IConfigUIPartial
+public class GeneralSettingsWindow(Configuration.Configuration configuration) : IConfigWindowPartial
 {
     public bool Draw()
     {

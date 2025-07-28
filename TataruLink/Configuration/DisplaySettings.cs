@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: TataruLink/Configuration/DisplaySettings.cs
+using System;
 
 namespace TataruLink.Configuration;
 

@@ -9,9 +9,7 @@
     <RootNamespace>TataruLink</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Folder Include="Core\" />
     <Folder Include="Models\" />
-    <Folder Include="Services\" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Update="Localization\Strings.resx">

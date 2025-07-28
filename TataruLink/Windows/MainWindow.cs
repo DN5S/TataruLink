@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: TataruLink/Windows/MainWindow.cs
+using System;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
 

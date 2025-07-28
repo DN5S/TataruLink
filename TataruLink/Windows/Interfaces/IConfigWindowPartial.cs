@@ -2,9 +2,9 @@
 namespace TataruLink.Windows.Interfaces;
 
 /// <summary>
-/// Defines the contract for a UI partial that can be drawn within a window.
+/// Defines a UI partial that can be drawn within a window.
 /// </summary>
-public interface IConfigUIPartial
+public interface IConfigWindowPartial
 {
     /// <summary>
     /// Draws the UI elements for this partial.

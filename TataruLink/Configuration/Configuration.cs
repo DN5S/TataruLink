@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: TataruLink/Configuration/Configuration.cs
+using System;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 

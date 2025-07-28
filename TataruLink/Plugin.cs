@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File: TataruLink/Plugin.cs
+using System;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
