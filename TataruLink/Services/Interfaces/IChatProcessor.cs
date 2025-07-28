@@ -1,6 +1,7 @@
 ﻿// File: TataruLink/Services/Interfaces/IChatProcessor.cs
 using Dalamud.Game.Text;
 using System.Threading.Tasks;
+using TataruLink.Models;
 
 namespace TataruLink.Services.Interfaces;
 
@@ -17,7 +18,7 @@ public interface IChatProcessor
     /// <param name="message">The content of the message.</param>
     /// <returns>
     /// A task that represents the asynchronous processing operation.
-    /// The task result contains the translated message, or null if no translation was performed.
+    /// The task result contains the TranslationRecord, or null if no translation was performed.
     /// </returns>
-    Task<string?> ProcessMessageAsync(XivChatType type, string senderName, string message);
+    Task<TranslationRecord?> ProcessMessageAsync(XivChatType type, string senderName, string message);
 }

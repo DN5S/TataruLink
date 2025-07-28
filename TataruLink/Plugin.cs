@@ -1,4 +1,5 @@
 ﻿// File: TataruLink/Plugin.cs
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -33,7 +34,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ICacheService cacheService;
     private readonly ITranslationService translationService;
     private readonly IChatProcessor chatProcessor;
-
+    private readonly IChatMessageFormatter chatMessageFormatter;
+    
     #endregion
     
     #region TataruLink Windows
@@ -53,7 +55,6 @@ public sealed class Plugin : IDalamudPlugin
     private const string TestCommandName = "/tatarutest";
     
     #endregion
-
     
     #region Other Fields and Properties
     
@@ -83,28 +84,29 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Initialize(this.pluginInterface);
         
         // Instantiate and assemble all services
-        this.cacheService = new CacheService();
+        cacheService = new CacheService();
         var filters = new List<IChatFilter>
         {
-            new TranslationEnabledFilter(this.Configuration),
+            new TranslationEnabledFilter(Configuration),
             new EmptyMessageFilter(),
-            new SelfMessageFilter(this.Configuration, this.clientState),
-            new ChatTypeFilter(this.Configuration)
+            new SelfMessageFilter(Configuration, this.clientState),
+            new ChatTypeFilter(Configuration)
         };
         
         var engines = new List<ITranslationEngine> { new GoogleTranslateEngine(this.log) };
-        if (!string.IsNullOrEmpty(this.Configuration.Apis.DeepLApiKey))
+        if (!string.IsNullOrEmpty(Configuration.Apis.DeepLApiKey))
         {
-            engines.Add(new DeepLTranslateEngine(this.Configuration.Apis.DeepLApiKey, false, this.log));
+            engines.Add(new DeepLTranslateEngine(Configuration.Apis.DeepLApiKey, false, this.log));
         }
         
-        this.translationService = new TranslationService(this.log, this.Configuration, this.cacheService, engines);
-        this.chatProcessor = new ChatProcessor(this.log, this.translationService, filters, this.Configuration);
+        translationService = new TranslationService(this.log, Configuration, cacheService, engines);
+        chatProcessor = new ChatProcessor(this.log, translationService, filters, Configuration);
+        chatMessageFormatter = new ChatMessageFormatter(Configuration);
         
         // Initialize windows
-        this.configWindow = new ConfigWindow(this);
-        this.windowSystem.AddWindow(this.configWindow);
-        this.toggleConfigAction = () => this.configWindow.Toggle();
+        configWindow = new ConfigWindow(this);
+        windowSystem.AddWindow(configWindow);
+        toggleConfigAction = () => configWindow.Toggle();
         
         // Set up command handlers
         this.commandManager.AddHandler(ConfigCommandName, new CommandInfo(OnConfigCommand)
@@ -119,8 +121,8 @@ public sealed class Plugin : IDalamudPlugin
         // TODO: Add /tatarulink command for main window.
         
         // Set up hooks
-        this.pluginInterface.UiBuilder.Draw += this.windowSystem.Draw;
-        this.pluginInterface.UiBuilder.OpenConfigUi += this.toggleConfigAction;
+        this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
+        this.pluginInterface.UiBuilder.OpenConfigUi += toggleConfigAction;
         this.chatGui.ChatMessage += OnChatMessage;
         
         this.log.Info("TataruLink started successfully.");
@@ -129,7 +131,7 @@ public sealed class Plugin : IDalamudPlugin
     private void OnConfigCommand(string command, string args)
     {
         log.Debug("Config command executed. Toggling config window.");
-        this.configWindow.Toggle();
+        configWindow.Toggle();
     }
 
     // private void OnCommand(string command, string args)
@@ -142,31 +144,37 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (string.IsNullOrWhiteSpace(args))
         {
-            this.chatGui.Print("Usage: /tatarutest <text to translate>");
+            chatGui.Print("Usage: /tatarutest <text to translate>");
             return;
         }
 
-        // The test command can still benefit from a try-catch,
-        // as it's a direct user interaction point and should provide feedback on errors.
         Task.Run(async () =>
         {
             try
             {
-                this.chatGui.Print($"Running test translation for: \"{args}\"");
-                var result = await this.chatProcessor.ProcessMessageAsync(XivChatType.Echo, "Test", args);
-                var resultText = result ?? "Message was filtered and not translated.";
-                this.chatGui.Print($"Test result: {resultText}");
+                chatGui.Print($"Running test translation for: \"{args}\"");
+                var translationRecord = await chatProcessor.ProcessMessageAsync(XivChatType.Echo, "Test", args);
+                
+                if (translationRecord != null)
+                {
+                    var formattedMessage = chatMessageFormatter.FormatMessage(translationRecord);
+                    chatGui.Print(formattedMessage);
+                }
+                else
+                {
+                    chatGui.Print("Message was filtered and not translated.");
+                }
             }
             catch (Exception ex)
             {
                 log.Error(ex, "An error occurred during test command execution.");
+                chatGui.Print("Test translation failed. Check logs for details.");
             }
         });
     }
     
     private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
-        // If a message is already handled by another plugin, ignore it.
         if (isHandled) return;
 
         var senderText = sender.TextValue;
@@ -174,11 +182,19 @@ public sealed class Plugin : IDalamudPlugin
         
         Task.Run(async () =>
         {
-            var translatedMessage = await this.chatProcessor.ProcessMessageAsync(type, senderText, messageText);
-            if (translatedMessage != null)
+            try
             {
-                // TODO: This needs a proper UI Formatter.
-                this.chatGui.Print($"[Translated] {translatedMessage}");
+                var translationRecord = await chatProcessor.ProcessMessageAsync(type, senderText, messageText);
+                if (translationRecord != null)
+                {
+                    // Use the formatter to create a properly formatted SeString
+                    var formattedMessage = chatMessageFormatter.FormatMessage(translationRecord);
+                    chatGui.Print(formattedMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "An error occurred while processing chat message for translation.");
             }
         });
     }
@@ -187,20 +203,20 @@ public sealed class Plugin : IDalamudPlugin
     {
         log.Info("TataruLink is shutting down.");
 
-        this.chatGui.ChatMessage -= OnChatMessage;
-        this.pluginInterface.UiBuilder.OpenConfigUi -= this.toggleConfigAction;
-        this.pluginInterface.UiBuilder.Draw -= this.windowSystem.Draw;
+        chatGui.ChatMessage -= OnChatMessage;
+        pluginInterface.UiBuilder.OpenConfigUi -= toggleConfigAction;
+        pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
         
-        this.commandManager.RemoveHandler(ConfigCommandName);
-        this.commandManager.RemoveHandler(TestCommandName);
+        commandManager.RemoveHandler(ConfigCommandName);
+        commandManager.RemoveHandler(TestCommandName);
         
-        this.windowSystem.RemoveAllWindows();
-        this.configWindow.Dispose();
-        (this.cacheService as IDisposable)?.Dispose();
+        windowSystem.RemoveAllWindows();
+        configWindow.Dispose();
+        (cacheService as IDisposable)?.Dispose();
     }
     
     private void DrawUI() => windowSystem.Draw();
-    public void ToggleConfigUI() => this.configWindow.Toggle();
+    public void ToggleConfigUI() => configWindow.Toggle();
     
     // TODO: ToggleMainUI 
     // public void ToggleMainUI() => MainWindow.Toggle();
