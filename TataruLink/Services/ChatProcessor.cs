@@ -33,7 +33,7 @@ public class ChatProcessor(
     }
     
     /// <inheritdoc />
-    public async Task<TranslationRecord?> ProcessMessageAsync(XivChatType type, string senderName, string message)
+    public async Task<TranslationRecord?> ExecuteTranslationAsync(XivChatType type, string senderName, string message)
     {
         log.Debug($"Message passed all filters. Proceeding to translation: \"{message}\"");
         

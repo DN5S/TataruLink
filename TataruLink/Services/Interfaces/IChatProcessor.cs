@@ -27,5 +27,5 @@ public interface IChatProcessor
     /// A task that represents the asynchronous processing operation.
     /// The task result contains the TranslationRecord, or null if no translation was performed.
     /// </returns>
-    Task<TranslationRecord?> ProcessMessageAsync(XivChatType type, string senderName, string message);
+    Task<TranslationRecord?> ExecuteTranslationAsync(XivChatType type, string senderName, string message);
 }

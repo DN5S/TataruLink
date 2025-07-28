@@ -45,12 +45,25 @@ public class DeepLTranslateEngine : BaseTranslationEngine
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            var requestBody = new
+            object requestBody;
+            if (string.Equals(sourceLanguage, "auto", StringComparison.OrdinalIgnoreCase))
             {
-                text = new[] { text },
-                target_lang = targetLanguage.ToUpper(),
-                source_lang = sourceLanguage.ToUpper()
-            };
+                requestBody = new
+                {
+                    text = new[] { text },
+                    target_lang = targetLanguage.ToUpper()
+                    // source_lang is omitted for auto-detection as per DeepL API spec.
+                };
+            }
+            else
+            {
+                requestBody = new
+                {
+                    text = new[] { text },
+                    target_lang = targetLanguage.ToUpper(),
+                    source_lang = sourceLanguage.ToUpper()
+                };
+            }
             
             using var request = new HttpRequestMessage(HttpMethod.Post, apiUrl);
             request.Headers.Authorization = new AuthenticationHeaderValue("DeepL-Auth-Key", apiKey);

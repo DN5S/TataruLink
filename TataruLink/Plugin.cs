@@ -31,10 +31,10 @@ public sealed class Plugin : IDalamudPlugin
 
     #region TataruLink Services 
 
-    private readonly ICacheService cacheService;
-    private readonly ITranslationService translationService;
-    private readonly IChatProcessor chatProcessor;
-    private readonly IChatMessageFormatter chatMessageFormatter;
+    private ICacheService cacheService;
+    private ITranslationService translationService;
+    private IChatProcessor chatProcessor;
+    private IChatMessageFormatter chatMessageFormatter;
     
     #endregion
     
@@ -82,26 +82,10 @@ public sealed class Plugin : IDalamudPlugin
         // Load configuration
         Configuration = this.pluginInterface.GetPluginConfig() as Configuration.Configuration ?? new Configuration.Configuration();
         Configuration.Initialize(this.pluginInterface);
+        Configuration.OnSave += InitializeServices;
         
         // Instantiate and assemble all services
-        cacheService = new CacheService();
-        var filters = new List<IChatFilter>
-        {
-            new TranslationEnabledFilter(Configuration),
-            new EmptyMessageFilter(),
-            new SelfMessageFilter(Configuration, this.clientState),
-            new ChatTypeFilter(Configuration)
-        };
-        
-        var engines = new List<ITranslationEngine> { new GoogleTranslateEngine(this.log) };
-        if (!string.IsNullOrEmpty(Configuration.Apis.DeepLApiKey))
-        {
-            engines.Add(new DeepLTranslateEngine(Configuration.Apis.DeepLApiKey, false, this.log));
-        }
-        
-        translationService = new TranslationService(this.log, Configuration, cacheService, engines);
-        chatProcessor = new ChatProcessor(this.log, translationService, filters, Configuration);
-        chatMessageFormatter = new ChatMessageFormatter(Configuration);
+        InitializeServices();
         
         // Initialize windows
         configWindow = new ConfigWindow(this);
@@ -124,8 +108,45 @@ public sealed class Plugin : IDalamudPlugin
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
         this.pluginInterface.UiBuilder.OpenConfigUi += toggleConfigAction;
         this.chatGui.ChatMessage += OnChatMessage;
+        Configuration.OnSave += InitializeServices;
         
         this.log.Info("TataruLink started successfully.");
+    }
+    
+    /// <summary>
+    /// Centralized method to build and wire up all of our services.
+    /// This is now automatically called whenever the configuration is saved.
+    /// </summary>
+    private void InitializeServices()
+    {
+        log.Info("Initializing/Re-initializing services based on current configuration...");
+
+        // Dispose of the old cache service if it exists to free up memory.
+        (cacheService as IDisposable)?.Dispose();
+
+        cacheService = new CacheService();
+        var filters = new List<IChatFilter>
+        {
+            new TranslationEnabledFilter(Configuration),
+            new EmptyMessageFilter(),
+            new SelfMessageFilter(Configuration, clientState),
+            new ChatTypeFilter(Configuration)
+        };
+        
+        var engines = new List<ITranslationEngine> { new GoogleTranslateEngine(log) };
+        if (!string.IsNullOrEmpty(Configuration.Apis.DeepLApiKey))
+        {
+            engines.Add(new DeepLTranslateEngine(Configuration.Apis.DeepLApiKey, false, log));
+            log.Info("DeepL engine has been initialized.");
+        }
+        else
+        {
+            log.Info("DeepL API key not found. DeepL engine was not initialized.");
+        }
+        
+        translationService = new TranslationService(log, Configuration, cacheService, engines);
+        chatProcessor = new ChatProcessor(log, translationService, filters, Configuration);
+        chatMessageFormatter = new ChatMessageFormatter(Configuration);
     }
     
     private void OnConfigCommand(string command, string args)
@@ -153,7 +174,7 @@ public sealed class Plugin : IDalamudPlugin
             try
             {
                 chatGui.Print($"Running test translation for: \"{args}\"");
-                var translationRecord = await chatProcessor.ProcessMessageAsync(XivChatType.Echo, "Test", args);
+                var translationRecord = await chatProcessor.ExecuteTranslationAsync(XivChatType.Echo, "Test", args);
                 
                 if (translationRecord != null)
                 {
@@ -189,7 +210,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             try
             {
-                var translationRecord = await chatProcessor.ProcessMessageAsync(type, senderText, messageText);
+                var translationRecord = await chatProcessor.ExecuteTranslationAsync(type, senderText, messageText);
                 if (translationRecord != null)
                 {
                     // Use the formatter to create a properly formatted SeString
@@ -208,6 +229,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         log.Info("TataruLink is shutting down.");
 
+        // Unsubscribe from all events to prevent memory leaks
+        Configuration.OnSave -= InitializeServices;
         chatGui.ChatMessage -= OnChatMessage;
         pluginInterface.UiBuilder.OpenConfigUi -= toggleConfigAction;
         pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
