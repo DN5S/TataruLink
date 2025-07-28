@@ -1,13 +1,16 @@
 ﻿// File: TataruLink/Services/Engines/DeepLTranslateEngine.cs
 using System;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Dalamud.Game.Text;
 using Dalamud.Plugin.Services;
 using TataruLink.Configuration;
+using TataruLink.Models;
 
 namespace TataruLink.Services.Engines;
 
@@ -35,10 +38,11 @@ public class DeepLTranslateEngine : BaseTranslationEngine
         apiUrl = useProApi ? ProApiUrl : FreeApiUrl;
     }
 
-    public override async Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+    public override async Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
     {
-        if (string.IsNullOrEmpty(text)) return string.Empty;
+        if (string.IsNullOrEmpty(text)) return null;
 
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var requestBody = new
@@ -56,14 +60,31 @@ public class DeepLTranslateEngine : BaseTranslationEngine
             response.EnsureSuccessStatusCode();
 
             var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var translatedText = jsonResponse.GetProperty("translations")[0].GetProperty("text").GetString();
+            stopwatch.Stop();
+            
+            var translation = jsonResponse.GetProperty("translations")[0];
+            var translatedText = translation.GetProperty("text").GetString();
+            var detectedLang = translation.GetProperty("detected_source_language").GetString();
 
-            return translatedText ?? string.Empty;
+            if (string.IsNullOrEmpty(translatedText)) return null;
+
+            return new TranslationRecord(
+                originalText: text,
+                translatedText: translatedText,
+                sender: "", 
+                chatType: default(XivChatType), // Use `default` for explicit
+                engineUsed: this.EngineType,
+                sourceLanguage: sourceLanguage,
+                detectedSourceLanguage: detectedLang,
+                targetLanguage: targetLanguage
+            ) { TimeTakenMs = stopwatch.ElapsedMilliseconds };
         }
+
         catch (Exception ex)
         {
-            Log.Error(ex, $"[DeepLTranslateEngine] Failed to translate text. Ensure API key is valid and endpoint ({apiUrl}) is correct.");
-            return string.Empty;
+            stopwatch.Stop();
+            Log.Error(ex, $"[DeepLTranslateEngine] Translation failed.");
+            return null;
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using TataruLink.Services.Interfaces;
 using TataruLink.Configuration;
+using TataruLink.Models;
 
 namespace TataruLink.Services.Engines;
 
@@ -18,5 +19,5 @@ public abstract class BaseTranslationEngine(IPluginLog log) : ITranslationEngine
     protected readonly IPluginLog Log = log;
 
     public abstract TranslationEngine EngineType { get; }
-    public abstract Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
+    public abstract Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
 }
