@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/Services/Interfaces/ITranslationService.cs
 using System.Threading.Tasks;
+using TataruLink.Models;
 
 namespace TataruLink.Services.Interfaces;
 
@@ -15,5 +16,5 @@ public interface ITranslationService
     /// <param name="sourceLanguage">The source language code.</param>
     /// <param name="targetLanguage">The target language code.</param>
     /// <returns>A task that represents the asynchronous translation operation. The task result contains the translated text.</returns>
-    Task<string> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
+    Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
 }
