@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
+using TataruLink.Models;
 using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services;
@@ -61,9 +62,9 @@ public class CacheService : ICacheService, IDisposable
     }
     
     /// <inheritdoc />
-    public bool TryGet(string originalText, out string? translatedText)
+    public bool TryGet(string originalText, out TranslationRecord? record)
     {
-        if (memoryCache.TryGetValue(originalText, out translatedText))
+        if (memoryCache.TryGetValue(originalText, out record))
         {
             Statistics.IncrementHit();
             return true;
@@ -74,17 +75,16 @@ public class CacheService : ICacheService, IDisposable
     }
     
     /// <inheritdoc />
-    public void Set(string originalText, string translatedText)
+    public void Set(TranslationRecord record)
     {
         var entryOptions = new MemoryCacheEntryOptions
         {
-            SlidingExpiration = this.options.DefaultSlidingExpiration,
-            AbsoluteExpirationRelativeToNow = this.options.DefaultAbsoluteExpiration,
+            SlidingExpiration = options.DefaultSlidingExpiration,
+            AbsoluteExpirationRelativeToNow = options.DefaultAbsoluteExpiration,
             Size = 1, // Fix the size of each item to 1, so SizeLimit means the number of items.
             Priority = CacheItemPriority.Normal
         };
-
-        memoryCache.Set(originalText, translatedText, entryOptions);
+        memoryCache.Set(record.OriginalText, record, entryOptions);
     }
     
     /// <inheritdoc />
@@ -102,17 +102,20 @@ public class CacheService : ICacheService, IDisposable
     /// Asynchronously pre-loads the cache with provided data.
     /// This is useful for loading a persistent cache from a file on startup.
     /// </summary>
-    /// <param name="preloadData">Enumerable of key-value pairs to load into the cache.</param>
-    public Task WarmUpAsync(IEnumerable<KeyValuePair<string, string>> preloadData)
+    /// <param name="preloadData">Enumerable of TranslationRecord objects to load into the cache.</param>
+    public Task WarmUpAsync(IEnumerable<TranslationRecord> preloadData)
     {
         return Task.Run(() =>
         {
-            foreach (var (key, value) in preloadData)
+            foreach (var record in preloadData)
             {
-                Set(key, value);
+                // Mark as coming from cache since this is preloaded data
+                record.FromCache = true;
+                Set(record);
             }
         });
     }
+
     
     public void Dispose()
     {
