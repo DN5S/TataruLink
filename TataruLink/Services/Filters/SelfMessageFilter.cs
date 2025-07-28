@@ -8,17 +8,8 @@ namespace TataruLink.Services.Filters;
 /// <summary>
 /// Filter that checks if messages from the player themselves should be translated.
 /// </summary>
-public class SelfMessageFilter : IChatFilter
+public class SelfMessageFilter(Configuration.Configuration configuration, IClientState clientState) : IChatFilter
 {
-    private readonly Configuration.Configuration configuration;
-    private readonly IClientState clientState;
-
-    public SelfMessageFilter(Configuration.Configuration configuration, IClientState clientState)
-    {
-        this.configuration = configuration;
-        this.clientState = clientState;
-    }
-    
     public bool ShouldTranslate(XivChatType type, string sender, string message)
     {
         var localPlayerName = clientState.LocalPlayer?.Name.TextValue;

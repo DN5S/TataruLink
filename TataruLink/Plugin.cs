@@ -48,7 +48,7 @@ public sealed class Plugin : IDalamudPlugin
     
     #region TataruLink Commands
     
-    private const string CommandName = "/tatarulink";
+    // private const string CommandName = "/tatarulink";
     private const string ConfigCommandName = "/tataruconfig";
     private const string TestCommandName = "/tatarutest";
     
@@ -132,11 +132,11 @@ public sealed class Plugin : IDalamudPlugin
         this.configWindow.Toggle();
     }
 
-    private void OnCommand(string command, string args)
-    {
-        // TODO: Toggle MainUI
-        // ToggleMainUI();
-    }
+    // private void OnCommand(string command, string args)
+    // {
+    //     // TODO: Toggle MainUI
+    //     // ToggleMainUI();
+    // }
     
     private void OnTestCommand(string command, string args)
     {
