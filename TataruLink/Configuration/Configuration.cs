@@ -25,8 +25,20 @@ public class Configuration : IPluginConfiguration
 
     public event Action? OnSave
     {
-        add => onSaveHandler += value;
-        remove => onSaveHandler -= value;
+        add 
+        { 
+            lock (eventLock)
+            {
+                onSaveHandler += value;
+            }
+        }
+        remove 
+        { 
+            lock (eventLock)
+            {
+                onSaveHandler -= value;
+            }
+        }
     }
 
     private readonly Lock eventLock = new();

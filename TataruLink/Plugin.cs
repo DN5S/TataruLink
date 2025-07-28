@@ -31,10 +31,10 @@ public sealed class Plugin : IDalamudPlugin
 
     #region TataruLink Services 
 
-    private ICacheService cacheService;
-    private ITranslationService translationService;
-    private IChatProcessor chatProcessor;
-    private IChatMessageFormatter chatMessageFormatter;
+    private ICacheService cacheService = null!;
+    private ITranslationService translationService = null!;
+    private IChatProcessor chatProcessor = null!;
+    private IChatMessageFormatter chatMessageFormatter = null!;
     
     #endregion
     
@@ -108,7 +108,6 @@ public sealed class Plugin : IDalamudPlugin
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
         this.pluginInterface.UiBuilder.OpenConfigUi += toggleConfigAction;
         this.chatGui.ChatMessage += OnChatMessage;
-        Configuration.OnSave += InitializeServices;
         
         this.log.Info("TataruLink started successfully.");
     }
@@ -203,7 +202,7 @@ public sealed class Plugin : IDalamudPlugin
         
         if (!chatProcessor.FilterMessage(type, senderText, messageText))
         {
-            return; // Message was filtered out, do nothing further.
+            return; // The message was filtered out, do nothing further.
         }
         
         Task.Run(async () =>

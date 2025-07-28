@@ -13,6 +13,7 @@ public class GeneralSettingsWindow(Configuration.Configuration configuration) : 
     {
         var configChanged = false;
         var translationSettings = configuration.Translation;
+        var displaySettings = configuration.Display;
 
         #region Core Controls
 
@@ -95,6 +96,32 @@ public class GeneralSettingsWindow(Configuration.Configuration configuration) : 
             apiSettings.DeepLApiKey = deepLKey;
             configChanged = true;
         }
+
+        #endregion
+        
+        ImGui.Spacing();
+        ImGui.Separator();
+        
+        #region Display Settings
+        
+        ImGui.Text("Display Settings");
+        
+        // Translation Format Input
+        var translationFormat = displaySettings.TranslationFormat;
+        if (ImGui.InputText("Translation Format", ref translationFormat, 256))
+        {
+            displaySettings.TranslationFormat = translationFormat;
+            configChanged = true;
+        }
+        ImGui.TextDisabled(
+            "Placeholders: {sender}, {original}, {translated}, {engine}, {time}, " +
+            "{charCount}, {detectedLang}, {fromCache}, {chatType}");
+
+        // Translation Color Picker
+        var color = ImGui.ColorConvertU32ToFloat4(displaySettings.TranslationColor);
+        if (!ImGui.ColorEdit4("Translation Color", ref color)) return configChanged;
+        displaySettings.TranslationColor = ImGui.ColorConvertFloat4ToU32(color);
+        configChanged = true;
 
         #endregion
 
