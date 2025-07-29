@@ -117,11 +117,14 @@ public class GeneralSettingsWindow(Configuration.Configuration configuration) : 
             "Placeholders: {sender}, {original}, {translated}, {engine}, {time}, " +
             "{charCount}, {detectedLang}, {fromCache}, {chatType}");
 
-        // Translation Color Picker
+        // TODO: Translation Color Picker
+        // Where is Color Table?
+        /*
         var color = ImGui.ColorConvertU32ToFloat4(displaySettings.TranslationColor);
         if (!ImGui.ColorEdit4("Translation Color", ref color)) return configChanged;
         displaySettings.TranslationColor = ImGui.ColorConvertFloat4ToU32(color);
         configChanged = true;
+        */
 
         #endregion
 

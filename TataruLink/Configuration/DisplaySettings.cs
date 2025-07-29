@@ -14,9 +14,7 @@ public class DisplaySettings
     public string TranslationFormat { get; set; } = "[{engine}] {translated}";
 
     /// <summary>
-    /// Color for the entire formatted translation text.
-    /// Format is ARGB (Alpha, Red, Green, Blue) as a hexadecimal value.
-    /// Default is White (0xFFFFFFFF). A nice light-blue is 0xFF99D5FF.
+    /// The UI Color Palette index for the translated text.
     /// </summary>
-    public uint TranslationColor { get; set; } = 0xFFFFFFFF; // White
+    public ushort TranslationColor { get; set; } = 0; 
 }

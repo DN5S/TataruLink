@@ -28,7 +28,7 @@ public class ChatMessageFormatter(Configuration.Configuration configuration) : I
         var builder = new SeStringBuilder();
         
         // Apply color to the entire formatted message
-        builder.Add(new UIForegroundPayload((ushort)displaySettings.TranslationColor));
+        builder.Add(new UIForegroundPayload(displaySettings.TranslationColor));
         builder.AddText(formattedText.Trim());   // Use Trim to remove potential trailing space from {fromCache}
         builder.Add(new UIForegroundPayload(0)); // 0 resets to the default color
         
