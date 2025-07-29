@@ -1,6 +1,6 @@
 ﻿// File: TataruLink/Services/Interfaces/IChatProcessor.cs
-using Dalamud.Game.Text;
 using System.Threading.Tasks;
+using Dalamud.Game.Text;
 using TataruLink.Models;
 
 namespace TataruLink.Services.Interfaces;

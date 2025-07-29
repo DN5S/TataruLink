@@ -1,6 +1,6 @@
 ﻿// File: TataruLink/Services/Filters/SelfMessageFilter.cs
-using Dalamud.Plugin.Services;
 using Dalamud.Game.Text;
+using Dalamud.Plugin.Services;
 using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services.Filters;
