@@ -1,0 +1,14 @@
+{
+  "Author": "DN5S",
+  "Name": "TataruLink",
+  "Punchline": "Real-time chat translator",
+  "Description": "Real-time chat translator",
+  "ApplicableVersion": "any",
+  "RepoUrl": "https://github.com/DN5S/TataruLink",
+  "Tags": [
+    "translation",
+    "chat",
+    "utility",
+    "localization"
+  ]
+}
