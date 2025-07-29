@@ -1,7 +1,4 @@
 ﻿// File: TataruLink/Plugin.cs
-
-using System;
-using System.Threading.Tasks;
 using Dalamud.Game.Command;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -131,6 +128,7 @@ public sealed class Plugin : IDalamudPlugin
         #region Setup Hooks
 
         // Set up hooks
+        services.GetRequiredService<IChatProcessor>().OnTranslationReady += OnTranslationReady;
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
         this.chatGui.ChatMessage += OnChatMessage;
 
@@ -193,6 +191,7 @@ public sealed class Plugin : IDalamudPlugin
     private void OnConfigCommand(string command, string args) => configWindow.Toggle();
     private void OnOverlayCommand(string command, string args) => chatOverlayWindow.Toggle();
     
+    // This is the updated OnTestCommand method.
     private void OnTestCommand(string command, string args)
     {
         if (string.IsNullOrWhiteSpace(args))
@@ -200,32 +199,12 @@ public sealed class Plugin : IDalamudPlugin
             chatGui.Print("Usage: /tatarutest <text to translate>");
             return;
         }
-        
-        var chatProcessor = services.GetRequiredService<IChatProcessor>();
-        var chatMessageFormatter = services.GetRequiredService<IChatMessageFormatter>();
 
-        Task.Run(async () =>
-        {
-            try
-            {
-                chatGui.Print($"Running test translation for: \"{args}\"");
-                var translationRecord = await chatProcessor.ExecuteTranslationAsync(XivChatType.Echo, "Test", args);
-                
-                if (translationRecord != null)
-                {
-                    var formattedMessage = chatMessageFormatter.FormatMessage(translationRecord);
-                    chatGui.Print(formattedMessage);
-                }
-                else
-                {
-                    chatGui.Print("Message was filtered and not translated.");
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Error(ex, "An error occurred during test command execution.");
-            }
-        });
+        var chatProcessor = services.GetRequiredService<IChatProcessor>();
+
+        chatProcessor.EnqueueMessage(XivChatType.Echo, "Test", args);
+    
+        chatGui.Print($"Test message enqueued: \"{args}\"");
     }
     
     #endregion
@@ -233,40 +212,20 @@ public sealed class Plugin : IDalamudPlugin
     private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         if (isHandled) return;
+        services.GetRequiredService<IChatProcessor>().EnqueueMessage(type, sender.TextValue, message.TextValue);
+    }
+    
+    private void OnTranslationReady(SeString formattedMessage)
+    {
+        var displayMode = Configuration.Display.DisplayMode;
 
-        var senderText = sender.TextValue;
-        var messageText = message.TextValue;
-
-        var chatProcessor = services.GetRequiredService<IChatProcessor>();
-        if (!chatProcessor.FilterMessage(type, senderText, messageText)) return;
-        
-        Task.Run(async () =>
+        // The framework call is now here, in the main plugin class.
+        framework.RunOnFrameworkThread(() =>
         {
-            try
-            {
-                // Retrieve services needed within the task.
-                var formatter = services.GetRequiredService<IChatMessageFormatter>();
-        
-                var translationRecord = await chatProcessor.ExecuteTranslationAsync(type, senderText, messageText);
-                if (translationRecord != null)
-                {
-                    var formattedMessage = formatter.FormatMessage(translationRecord);
-                    var displayMode = Configuration.Display.DisplayMode;
-
-                    await framework.RunOnFrameworkThread(() =>
-                    {
-                        if (displayMode is TranslationDisplayMode.InGameChat or TranslationDisplayMode.Both)
-                            chatGui.Print(formattedMessage);
-
-                        if (displayMode is TranslationDisplayMode.SeparateWindow or TranslationDisplayMode.Both)
-                            chatOverlayWindow.AddLog(formattedMessage);
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Error(ex, "An error occurred while processing chat message for translation.");
-            }
+            if (displayMode is not TranslationDisplayMode.SeparateWindow)
+                chatGui.Print(formattedMessage);
+            if (displayMode is not TranslationDisplayMode.InGameChat)
+                chatOverlayWindow.AddLog(formattedMessage);
         });
     }
 
