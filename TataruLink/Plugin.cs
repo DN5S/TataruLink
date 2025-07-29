@@ -1,7 +1,6 @@
 ﻿// File: TataruLink/Plugin.cs
 
 using System;
-using System.Threading.Tasks;
 using Dalamud.Game.Command;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -35,36 +34,30 @@ public sealed class Plugin : IDalamudPlugin
 
     #endregion
 
-    #region TataruLink Services 
-    
+    #region TataruLink Services
+
     private readonly ServiceProvider services;
-    
+
     #endregion
-    
+
     #region TataruLink Windows
-    
+
     private readonly WindowSystem windowSystem = new("TataruLink");
     private readonly MainWindow mainWindow;
     private readonly ChatOverlayWindow chatOverlayWindow;
     private readonly ConfigWindow configWindow;
-    
+
     #endregion
-    
+
     #region TataruLink Commands
-    
+
     private const string CommandName = "/tatarulink";
     private const string OverlayCommandName = "/tataruoverlay";
     private const string ConfigCommandName = "/tataruconfig";
     private const string TestCommandName = "/tatarutest";
-    
-    #endregion
-    
-    #region Other Fields and Properties
 
-    public Configuration.Configuration Configuration { get; }
-    
     #endregion
-    
+
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         ICommandManager commandManager,
@@ -82,33 +75,27 @@ public sealed class Plugin : IDalamudPlugin
         this.clientState = clientState;
         this.framework = framework;
 
-        #endregion 
-        
+        #endregion
+
         this.log.Info("TataruLink is starting up.");
 
-        #region Load configuration
-        
-        Configuration = this.pluginInterface.GetPluginConfig() as Configuration.Configuration ?? new Configuration.Configuration();
-        Configuration.Initialize(this.pluginInterface);
-
-        #endregion 
-        
         // Instantiate and assemble all services
-        services = ConfigureServices();
-        
+        var configManager = new ConfigurationManager(this.pluginInterface);
+        services = ConfigureServices(configManager);
+
         #region Initialize windows
 
         mainWindow = new MainWindow(services.GetRequiredService<ICacheService>());
-        configWindow = new ConfigWindow(this);
+        configWindow = new ConfigWindow(services.GetRequiredService<IConfigurationManager>());
         chatOverlayWindow = new ChatOverlayWindow();
         windowSystem.AddWindow(mainWindow);
         windowSystem.AddWindow(configWindow);
         windowSystem.AddWindow(chatOverlayWindow);
-        
+
         #endregion
-        
+
         #region Setup command handlers
-        
+
         this.commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Opens the TataruLink main window."
@@ -125,74 +112,81 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage = "Tests the translation pipeline. Usage: /tatarutest <text>"
         });
-        
+
         #endregion
 
         #region Setup Hooks
 
         // Set up hooks
+        services.GetRequiredService<IChatProcessor>().OnTranslationReady += OnTranslationReady;
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
+        this.pluginInterface.UiBuilder.OpenConfigUi += OnOpenConfigUi;
+        this.pluginInterface.UiBuilder.OpenMainUi += OnOpenMainUi;
         this.chatGui.ChatMessage += OnChatMessage;
 
         #endregion
-        
+
         this.log.Info("TataruLink started successfully.");
     }
-    
+
     /// <summary>
     /// Configures and builds the dependency injection container for the plugin.
     /// All services, filters, and engines are registered here.
     /// This method centralizes the logic for service creation and dependency management.
     /// </summary>
     /// <returns>A fully configured ServiceProvider.</returns>
-    private ServiceProvider ConfigureServices()
+    private ServiceProvider ConfigureServices(IConfigurationManager configManager)
     {
         var serviceCollection = new ServiceCollection();
 
-        // Register Dalamud services and plugin configuration as singletons,
-        // making them available to any other service that needs them.
+        // Register Dalamud services
         serviceCollection.AddSingleton(pluginInterface);
         serviceCollection.AddSingleton(commandManager);
         serviceCollection.AddSingleton(log);
         serviceCollection.AddSingleton(chatGui);
         serviceCollection.AddSingleton(clientState);
         serviceCollection.AddSingleton(framework);
-        serviceCollection.AddSingleton(Configuration);
 
-        // Register all translation engines. The TranslationService will receive an
-        // IEnumerable<ITranslationEngine> containing all registered engines.
-        serviceCollection.AddSingleton<ITranslationEngine, GoogleTranslateEngine>();
-        if (!string.IsNullOrEmpty(Configuration.Apis.DeepLApiKey))
-        {
-            serviceCollection.AddSingleton<ITranslationEngine>(
-                s => new DeepLTranslateEngine(Configuration.Apis.DeepLApiKey, false, s.GetRequiredService<IPluginLog>()));
-        }
+        // 1. Register the existing configManager instance as the implementation for IConfigurationManager.
+        serviceCollection.AddSingleton(configManager);
+        // 2. Register the Configuration object held by the manager.
+        serviceCollection.AddSingleton(configManager.Config);
 
-        // Register all chat filters. The ChatProcessor will receive an
-        // IEnumerable<IChatFilter> to build its filter pipeline.
-        serviceCollection.AddSingleton<IChatFilter, TranslationEnabledFilter>();
-        serviceCollection.AddSingleton<IChatFilter, EmptyMessageFilter>();
-        serviceCollection.AddSingleton<IChatFilter, SelfMessageFilter>();
-        serviceCollection.AddSingleton<IChatFilter, ChatTypeFilter>();
-
-        // Register the core services of the plugin as singletons.
-        // The DI container will automatically resolve their dependencies (e.g., IPluginLog, ICacheService)
-        // by looking at their constructors.
+        // Register core services
         serviceCollection.AddSingleton<ICacheService, CacheService>();
         serviceCollection.AddSingleton<ITranslationService, TranslationService>();
         serviceCollection.AddSingleton<IChatProcessor, ChatProcessor>();
         serviceCollection.AddSingleton<IChatMessageFormatter, ChatMessageFormatter>();
 
+        // Register translation engines
+        serviceCollection.AddSingleton<ITranslationEngine, GoogleTranslateEngine>();
+        if (!string.IsNullOrEmpty(configManager.Config.Apis.DeepLApiKey))
+        {
+            serviceCollection.AddSingleton<ITranslationEngine>(s => new DeepLTranslateEngine(
+                                                                   configManager.Config.Apis.DeepLApiKey, false,
+                                                                   s.GetRequiredService<IPluginLog>()));
+        }
+
+        // Register chat filters
+        serviceCollection.AddSingleton<IChatFilter, TranslationEnabledFilter>();
+        serviceCollection.AddSingleton<IChatFilter, EmptyMessageFilter>();
+        serviceCollection.AddSingleton<IChatFilter, SelfMessageFilter>();
+        serviceCollection.AddSingleton<IChatFilter, ChatTypeFilter>();
+
         // Build and return the service provider.
         return serviceCollection.BuildServiceProvider();
     }
-    
+
     #region Command Handlers
-    
+
     private void OnCommand(string command, string args) => mainWindow.Toggle();
     private void OnConfigCommand(string command, string args) => configWindow.Toggle();
     private void OnOverlayCommand(string command, string args) => chatOverlayWindow.Toggle();
-    
+
+    private void OnOpenConfigUi() => configWindow.Toggle();
+    private void OnOpenMainUi() => mainWindow.Toggle();
+
+    // This is the updated OnTestCommand method.
     private void OnTestCommand(string command, string args)
     {
         if (string.IsNullOrWhiteSpace(args))
@@ -200,74 +194,65 @@ public sealed class Plugin : IDalamudPlugin
             chatGui.Print("Usage: /tatarutest <text to translate>");
             return;
         }
-        
-        var chatProcessor = services.GetRequiredService<IChatProcessor>();
-        var chatMessageFormatter = services.GetRequiredService<IChatMessageFormatter>();
 
-        Task.Run(async () =>
-        {
-            try
-            {
-                chatGui.Print($"Running test translation for: \"{args}\"");
-                var translationRecord = await chatProcessor.ExecuteTranslationAsync(XivChatType.Echo, "Test", args);
-                
-                if (translationRecord != null)
-                {
-                    var formattedMessage = chatMessageFormatter.FormatMessage(translationRecord);
-                    chatGui.Print(formattedMessage);
-                }
-                else
-                {
-                    chatGui.Print("Message was filtered and not translated.");
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Error(ex, "An error occurred during test command execution.");
-            }
-        });
+        var chatProcessor = services.GetRequiredService<IChatProcessor>();
+
+        chatProcessor.EnqueueMessage(XivChatType.Echo, "Test", args);
+
+        chatGui.Print($"Test message enqueued: \"{args}\"");
     }
-    
+
     #endregion
-    
-    private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+
+    private void OnChatMessage(
+        XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         if (isHandled) return;
-
-        var senderText = sender.TextValue;
-        var messageText = message.TextValue;
-
-        var chatProcessor = services.GetRequiredService<IChatProcessor>();
-        if (!chatProcessor.FilterMessage(type, senderText, messageText)) return;
         
-        Task.Run(async () =>
+        var senderValue = sender.TextValue;
+        var messageValue = message.TextValue;
+
+        if (string.IsNullOrEmpty(messageValue)) return;
+        
+        framework.RunOnFrameworkThread(() =>
         {
             try
             {
-                // Retrieve services needed within the task.
-                var formatter = services.GetRequiredService<IChatMessageFormatter>();
-        
-                var translationRecord = await chatProcessor.ExecuteTranslationAsync(type, senderText, messageText);
-                if (translationRecord != null)
-                {
-                    var formattedMessage = formatter.FormatMessage(translationRecord);
-                    var displayMode = Configuration.Display.DisplayMode;
-
-                    await framework.RunOnFrameworkThread(() =>
-                    {
-                        if (displayMode is TranslationDisplayMode.InGameChat or TranslationDisplayMode.Both)
-                            chatGui.Print(formattedMessage);
-
-                        if (displayMode is TranslationDisplayMode.SeparateWindow or TranslationDisplayMode.Both)
-                            chatOverlayWindow.AddLog(formattedMessage);
-                    });
-                }
+                var chatProcessor = services?.GetRequiredService<IChatProcessor>();
+                chatProcessor?.EnqueueMessage(type, senderValue, messageValue);
             }
             catch (Exception ex)
             {
-                log.Error(ex, "An error occurred while processing chat message for translation.");
+                log.Error($"Error processing chat message: {ex}");
             }
         });
+
+
+    }
+
+    private void OnTranslationReady(SeString formattedMessage)
+    {
+        var configuration = services?.GetRequiredService<Configuration.Configuration>();
+        if (configuration == null) return;
+
+        var displayMode = configuration.Display.DisplayMode;
+
+        // The framework call is now here, in the main plugin class.
+        framework.RunOnFrameworkThread(() =>
+        {
+            try
+            {
+                if (displayMode is not TranslationDisplayMode.SeparateWindow)
+                    chatGui.Print(formattedMessage);
+                if (displayMode is not TranslationDisplayMode.InGameChat)
+                    chatOverlayWindow?.AddLog(formattedMessage);
+            }
+            catch (Exception ex)
+            {
+                log.Error($"Error displaying translation: {ex}");
+            }
+        });
+
     }
 
     public void Dispose()
@@ -276,15 +261,18 @@ public sealed class Plugin : IDalamudPlugin
 
         chatGui.ChatMessage -= OnChatMessage;
         pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
-        
+        pluginInterface.UiBuilder.OpenConfigUi -= OnOpenConfigUi;
+        pluginInterface.UiBuilder.OpenMainUi -= OnOpenMainUi;
+
         // Remove all command handlers.
         commandManager.RemoveHandler(CommandName);
         commandManager.RemoveHandler(OverlayCommandName);
         commandManager.RemoveHandler(ConfigCommandName);
         commandManager.RemoveHandler(TestCommandName);
-        
+
         windowSystem.RemoveAllWindows();
         services.Dispose();
     }
 }
+
  

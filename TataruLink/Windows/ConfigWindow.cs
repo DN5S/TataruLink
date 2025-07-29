@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
 using TataruLink.Localization;
+using TataruLink.Services.Interfaces;
 using TataruLink.Windows.Interfaces;
 using TataruLink.Windows.Partials;
 
@@ -16,11 +17,12 @@ namespace TataruLink.Windows;
 /// </summary>
 public class ConfigWindow : Window, IDisposable
 {
-    private readonly Configuration.Configuration configuration;
+    private readonly IConfigurationManager configManager;
+    
     private readonly List<IConfigWindowPartial> settingPartials = [];
     private readonly List<string> tabNames = [Strings.ConfigTabGeneral, Strings.ConfigTabChatTypes];
 
-    public ConfigWindow(Plugin plugin) : base(Strings.ConfigWindowTitle)
+    public ConfigWindow(IConfigurationManager configManager) : base(Strings.ConfigWindowTitle)
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -28,7 +30,8 @@ public class ConfigWindow : Window, IDisposable
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
 
-        configuration = plugin.Configuration;
+        this.configManager = configManager;
+        var configuration = configManager.Config;
 
         // Initialize and add all UI partials that will be rendered as tabs.
         settingPartials.Add(new GeneralSettingsWindow(configuration));
@@ -55,7 +58,7 @@ public class ConfigWindow : Window, IDisposable
 
         if (configChanged)
         {
-            configuration.Save();
+            configManager.Save();
         }
     }
 }

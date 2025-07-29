@@ -2,6 +2,7 @@
 using System.Linq;
 using ImGuiNET;
 using TataruLink.Services.Filters;
+using TataruLink.Utils;
 using TataruLink.Windows.Interfaces;
 
 namespace TataruLink.Windows.Partials;
@@ -15,7 +16,7 @@ public class ChatTypesWindow(Configuration.Configuration configuration) : IConfi
     public bool Draw()
     {
         var configChanged = false;
-        var categorizedChatTypes = configuration.Translation.CategorizedChatTypes;
+        var enabledChatTypes = configuration.Translation.EnabledChatTypes;
 
         // TODO: Replace with a localized string from Strings.resx
         ImGui.Text("Enable translation for each chat type category.");
@@ -23,28 +24,34 @@ public class ChatTypesWindow(Configuration.Configuration configuration) : IConfi
         ImGui.Separator();
 
         // Iterate over each category (e.g., "General", "Linkshells") and display its chat types in a table.
-        foreach (var category in categorizedChatTypes)
+        foreach (var category in XivChatTypeHelper.CategorizedChatTypesForDisplay)
         {
             if (!ImGui.CollapsingHeader(category.Key)) continue;
-            
-            if (ImGui.BeginTable($"Table_{category.Key}", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV))
-            {
-                // ToList() is used to create a copy, allowing safe modification during iteration.
-                foreach (var chatTypeEntry in category.Value.ToList())
-                {
-                    ImGui.TableNextColumn();
 
-                    var isEnabled = chatTypeEntry.Value;
-                    if (ImGui.Checkbox(chatTypeEntry.Key.ToString(), ref isEnabled))
-                    {
-                        category.Value[chatTypeEntry.Key] = isEnabled;
-                        configChanged = true;
-                    }
+            if (!ImGui.BeginTable($"Table_{category.Key}", 2,
+                                  ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV)) continue;
+            foreach (var chatType in category.Value)
+            {
+                ImGui.TableNextColumn();
+
+                // The checkbox's state is determined by whether the type exists in the HashSet.
+                var isEnabled = enabledChatTypes.Contains(chatType);
+                // The checkbox's label is retrieved from the helper for a user-friendly name.
+                if (!ImGui.Checkbox(XivChatTypeHelper.GetDisplayName(chatType), ref isEnabled)) continue;
+                // When the checkbox state changes, we modify the HashSet accordingly.
+                if (isEnabled)
+                {
+                    enabledChatTypes.Add(chatType);
                 }
-                ImGui.EndTable();
+                else
+                {
+                    enabledChatTypes.Remove(chatType);
+                }
+                configChanged = true;
             }
+            ImGui.EndTable();
         }
-        
+
         return configChanged;
     }
 }

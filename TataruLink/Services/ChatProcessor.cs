@@ -1,7 +1,12 @@
 ﻿// File: TataruLink/Services/ChatProcessor.cs
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using TataruLink.Models;
 using TataruLink.Services.Interfaces;
@@ -12,57 +17,120 @@ namespace TataruLink.Services;
 /// The high-level service that orchestrates the chat translation pipeline.
 /// It applies filters and, if they pass, coordinates with the TranslationService to perform the translation.
 /// </summary>
-public class ChatProcessor(
-    IPluginLog log,
-    ITranslationService translationService,
-    IEnumerable<IChatFilter> filters,
-    Configuration.Configuration configuration)
-    : IChatProcessor
+public class ChatProcessor : IChatProcessor
 {
-    /// <inheritdoc />
-    public bool FilterMessage(XivChatType type, string senderName, string message)
+    private readonly IPluginLog log;
+    private readonly ITranslationService translationService;
+    private readonly IChatMessageFormatter formatter;
+    private readonly IEnumerable<IChatFilter> filters;
+    private readonly ICacheService cacheService;
+    private readonly Configuration.Configuration configuration;
+
+    private readonly ConcurrentQueue<ChatMessage> messageQueue = new();
+    private readonly CancellationTokenSource cancellationTokenSource = new();
+    private readonly SemaphoreSlim semaphore = new(10); // Max 5 concurrent translations
+    private readonly Task dispatcherTask;
+
+    public event Action<SeString>? OnTranslationReady; 
+    
+    public ChatProcessor(
+        IPluginLog log,
+        ITranslationService translationService,
+        IChatMessageFormatter formatter,
+        IEnumerable<IChatFilter> filters,
+        ICacheService cacheService,
+        Configuration.Configuration configuration)
     {
-        foreach (var filter in filters)
-        {
-            if (filter.ShouldTranslate(type, senderName, message)) continue;
-            log.Debug($"Message filtered out by {filter.GetType().Name}: \"{message}\"");
-            return false;
-        }
-        return true;
+        this.log = log;
+        this.translationService = translationService;
+        this.formatter = formatter;
+        this.filters = filters;
+        this.configuration = configuration;
+        this.cacheService = cacheService;
+
+        dispatcherTask = Task.Run(ProcessQueueAsync);
+        log.Info("ChatProcessor pipeline started.");
     }
     
     /// <inheritdoc />
-    public async Task<TranslationRecord?> ExecuteTranslationAsync(XivChatType type, string senderName, string message)
+    public void EnqueueMessage(XivChatType type, string sender, string message)
     {
-        log.Debug($"Message passed all filters. Proceeding to translation: \"{message}\"");
-        
-        var sourceLanguage = configuration.Translation.EnableLanguageDetection 
-                                 ? "auto"
-                                 : configuration.Translation.FromLanguage;
-        var targetLanguage = configuration.Translation.TranslateTo;
-
-        var translationResult = await translationService.TranslateAsync(message, sourceLanguage, targetLanguage);
-
-        if (translationResult != null)
+        messageQueue.Enqueue(new ChatMessage(type, sender, message));
+    }
+    
+    private async Task ProcessQueueAsync()
+    {
+        var token = cancellationTokenSource.Token;
+        while (!token.IsCancellationRequested)
         {
-            // Enrich the record with context that only this layer knows (sender and chat type).
-            // This creates a new, complete record for the final output.
-            return new TranslationRecord(
-                translationResult.OriginalText,
-                translationResult.TranslatedText,
-                senderName,
-                type,
-                translationResult.EngineUsed,
-                translationResult.SourceLanguage,
-                translationResult.DetectedSourceLanguage,
-                translationResult.TargetLanguage)
+            if (messageQueue.TryDequeue(out var chatMessage))
             {
-                TimeTakenMs = translationResult.TimeTakenMs,
-                FromCache = translationResult.FromCache
-            };
+                await semaphore.WaitAsync(token);
+                _ = Task.Run(() => HandleMessageAsync(chatMessage), token);
+            }
+            else
+            {
+                await Task.Delay(50, token);
+            }
         }
+    }
+    
+    private async Task HandleMessageAsync(ChatMessage chatMessage)
+    {
+        try
+        {
+            if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender, chatMessage.Message)))
+            {
+                return;
+            }
 
-        log.Warning($"Translation failed for message: \"{message}\"");
-        return null;
+            var sourceLang = configuration.Translation.EnableLanguageDetection ? "auto" : configuration.Translation.FromLanguage;
+            var targetLang = configuration.Translation.TranslateTo;
+
+            var record = await translationService.TranslateAsync(chatMessage.Message, sourceLang, targetLang);
+            if (record == null) return;
+            
+            var enrichedRecord = new TranslationRecord(
+                record.OriginalText, record.TranslatedText, chatMessage.Sender, chatMessage.Type,
+                record.EngineUsed, record.SourceLanguage, record.DetectedSourceLanguage, record.TargetLanguage
+            ) { TimeTakenMs = record.TimeTakenMs, FromCache = record.FromCache };
+            var formattedMessage = formatter.FormatMessage(enrichedRecord);
+            
+            // If the record was newly translated (not from cache), store the complete, enriched version in the cache.
+            if (!enrichedRecord.FromCache && configuration.Translation.UseCache)
+            {
+                cacheService.Set(enrichedRecord);
+            }
+            
+            OnTranslationReady?.Invoke(formattedMessage);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.Error(ex, $"Error processing message: {chatMessage.Message}");
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+    
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        cancellationTokenSource.Cancel();
+        try
+        {
+            // Wait for the dispatcher to stop, but not forever.
+            dispatcherTask.Wait(1000); 
+        }
+        catch (AggregateException ex)
+        {
+            // Log exceptions that aren't task cancellation.
+            ex.Handle(e => e is TaskCanceledException);
+        }
+        
+        cancellationTokenSource.Dispose();
+        semaphore.Dispose();
+        log.Info("ChatProcessor pipeline stopped.");
     }
 }

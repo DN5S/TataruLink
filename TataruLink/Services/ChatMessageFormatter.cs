@@ -3,6 +3,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using TataruLink.Models;
 using TataruLink.Services.Interfaces;
+using TataruLink.Utils;
 
 namespace TataruLink.Services;
 
@@ -29,13 +30,19 @@ public class ChatMessageFormatter(Configuration.Configuration configuration) : I
                             .Replace("{charCount}", record.CharacterCount.ToString())
                             .Replace("{detectedLang}", record.DetectedSourceLanguage ?? "N/A")
                             .Replace("{fromCache}", record.FromCache ? "(Cached)" : "")
-                            .Replace("{chatType}", record.ChatType.ToString())
+                            .Replace("{chatType}", XivChatTypeHelper.GetDisplayName(record.ChatType))
                             .Replace("{sourceLang}", record.SourceLanguage)
                             .Replace("{targetLang}", record.TargetLanguage);
         
         var builder = new SeStringBuilder();
         
-        builder.Add(new UIForegroundPayload(displaySettings.TranslationColor));
+        var colorKey = displaySettings.TranslationColor;
+        if (colorKey > ushort.MaxValue)
+        {
+            colorKey = 62; // Default Color
+        }
+        
+        builder.Add(new UIForegroundPayload((ushort)colorKey));
         builder.AddText(formattedText.Trim());
         builder.Add(new UIForegroundPayload(0)); // Reset to default color
         

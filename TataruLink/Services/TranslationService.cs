@@ -88,13 +88,7 @@ public class TranslationService : ITranslationService
             }
         }
 
-        // 4. If translation was successful, store it in the cache.
-        if (resultRecord != null && configuration.Translation.UseCache)
-        {
-            log.Debug($"Storing new translation in cache for: \"{text}\"");
-            cacheService.Set(resultRecord);
-        }
-        else if (resultRecord == null)
+        if (resultRecord == null)
         {
             log.Warning($"All translation attempts failed for: \"{text}\"");
         }

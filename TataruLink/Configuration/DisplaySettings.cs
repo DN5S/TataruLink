@@ -26,7 +26,7 @@ public class DisplaySettings
     /// <summary>
     /// Gets or sets the key for the color from the UIColor sheet to be used for the translated text.
     /// </summary>
-    public ushort TranslationColor { get; set; } = 62; // Default: A nice light blue
+    public uint TranslationColor { get; set; } = 0; // Default: A nice light blue
 
     /// <summary>
     /// Gets or sets the mode determining the output location for translated messages.
