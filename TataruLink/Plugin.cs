@@ -1,4 +1,5 @@
 ﻿// File: TataruLink/Plugin.cs
+
 using Dalamud.Game.Command;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -56,12 +57,6 @@ public sealed class Plugin : IDalamudPlugin
     
     #endregion
     
-    #region Other Fields and Properties
-
-    public Configuration.Configuration Configuration { get; }
-    
-    #endregion
-    
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         ICommandManager commandManager,
@@ -82,21 +77,15 @@ public sealed class Plugin : IDalamudPlugin
         #endregion 
         
         this.log.Info("TataruLink is starting up.");
-
-        #region Load configuration
-        
-        Configuration = this.pluginInterface.GetPluginConfig() as Configuration.Configuration ?? new Configuration.Configuration();
-        Configuration.Initialize(this.pluginInterface);
-
-        #endregion 
         
         // Instantiate and assemble all services
-        services = ConfigureServices();
+        var configManager = new ConfigurationManager(this.pluginInterface);
+        services = ConfigureServices(configManager);
         
         #region Initialize windows
 
         mainWindow = new MainWindow(services.GetRequiredService<ICacheService>());
-        configWindow = new ConfigWindow(this);
+        configWindow = new ConfigWindow(services.GetRequiredService<IConfigurationManager>());
         chatOverlayWindow = new ChatOverlayWindow();
         windowSystem.AddWindow(mainWindow);
         windowSystem.AddWindow(configWindow);
@@ -143,43 +132,42 @@ public sealed class Plugin : IDalamudPlugin
     /// This method centralizes the logic for service creation and dependency management.
     /// </summary>
     /// <returns>A fully configured ServiceProvider.</returns>
-    private ServiceProvider ConfigureServices()
+    private ServiceProvider ConfigureServices(IConfigurationManager configManager)
     {
         var serviceCollection = new ServiceCollection();
 
-        // Register Dalamud services and plugin configuration as singletons,
-        // making them available to any other service that needs them.
+        // Register Dalamud services
         serviceCollection.AddSingleton(pluginInterface);
         serviceCollection.AddSingleton(commandManager);
         serviceCollection.AddSingleton(log);
         serviceCollection.AddSingleton(chatGui);
         serviceCollection.AddSingleton(clientState);
         serviceCollection.AddSingleton(framework);
-        serviceCollection.AddSingleton(Configuration);
+        
+        // 1. Register the existing configManager instance as the implementation for IConfigurationManager.
+        serviceCollection.AddSingleton(configManager); 
+        // 2. Register the Configuration object held by the manager.
+        serviceCollection.AddSingleton(configManager.Config);
 
-        // Register all translation engines. The TranslationService will receive an
-        // IEnumerable<ITranslationEngine> containing all registered engines.
-        serviceCollection.AddSingleton<ITranslationEngine, GoogleTranslateEngine>();
-        if (!string.IsNullOrEmpty(Configuration.Apis.DeepLApiKey))
-        {
-            serviceCollection.AddSingleton<ITranslationEngine>(
-                s => new DeepLTranslateEngine(Configuration.Apis.DeepLApiKey, false, s.GetRequiredService<IPluginLog>()));
-        }
-
-        // Register all chat filters. The ChatProcessor will receive an
-        // IEnumerable<IChatFilter> to build its filter pipeline.
-        serviceCollection.AddSingleton<IChatFilter, TranslationEnabledFilter>();
-        serviceCollection.AddSingleton<IChatFilter, EmptyMessageFilter>();
-        serviceCollection.AddSingleton<IChatFilter, SelfMessageFilter>();
-        serviceCollection.AddSingleton<IChatFilter, ChatTypeFilter>();
-
-        // Register the core services of the plugin as singletons.
-        // The DI container will automatically resolve their dependencies (e.g., IPluginLog, ICacheService)
-        // by looking at their constructors.
+        // Register core services
         serviceCollection.AddSingleton<ICacheService, CacheService>();
         serviceCollection.AddSingleton<ITranslationService, TranslationService>();
         serviceCollection.AddSingleton<IChatProcessor, ChatProcessor>();
         serviceCollection.AddSingleton<IChatMessageFormatter, ChatMessageFormatter>();
+
+        // Register translation engines
+        serviceCollection.AddSingleton<ITranslationEngine, GoogleTranslateEngine>();
+        if (!string.IsNullOrEmpty(configManager.Config.Apis.DeepLApiKey))
+        {
+            serviceCollection.AddSingleton<ITranslationEngine>(
+                s => new DeepLTranslateEngine(configManager.Config.Apis.DeepLApiKey, false, s.GetRequiredService<IPluginLog>()));
+        }
+
+        // Register chat filters
+        serviceCollection.AddSingleton<IChatFilter, TranslationEnabledFilter>();
+        serviceCollection.AddSingleton<IChatFilter, EmptyMessageFilter>();
+        serviceCollection.AddSingleton<IChatFilter, SelfMessageFilter>();
+        serviceCollection.AddSingleton<IChatFilter, ChatTypeFilter>();
 
         // Build and return the service provider.
         return serviceCollection.BuildServiceProvider();
@@ -217,8 +205,9 @@ public sealed class Plugin : IDalamudPlugin
     
     private void OnTranslationReady(SeString formattedMessage)
     {
-        var displayMode = Configuration.Display.DisplayMode;
-
+        var configuration = services.GetRequiredService<Configuration.Configuration>();
+        var displayMode = configuration.Display.DisplayMode;
+        
         // The framework call is now here, in the main plugin class.
         framework.RunOnFrameworkThread(() =>
         {
