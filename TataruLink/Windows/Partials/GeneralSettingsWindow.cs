@@ -1,8 +1,8 @@
 ﻿// TataruLink/Windows/Partials/GeneralSettingsUI.cs
 using System;
 using ImGuiNET;
-using TataruLink.Localization;
 using TataruLink.Configuration;
+using TataruLink.Localization;
 using TataruLink.Windows.Interfaces;
 
 namespace TataruLink.Windows.Partials;

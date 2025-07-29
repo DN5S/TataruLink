@@ -1,5 +1,4 @@
 ﻿// File: TataruLink/Services/Filters/TranslationEnabledFilter.cs
-using TataruLink.Configuration;
 using Dalamud.Game.Text;
 using TataruLink.Services.Interfaces;
 

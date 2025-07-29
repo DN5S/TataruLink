@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 using System.Web;
 using Dalamud.Plugin.Services;
 using TataruLink.Configuration;
-using TataruLink.Services.Interfaces;
 using TataruLink.Models;
+using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services.Engines;
 
