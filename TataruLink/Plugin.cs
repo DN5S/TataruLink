@@ -41,15 +41,14 @@ public sealed class Plugin : IDalamudPlugin
     #region TataruLink Windows
     
     private readonly WindowSystem windowSystem = new("TataruLink");
-    // TODO: Add MainWindow later.
-    // private MainWindow MainWindow
+    private readonly MainWindow mainWindow;
     private readonly ChatOverlayWindow chatOverlayWindow;
     private readonly ConfigWindow configWindow;
     #endregion
     
     #region TataruLink Commands
     
-    // private const string CommandName = "/tatarulink";
+    private const string CommandName = "/tatarulink";
     private const string OverlayCommandName = "/tataruoverlay";
     private const string ConfigCommandName = "/tataruconfig";
     private const string TestCommandName = "/tatarutest";
@@ -94,9 +93,11 @@ public sealed class Plugin : IDalamudPlugin
         InitializeServices();
         
         #region Initialize windows
-        
+
+        mainWindow = new MainWindow(cacheService);
         configWindow = new ConfigWindow(this);
         chatOverlayWindow = new ChatOverlayWindow();
+        windowSystem.AddWindow(mainWindow);
         windowSystem.AddWindow(configWindow);
         windowSystem.AddWindow(chatOverlayWindow);
         
@@ -104,7 +105,10 @@ public sealed class Plugin : IDalamudPlugin
         
         #region Setup command handlers
         
-        // TODO: Add /tatarulink command for main window.
+        this.commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Opens the TataruLink main window."
+        });
         this.commandManager.AddHandler(OverlayCommandName, new CommandInfo(OnOverlayCommand)
         {
             HelpMessage = "Toggles the TataruLink translation overlay window."
@@ -125,7 +129,6 @@ public sealed class Plugin : IDalamudPlugin
         // Set up hooks
         toggleConfigAction = () => configWindow.Toggle();
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
-        this.pluginInterface.UiBuilder.OpenConfigUi += toggleConfigAction;
         this.chatGui.ChatMessage += OnChatMessage;
 
         #endregion
@@ -169,11 +172,10 @@ public sealed class Plugin : IDalamudPlugin
         chatMessageFormatter = new ChatMessageFormatter(Configuration);
     }
     
-    // private void OnCommand(string command, string args)
-    // {
-    //     // TODO: Toggle MainUI
-    //     // ToggleMainUI();
-    // }
+    private void OnCommand(string command, string args)
+    {
+        mainWindow.Toggle();
+    }
     
     private void OnConfigCommand(string command, string args)
     {
@@ -269,6 +271,9 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.OpenConfigUi -= toggleConfigAction;
         pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
         
+        // Remove all command handlers
+        commandManager.RemoveHandler(CommandName);
+        commandManager.RemoveHandler(OverlayCommandName);
         commandManager.RemoveHandler(ConfigCommandName);
         commandManager.RemoveHandler(TestCommandName);
         
@@ -276,6 +281,4 @@ public sealed class Plugin : IDalamudPlugin
         configWindow.Dispose();
         (cacheService as IDisposable)?.Dispose();
     }
-    
-    public void ToggleConfigUI() => configWindow.Toggle();
 }
