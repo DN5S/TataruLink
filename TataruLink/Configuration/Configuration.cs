@@ -1,6 +1,4 @@
 ﻿// File: TataruLink/Configuration/Configuration.cs
-using System;
-using System.Threading;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 using Newtonsoft.Json;
@@ -22,22 +20,6 @@ public class Configuration : IPluginConfiguration
     [JsonIgnore]
     private IDalamudPluginInterface? pluginInterface;
     
-    [JsonIgnore]
-    private Action? onSaveHandler;
-
-    /// <summary>
-    /// An event that is invoked whenever the configuration is saved.
-    /// This is used to dynamically re-initialize services when settings change.
-    /// </summary>
-    public event Action? OnSave
-    {
-        add => onSaveHandler += value;
-        remove => onSaveHandler -= value;
-    }
-
-    [JsonIgnore]
-    private readonly Lock eventLock = new();
-
     /// <summary>
     /// Initializes the configuration instance with the plugin interface.
     /// </summary>
@@ -53,9 +35,5 @@ public class Configuration : IPluginConfiguration
     public void Save()
     {
         pluginInterface!.SavePluginConfig(this);
-        lock (eventLock)
-        {
-            onSaveHandler?.Invoke();
-        }
     }
 }
