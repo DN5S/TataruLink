@@ -56,55 +56,19 @@ public class TranslationSettings
     #region Translation Targets
 
     /// <summary>
-    /// Determines whether to translate messages for each chat type, grouped by category.
+    /// Stores the set of chat types for which translation is enabled.
+    /// Using a HashSet provides optimal O(1) performance for checking if a type is enabled.
     /// </summary>
-    public Dictionary<string, Dictionary<XivChatType, bool>> CategorizedChatTypes { get; set; } = new()
-    {
-        // Category: General Communication
-        { Strings.CategorizedChatTypes_General, new Dictionary<XivChatType, bool>
-            {
-                { XivChatType.Say, true }, { XivChatType.Shout, false }, { XivChatType.Yell, false },
-                { XivChatType.Party, true }, { XivChatType.CrossParty, true }, { XivChatType.Alliance, true },
-                { XivChatType.TellIncoming, true }, { XivChatType.TellOutgoing, false },
-                { XivChatType.FreeCompany, true }, { XivChatType.NoviceNetwork, false },
-                { XivChatType.PvPTeam, false }
-            }
-        },
-        
-        // Category: Linkshells
-        { Strings.CategorizedChatTypes_Linkshells, new Dictionary<XivChatType, bool>
-            {
-                { XivChatType.Ls1, false }, { XivChatType.Ls2, false }, { XivChatType.Ls3, false }, { XivChatType.Ls4, false },
-                { XivChatType.Ls5, false }, { XivChatType.Ls6, false }, { XivChatType.Ls7, false }, { XivChatType.Ls8, false }
-            }
-        },
-
-        // Category: Cross-world Linkshells
-        { Strings.CategorizedChatTypes_CWLS, new Dictionary<XivChatType, bool>
-            {
-                { XivChatType.CrossLinkShell1, false }, { XivChatType.CrossLinkShell2, false }, { XivChatType.CrossLinkShell3, false }, { XivChatType.CrossLinkShell4, false },
-                { XivChatType.CrossLinkShell5, false }, { XivChatType.CrossLinkShell6, false }, { XivChatType.CrossLinkShell7, false }, { XivChatType.CrossLinkShell8, false }
-            }
-        },
-
-        // Category: System & Emotes
-        { Strings.CategorizedChatTypes_System_and_Emotes, new Dictionary<XivChatType, bool>
-            {
-                { XivChatType.StandardEmote, false }, { XivChatType.CustomEmote, false },
-                { XivChatType.Echo, true }, { XivChatType.SystemMessage, false }, { XivChatType.SystemError, false },
-                { XivChatType.GatheringSystemMessage, false }, { XivChatType.ErrorMessage, false },
-                { XivChatType.RetainerSale, false }, { XivChatType.Debug, false }, { XivChatType.Notice, false },
-                { XivChatType.Urgent, false }
-            }
-        },
-        
-        // Category: NPC Dialogue
-        { Strings.CategorizedChatTypes_NPC, new Dictionary<XivChatType, bool>
-            {
-                { XivChatType.NPCDialogue, false }, { XivChatType.NPCDialogueAnnouncements, false }
-            }
-        }
-    };
+    public HashSet<XivChatType> EnabledChatTypes { get; set; } =
+    [
+        XivChatType.Say,
+        XivChatType.Party,
+        XivChatType.CrossParty,
+        XivChatType.Alliance,
+        XivChatType.TellIncoming,
+        XivChatType.FreeCompany,
+        XivChatType.Echo
+    ];
 
     #endregion
 
