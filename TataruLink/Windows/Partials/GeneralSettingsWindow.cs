@@ -106,6 +106,29 @@ public class GeneralSettingsWindow(Configuration.Configuration configuration) : 
         
         ImGui.Text("Display Settings");
         
+        // --- Display Mode Radio Buttons ---
+        ImGui.Text("Output Mode:");
+        ImGui.SameLine();
+        if (ImGui.RadioButton("In-Game Chat", configuration.Display.DisplayMode == TranslationDisplayMode.InGameChat))
+        {
+            configuration.Display.DisplayMode = TranslationDisplayMode.InGameChat;
+            configChanged = true;
+        }
+        ImGui.SameLine();
+        if (ImGui.RadioButton("Overlay Window", configuration.Display.DisplayMode == TranslationDisplayMode.SeparateWindow))
+        {
+            configuration.Display.DisplayMode = TranslationDisplayMode.SeparateWindow;
+            configChanged = true;
+        }
+        ImGui.SameLine();
+        if (ImGui.RadioButton("Both", configuration.Display.DisplayMode == TranslationDisplayMode.Both))
+        {
+            configuration.Display.DisplayMode = TranslationDisplayMode.Both;
+            configChanged = true;
+        }
+
+        ImGui.Separator();
+        
         // Translation Format Input
         var translationFormat = displaySettings.TranslationFormat;
         if (ImGui.InputText("Translation Format", ref translationFormat, 256))

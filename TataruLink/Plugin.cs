@@ -1,5 +1,4 @@
 ﻿// File: TataruLink/Plugin.cs
-
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -9,6 +8,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using TataruLink.Configuration;
 using TataruLink.Services;
 using TataruLink.Services.Engines;
 using TataruLink.Services.Filters;
@@ -41,16 +41,16 @@ public sealed class Plugin : IDalamudPlugin
     #region TataruLink Windows
     
     private readonly WindowSystem windowSystem = new("TataruLink");
-    private readonly ConfigWindow configWindow;
-        
     // TODO: Add MainWindow later.
     // private MainWindow MainWindow
-    
+    private readonly ChatOverlayWindow chatOverlayWindow;
+    private readonly ConfigWindow configWindow;
     #endregion
     
     #region TataruLink Commands
     
     // private const string CommandName = "/tatarulink";
+    private const string OverlayCommandName = "/tataruoverlay";
     private const string ConfigCommandName = "/tataruconfig";
     private const string TestCommandName = "/tatarutest";
     
@@ -70,29 +70,45 @@ public sealed class Plugin : IDalamudPlugin
         IChatGui chatGui,
         IClientState clientState)
     {
-        // Assign Dalamud services
+        #region Assign Dalamud services
+
         this.pluginInterface = pluginInterface;
         this.commandManager = commandManager;
         this.log = log;
         this.chatGui = chatGui;
         this.clientState = clientState;
+
+        #endregion 
         
         this.log.Info("TataruLink is starting up.");
+
+        #region Load configuration
         
-        // Load configuration
         Configuration = this.pluginInterface.GetPluginConfig() as Configuration.Configuration ?? new Configuration.Configuration();
         Configuration.Initialize(this.pluginInterface);
         Configuration.OnSave += InitializeServices;
+
+        #endregion 
         
         // Instantiate and assemble all services
         InitializeServices();
         
-        // Initialize windows
-        configWindow = new ConfigWindow(this);
-        windowSystem.AddWindow(configWindow);
-        toggleConfigAction = () => configWindow.Toggle();
+        #region Initialize windows
         
-        // Set up command handlers
+        configWindow = new ConfigWindow(this);
+        chatOverlayWindow = new ChatOverlayWindow();
+        windowSystem.AddWindow(configWindow);
+        windowSystem.AddWindow(chatOverlayWindow);
+        
+        #endregion
+        
+        #region Setup command handlers
+        
+        // TODO: Add /tatarulink command for main window.
+        this.commandManager.AddHandler(OverlayCommandName, new CommandInfo(OnOverlayCommand)
+        {
+            HelpMessage = "Toggles the TataruLink translation overlay window."
+        });
         this.commandManager.AddHandler(ConfigCommandName, new CommandInfo(OnConfigCommand)
         {
             HelpMessage = "Opens the TataruLink settings window."
@@ -102,12 +118,17 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Tests the translation pipeline. Usage: /tatarutest <text>"
         });
         
-        // TODO: Add /tatarulink command for main window.
-        
+        #endregion
+
+        #region Setup Hooks
+
         // Set up hooks
+        toggleConfigAction = () => configWindow.Toggle();
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
         this.pluginInterface.UiBuilder.OpenConfigUi += toggleConfigAction;
         this.chatGui.ChatMessage += OnChatMessage;
+
+        #endregion
         
         this.log.Info("TataruLink started successfully.");
     }
@@ -148,17 +169,22 @@ public sealed class Plugin : IDalamudPlugin
         chatMessageFormatter = new ChatMessageFormatter(Configuration);
     }
     
-    private void OnConfigCommand(string command, string args)
-    {
-        log.Debug("Config command executed. Toggling config window.");
-        configWindow.Toggle();
-    }
-
     // private void OnCommand(string command, string args)
     // {
     //     // TODO: Toggle MainUI
     //     // ToggleMainUI();
     // }
+    
+    private void OnConfigCommand(string command, string args)
+    {
+        log.Debug("Config command executed. Toggling config window.");
+        configWindow.Toggle();
+    }
+    
+    private void OnOverlayCommand(string command, string args)
+    {
+        chatOverlayWindow.Toggle();
+    }
     
     private void OnTestCommand(string command, string args)
     {
@@ -214,7 +240,16 @@ public sealed class Plugin : IDalamudPlugin
                 {
                     // Use the formatter to create a properly formatted SeString
                     var formattedMessage = chatMessageFormatter.FormatMessage(translationRecord);
-                    chatGui.Print(formattedMessage);
+                    var displayMode = Configuration.Display.DisplayMode;
+                    if (displayMode is TranslationDisplayMode.InGameChat or TranslationDisplayMode.Both)
+                    {
+                        chatGui.Print(formattedMessage);
+                    }
+
+                    if (displayMode is TranslationDisplayMode.SeparateWindow or TranslationDisplayMode.Both)
+                    {
+                        chatOverlayWindow.AddLog(formattedMessage);
+                    }
                 }
             }
             catch (Exception ex)
@@ -242,9 +277,5 @@ public sealed class Plugin : IDalamudPlugin
         (cacheService as IDisposable)?.Dispose();
     }
     
-    private void DrawUI() => windowSystem.Draw();
     public void ToggleConfigUI() => configWindow.Toggle();
-    
-    // TODO: ToggleMainUI 
-    // public void ToggleMainUI() => MainWindow.Toggle();
 }
