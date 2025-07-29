@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/Plugin.cs
 
+using System;
 using Dalamud.Game.Command;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -33,30 +34,30 @@ public sealed class Plugin : IDalamudPlugin
 
     #endregion
 
-    #region TataruLink Services 
-    
+    #region TataruLink Services
+
     private readonly ServiceProvider services;
-    
+
     #endregion
-    
+
     #region TataruLink Windows
-    
+
     private readonly WindowSystem windowSystem = new("TataruLink");
     private readonly MainWindow mainWindow;
     private readonly ChatOverlayWindow chatOverlayWindow;
     private readonly ConfigWindow configWindow;
-    
+
     #endregion
-    
+
     #region TataruLink Commands
-    
+
     private const string CommandName = "/tatarulink";
     private const string OverlayCommandName = "/tataruoverlay";
     private const string ConfigCommandName = "/tataruconfig";
     private const string TestCommandName = "/tatarutest";
-    
+
     #endregion
-    
+
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         ICommandManager commandManager,
@@ -74,14 +75,14 @@ public sealed class Plugin : IDalamudPlugin
         this.clientState = clientState;
         this.framework = framework;
 
-        #endregion 
-        
+        #endregion
+
         this.log.Info("TataruLink is starting up.");
-        
+
         // Instantiate and assemble all services
         var configManager = new ConfigurationManager(this.pluginInterface);
         services = ConfigureServices(configManager);
-        
+
         #region Initialize windows
 
         mainWindow = new MainWindow(services.GetRequiredService<ICacheService>());
@@ -90,11 +91,11 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem.AddWindow(mainWindow);
         windowSystem.AddWindow(configWindow);
         windowSystem.AddWindow(chatOverlayWindow);
-        
+
         #endregion
-        
+
         #region Setup command handlers
-        
+
         this.commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Opens the TataruLink main window."
@@ -111,7 +112,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             HelpMessage = "Tests the translation pipeline. Usage: /tatarutest <text>"
         });
-        
+
         #endregion
 
         #region Setup Hooks
@@ -119,13 +120,15 @@ public sealed class Plugin : IDalamudPlugin
         // Set up hooks
         services.GetRequiredService<IChatProcessor>().OnTranslationReady += OnTranslationReady;
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
+        this.pluginInterface.UiBuilder.OpenConfigUi += OnOpenConfigUi;
+        this.pluginInterface.UiBuilder.OpenMainUi += OnOpenMainUi;
         this.chatGui.ChatMessage += OnChatMessage;
 
         #endregion
-        
+
         this.log.Info("TataruLink started successfully.");
     }
-    
+
     /// <summary>
     /// Configures and builds the dependency injection container for the plugin.
     /// All services, filters, and engines are registered here.
@@ -143,9 +146,9 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton(chatGui);
         serviceCollection.AddSingleton(clientState);
         serviceCollection.AddSingleton(framework);
-        
+
         // 1. Register the existing configManager instance as the implementation for IConfigurationManager.
-        serviceCollection.AddSingleton(configManager); 
+        serviceCollection.AddSingleton(configManager);
         // 2. Register the Configuration object held by the manager.
         serviceCollection.AddSingleton(configManager.Config);
 
@@ -159,8 +162,9 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton<ITranslationEngine, GoogleTranslateEngine>();
         if (!string.IsNullOrEmpty(configManager.Config.Apis.DeepLApiKey))
         {
-            serviceCollection.AddSingleton<ITranslationEngine>(
-                s => new DeepLTranslateEngine(configManager.Config.Apis.DeepLApiKey, false, s.GetRequiredService<IPluginLog>()));
+            serviceCollection.AddSingleton<ITranslationEngine>(s => new DeepLTranslateEngine(
+                                                                   configManager.Config.Apis.DeepLApiKey, false,
+                                                                   s.GetRequiredService<IPluginLog>()));
         }
 
         // Register chat filters
@@ -172,13 +176,16 @@ public sealed class Plugin : IDalamudPlugin
         // Build and return the service provider.
         return serviceCollection.BuildServiceProvider();
     }
-    
+
     #region Command Handlers
-    
+
     private void OnCommand(string command, string args) => mainWindow.Toggle();
     private void OnConfigCommand(string command, string args) => configWindow.Toggle();
     private void OnOverlayCommand(string command, string args) => chatOverlayWindow.Toggle();
-    
+
+    private void OnOpenConfigUi() => configWindow.Toggle();
+    private void OnOpenMainUi() => mainWindow.Toggle();
+
     // This is the updated OnTestCommand method.
     private void OnTestCommand(string command, string args)
     {
@@ -191,31 +198,61 @@ public sealed class Plugin : IDalamudPlugin
         var chatProcessor = services.GetRequiredService<IChatProcessor>();
 
         chatProcessor.EnqueueMessage(XivChatType.Echo, "Test", args);
-    
+
         chatGui.Print($"Test message enqueued: \"{args}\"");
     }
-    
+
     #endregion
-    
-    private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+
+    private void OnChatMessage(
+        XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         if (isHandled) return;
-        services.GetRequiredService<IChatProcessor>().EnqueueMessage(type, sender.TextValue, message.TextValue);
+        
+        var senderValue = sender.TextValue;
+        var messageValue = message.TextValue;
+
+        if (string.IsNullOrEmpty(messageValue)) return;
+        
+        framework.RunOnFrameworkThread(() =>
+        {
+            try
+            {
+                var chatProcessor = services?.GetRequiredService<IChatProcessor>();
+                chatProcessor?.EnqueueMessage(type, senderValue, messageValue);
+            }
+            catch (Exception ex)
+            {
+                log.Error($"Error processing chat message: {ex}");
+            }
+        });
+
+
     }
-    
+
     private void OnTranslationReady(SeString formattedMessage)
     {
-        var configuration = services.GetRequiredService<Configuration.Configuration>();
+        var configuration = services?.GetRequiredService<Configuration.Configuration>();
+        if (configuration == null) return;
+
         var displayMode = configuration.Display.DisplayMode;
-        
+
         // The framework call is now here, in the main plugin class.
         framework.RunOnFrameworkThread(() =>
         {
-            if (displayMode is not TranslationDisplayMode.SeparateWindow)
-                chatGui.Print(formattedMessage);
-            if (displayMode is not TranslationDisplayMode.InGameChat)
-                chatOverlayWindow.AddLog(formattedMessage);
+            try
+            {
+                if (displayMode is not TranslationDisplayMode.SeparateWindow)
+                    chatGui.Print(formattedMessage);
+                if (displayMode is not TranslationDisplayMode.InGameChat)
+                    chatOverlayWindow?.AddLog(formattedMessage);
+            }
+            catch (Exception ex)
+            {
+                log.Error($"Error displaying translation: {ex}");
+            }
         });
+
     }
 
     public void Dispose()
@@ -224,15 +261,18 @@ public sealed class Plugin : IDalamudPlugin
 
         chatGui.ChatMessage -= OnChatMessage;
         pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
-        
+        pluginInterface.UiBuilder.OpenConfigUi -= OnOpenConfigUi;
+        pluginInterface.UiBuilder.OpenMainUi -= OnOpenMainUi;
+
         // Remove all command handlers.
         commandManager.RemoveHandler(CommandName);
         commandManager.RemoveHandler(OverlayCommandName);
         commandManager.RemoveHandler(ConfigCommandName);
         commandManager.RemoveHandler(TestCommandName);
-        
+
         windowSystem.RemoveAllWindows();
         services.Dispose();
     }
 }
+
  

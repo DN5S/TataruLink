@@ -23,6 +23,7 @@ public class ChatProcessor : IChatProcessor
     private readonly ITranslationService translationService;
     private readonly IChatMessageFormatter formatter;
     private readonly IEnumerable<IChatFilter> filters;
+    private readonly ICacheService cacheService;
     private readonly Configuration.Configuration configuration;
 
     private readonly ConcurrentQueue<ChatMessage> messageQueue = new();
@@ -37,6 +38,7 @@ public class ChatProcessor : IChatProcessor
         ITranslationService translationService,
         IChatMessageFormatter formatter,
         IEnumerable<IChatFilter> filters,
+        ICacheService cacheService,
         Configuration.Configuration configuration)
     {
         this.log = log;
@@ -44,6 +46,7 @@ public class ChatProcessor : IChatProcessor
         this.formatter = formatter;
         this.filters = filters;
         this.configuration = configuration;
+        this.cacheService = cacheService;
 
         dispatcherTask = Task.Run(ProcessQueueAsync);
         log.Info("ChatProcessor pipeline started.");
@@ -92,6 +95,12 @@ public class ChatProcessor : IChatProcessor
                 record.EngineUsed, record.SourceLanguage, record.DetectedSourceLanguage, record.TargetLanguage
             ) { TimeTakenMs = record.TimeTakenMs, FromCache = record.FromCache };
             var formattedMessage = formatter.FormatMessage(enrichedRecord);
+            
+            // If the record was newly translated (not from cache), store the complete, enriched version in the cache.
+            if (!enrichedRecord.FromCache && configuration.Translation.UseCache)
+            {
+                cacheService.Set(enrichedRecord);
+            }
             
             OnTranslationReady?.Invoke(formattedMessage);
         }

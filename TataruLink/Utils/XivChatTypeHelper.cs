@@ -79,14 +79,19 @@ public static class XivChatTypeHelper
     /// </summary>
     public static string GetDisplayName(XivChatType type)
     {
+        if (DisplayNames.TryGetValue(type, out var name))
+        {
+            return name;
+        }
+
         var typeCode = (ushort)type;
         return typeCode switch
         {
             >= (ushort)XivChatType.Ls1 and <= (ushort)XivChatType.Ls8 =>
-                $"Linkshell {typeCode - (ushort)XivChatType.Ls1 + 1}",
+                $"Linkshell-{typeCode - (ushort)XivChatType.Ls1 + 1}",
             >= (ushort)XivChatType.CrossLinkShell1 and <= (ushort)XivChatType.CrossLinkShell8 =>
-                $"CWLS {typeCode - (ushort)XivChatType.CrossLinkShell1 + 1}",
-            _ => DisplayNames.TryGetValue(type, out var name) ? name : type.ToString()
+                $"CWLS-{typeCode - (ushort)XivChatType.CrossLinkShell1 + 1}",
+            _ => type.ToString()
         };
     }
 }
