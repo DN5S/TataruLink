@@ -5,10 +5,12 @@ using TataruLink.Services.Interfaces;
 namespace TataruLink.Services.Filters;
 
 /// <summary>
-/// Filter that blocks empty or whitespace messages from being translated.
+/// A filter that prevents empty or whitespace-only messages from being sent for translation,
+/// avoiding unnecessary API calls.
 /// </summary>
 public class EmptyMessageFilter : IChatFilter
 {
+    /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)
     {
         return !string.IsNullOrWhiteSpace(message);

@@ -9,23 +9,28 @@ using ImGuiNET;
 
 namespace TataruLink.Windows;
 
+/// <summary>
+/// A dedicated, movable window for displaying real-time translated chat messages,
+/// inspired by the Tataru Helper application.
+/// </summary>
 public class ChatOverlayWindow : Window, IDisposable
 {
     private readonly List<SeString> logHistory = [];
     private bool scrollToBottom;
-    
+
     public ChatOverlayWindow() : base("Translation Overlay##TataruLinkOverlay")
     {
         Size = new Vector2(400, 200);
         SizeCondition = ImGuiCond.FirstUseEver;
-        Flags = ImGuiWindowFlags.None;
     }
 
     public void Dispose() { }
 
     /// <summary>
-    /// Adds a new formatted message to the overlay.
+    /// Adds a new formatted message to the overlay's history.
+    /// This method is called by the Plugin's chat event handler.
     /// </summary>
+    /// <param name="formattedMessage">The formatted SeString to add.</param>
     public void AddLog(SeString formattedMessage)
     {
         logHistory.Add(formattedMessage);
@@ -33,10 +38,11 @@ public class ChatOverlayWindow : Window, IDisposable
         {
             logHistory.RemoveAt(0);
         }
-        // When a new message is added, flag that we need to scroll to the bottom.
+        // Flag that the view should scroll to the bottom on the next Draw call.
         scrollToBottom = true;
     }
-    
+
+    /// <inheritdoc/>
     public override void Draw()
     {
         if (ImGui.Button("Clear"))
@@ -46,14 +52,12 @@ public class ChatOverlayWindow : Window, IDisposable
         
         ImGui.Separator();
         
-        // This child window will contain the scrollable chat log.
         ImGui.BeginChild("scrolling", Vector2.Zero, false, ImGuiWindowFlags.HorizontalScrollbar);
         foreach (var seString in logHistory)
         {
             ImGui.TextUnformatted(seString.TextValue);
         }
         
-        // If a new message was added, scroll to the bottom.
         if (scrollToBottom)
         {
             ImGui.SetScrollHereY(1.0f);

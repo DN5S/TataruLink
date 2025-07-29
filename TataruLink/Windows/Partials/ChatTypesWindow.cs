@@ -1,11 +1,15 @@
 ﻿// File: TataruLink/Windows/Partials/ChatTypesUI.cs
 using System.Linq;
 using ImGuiNET;
-using TataruLink.Localization;
+using TataruLink.Services.Filters;
 using TataruLink.Windows.Interfaces;
 
 namespace TataruLink.Windows.Partials;
 
+/// <summary>
+/// A partial window responsible for rendering the UI for enabling or disabling translations for specific chat types.
+/// This directly configures the behavior of the <see cref="ChatTypeFilter"/>.
+/// </summary>
 public class ChatTypesWindow(Configuration.Configuration configuration) : IConfigWindowPartial
 {
     public bool Draw()
@@ -18,27 +22,27 @@ public class ChatTypesWindow(Configuration.Configuration configuration) : IConfi
         ImGui.Text("Changes will be applied to all channels within that category.");
         ImGui.Separator();
 
-        // Iterate over each category (e.g., "General", "Linkshells")
-        foreach (var chatTypesInCategory 
-                 in from category in categorizedChatTypes 
-                    where ImGui.CollapsingHeader(category.Key) 
-                    where ImGui.BeginTable($"Table_{category.Key}", 2,
-                                           ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV) select category.Value)
+        // Iterate over each category (e.g., "General", "Linkshells") and display its chat types in a table.
+        foreach (var category in categorizedChatTypes)
         {
-            // Iterate over each chat type within the current category
-            foreach (var chatTypeEntry in chatTypesInCategory.ToList())
+            if (!ImGui.CollapsingHeader(category.Key)) continue;
+            
+            if (ImGui.BeginTable($"Table_{category.Key}", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV))
             {
-                ImGui.TableNextColumn();
-
-                var isEnabled = chatTypeEntry.Value;
-                if (ImGui.Checkbox(chatTypeEntry.Key.ToString(), ref isEnabled))
+                // ToList() is used to create a copy, allowing safe modification during iteration.
+                foreach (var chatTypeEntry in category.Value.ToList())
                 {
-                    // Update the value in the dictionary and mark config as changed
-                    chatTypesInCategory[chatTypeEntry.Key] = isEnabled;
-                    configChanged = true;
+                    ImGui.TableNextColumn();
+
+                    var isEnabled = chatTypeEntry.Value;
+                    if (ImGui.Checkbox(chatTypeEntry.Key.ToString(), ref isEnabled))
+                    {
+                        category.Value[chatTypeEntry.Key] = isEnabled;
+                        configChanged = true;
+                    }
                 }
+                ImGui.EndTable();
             }
-            ImGui.EndTable();
         }
         
         return configChanged;

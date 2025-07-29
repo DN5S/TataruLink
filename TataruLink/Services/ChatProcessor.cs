@@ -9,8 +9,8 @@ using TataruLink.Services.Interfaces;
 namespace TataruLink.Services;
 
 /// <summary>
-/// Processes incoming chat messages to determine if they need translation and performs it if necessary.
-/// This is the highest-level service that orchestrates the entire translation pipeline.
+/// The high-level service that orchestrates the chat translation pipeline.
+/// It applies filters and, if they pass, coordinates with the TranslationService to perform the translation.
 /// </summary>
 public class ChatProcessor(
     IPluginLog log,
@@ -24,7 +24,6 @@ public class ChatProcessor(
     {
         foreach (var filter in filters)
         {
-            // This now runs on the main thread, so SelfMessageFilter is safe.
             if (filter.ShouldTranslate(type, senderName, message)) continue;
             log.Debug($"Message filtered out by {filter.GetType().Name}: \"{message}\"");
             return false;
@@ -37,37 +36,33 @@ public class ChatProcessor(
     {
         log.Debug($"Message passed all filters. Proceeding to translation: \"{message}\"");
         
-        // 1. Determine translation parameters from configuration
         var sourceLanguage = configuration.Translation.EnableLanguageDetection 
                                  ? "auto"
                                  : configuration.Translation.FromLanguage;
         var targetLanguage = configuration.Translation.TranslateTo;
 
-        // 2. Execute translation via TranslationService
         var translationResult = await translationService.TranslateAsync(message, sourceLanguage, targetLanguage);
 
-        // 3. If translation is successful, enrich with chat context that only this layer knows
         if (translationResult != null)
         {
-            // Instead of creating a new record, update the existing one with context information
-            // This preserves all the metadata from the translation process
+            // Enrich the record with context that only this layer knows (sender and chat type).
+            // This creates a new, complete record for the final output.
             return new TranslationRecord(
-                originalText: translationResult.OriginalText,
-                translatedText: translationResult.TranslatedText,
-                sender: senderName, // Context enrichment: actual sender
-                chatType: type,     // Context enrichment: actual chat type
-                engineUsed: translationResult.EngineUsed,
-                sourceLanguage: translationResult.SourceLanguage,
-                detectedSourceLanguage: translationResult.DetectedSourceLanguage,
-                targetLanguage: translationResult.TargetLanguage
-            )
+                translationResult.OriginalText,
+                translationResult.TranslatedText,
+                senderName,
+                type,
+                translationResult.EngineUsed,
+                translationResult.SourceLanguage,
+                translationResult.DetectedSourceLanguage,
+                translationResult.TargetLanguage)
             {
                 TimeTakenMs = translationResult.TimeTakenMs,
                 FromCache = translationResult.FromCache
             };
         }
 
-        log.Debug($"Translation failed or returned null for message: \"{message}\"");
+        log.Warning($"Translation failed for message: \"{message}\"");
         return null;
     }
 }

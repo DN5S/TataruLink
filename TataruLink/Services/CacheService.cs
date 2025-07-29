@@ -44,8 +44,8 @@ public class CacheStatistics
 }
 
 /// <summary>
-/// Translated Results cache service using IMemoryCache.
-/// Includes automatic expiration, size limiting, statistics, and warm-up capabilities.
+/// A thread-safe, high-performance translation cache service built upon IMemoryCache.
+/// Provides features such as automatic expiration, size limiting, performance statistics, and key tracking for enumeration.
 /// </summary>
 public class CacheService : ICacheService, IDisposable
 {
@@ -54,7 +54,6 @@ public class CacheService : ICacheService, IDisposable
     private readonly CacheOptions options;
     public CacheStatistics Statistics { get; } = new();
     
-    // Allowing IMemoryCache injection for testability.
     public CacheService(CacheOptions? cacheOptions = null, IMemoryCache? memoryCache = null)
     {
         options = cacheOptions ?? new CacheOptions();
@@ -67,13 +66,15 @@ public class CacheService : ICacheService, IDisposable
     /// <inheritdoc />
     public bool TryGet(string originalText, out TranslationRecord? record)
     {
-        if (memoryCache.TryGetValue(originalText, out record))
+        if (memoryCache.TryGetValue(originalText, out record) && record != null)
         {
             Statistics.IncrementHit();
+            record.FromCache = true; // Mark the record as having been retrieved from the cache.
             return true;
         }
 
         Statistics.IncrementMiss();
+        record = null;
         return false;
     }
     
@@ -84,12 +85,11 @@ public class CacheService : ICacheService, IDisposable
         {
             SlidingExpiration = options.DefaultSlidingExpiration,
             AbsoluteExpirationRelativeToNow = options.DefaultAbsoluteExpiration,
-            Size = 1, // Fix the size of each item to 1, so SizeLimit means the number of items.
+            Size = 1,
             Priority = CacheItemPriority.Normal
         };
         
-        // Register a callback to remove the key from the tracking dictionary when the entry is evicted.
-        entryOptions.RegisterPostEvictionCallback((key, value, reason, state) =>
+        entryOptions.RegisterPostEvictionCallback((key, _, _, state) =>
         {
             ((ConcurrentDictionary<string, bool>)state!).TryRemove(key.ToString()!, out _);
         }, cacheKeys);
@@ -98,9 +98,9 @@ public class CacheService : ICacheService, IDisposable
         cacheKeys.TryAdd(record.OriginalText, true);
     }
 
+    /// <inheritdoc />
     public IEnumerable<TranslationRecord> GetHistory()
     {
-        // Iterate over a snapshot of the keys to avoid collection modification issues.
         foreach (var key in cacheKeys.Keys.ToList())
         {
             if (memoryCache.TryGetValue(key, out TranslationRecord? record))
@@ -113,28 +113,22 @@ public class CacheService : ICacheService, IDisposable
     /// <inheritdoc />
     public void Clear()
     {
-        // Since IMemoryCache does not have a direct Clear method, use Compact to remove all items.
-        if (memoryCache is MemoryCache mc)
-        {
-            mc.Compact(1.0); // Remove 100% of the items.
-        }
         cacheKeys.Clear();
+        (memoryCache as MemoryCache)?.Compact(1.0);
         Statistics.Reset();
     }
     
     /// <summary>
-    /// Asynchronously pre-loads the cache with provided data.
-    /// This is useful for loading a persistent cache from a file on startup.
+    /// Asynchronously pre-loads the cache with a collection of translation records.
+    /// This is useful for restoring a persistent cache from a file on plugin startup.
     /// </summary>
-    /// <param name="preloadData">Enumerable of TranslationRecord objects to load into the cache.</param>
+    /// <param name="preloadData">An enumerable collection of TranslationRecord objects to load into the cache.</param>
     public Task WarmUpAsync(IEnumerable<TranslationRecord> preloadData)
     {
         return Task.Run(() =>
         {
             foreach (var record in preloadData)
             {
-                // Mark as coming from a cache since this is preloaded data
-                record.FromCache = true;
                 Set(record);
             }
         });

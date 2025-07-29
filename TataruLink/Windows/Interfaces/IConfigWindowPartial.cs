@@ -1,14 +1,14 @@
-﻿// File: TataruLink/Windows/Interfaces/IConfigUIPartial.cs
+﻿// File: TataruLink/Windows/Interfaces/IConfigWindowPartial.cs
 namespace TataruLink.Windows.Interfaces;
 
 /// <summary>
-/// Defines a UI partial that can be drawn within a window.
+/// Defines a contract for a UI component that can be drawn as part of a larger configuration window.
 /// </summary>
 public interface IConfigWindowPartial
 {
     /// <summary>
-    /// Draws the UI elements for this partial.
+    /// Draws the UI elements for this partial view.
     /// </summary>
-    /// <returns>True if any configuration was changed, otherwise false.</returns>
+    /// <returns>true if any configuration setting was changed during this draw call; otherwise, false.</returns>
     bool Draw();
 }

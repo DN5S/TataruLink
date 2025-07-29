@@ -6,14 +6,20 @@ using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services;
 
+/// <summary>
+/// A service that formats a <see cref="TranslationRecord"/> into a decorated <see cref="SeString"/> for display.
+/// </summary>
 public class ChatMessageFormatter(Configuration.Configuration configuration) : IChatMessageFormatter
 {
+    /// <inheritdoc />
     public SeString FormatMessage(TranslationRecord record)
     {
         var displaySettings = configuration.Display;
         var format = displaySettings.TranslationFormat;
         
-        // Build a comprehensive format string with all available placeholders
+        // Replace all available placeholders.
+        // {sender}, {original}, {translated}, {engine}, {time}, {charCount},
+        // {detectedLang}, {fromCache}, {chatType}, {sourceLang}, {targetLang}
         var formattedText = format
                             .Replace("{sender}", record.Sender)
                             .Replace("{original}", record.OriginalText)
@@ -23,14 +29,15 @@ public class ChatMessageFormatter(Configuration.Configuration configuration) : I
                             .Replace("{charCount}", record.CharacterCount.ToString())
                             .Replace("{detectedLang}", record.DetectedSourceLanguage ?? "N/A")
                             .Replace("{fromCache}", record.FromCache ? "(Cached)" : "")
-                            .Replace("{chatType}", record.ChatType.ToString());
+                            .Replace("{chatType}", record.ChatType.ToString())
+                            .Replace("{sourceLang}", record.SourceLanguage)
+                            .Replace("{targetLang}", record.TargetLanguage);
         
         var builder = new SeStringBuilder();
         
-        // Apply color to the entire formatted message
         builder.Add(new UIForegroundPayload(displaySettings.TranslationColor));
-        builder.AddText(formattedText.Trim());   // Use Trim to remove potential trailing space from {fromCache}
-        builder.Add(new UIForegroundPayload(0)); // 0 resets to the default color
+        builder.AddText(formattedText.Trim());
+        builder.Add(new UIForegroundPayload(0)); // Reset to default color
         
         return builder.Build();
     }

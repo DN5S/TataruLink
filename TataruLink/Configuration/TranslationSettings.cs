@@ -1,11 +1,9 @@
 ﻿// File: TataruLink/Configuration/TranslationSettings.cs
-using System;
 using System.Collections.Generic;
 using Dalamud.Game.Text;
 using TataruLink.Localization;
 
 namespace TataruLink.Configuration;
-
 
 public enum TranslationEngine
 {
@@ -14,18 +12,14 @@ public enum TranslationEngine
     // TODO: Add other translation engines.
 }
 
-[Serializable]
 public class ApiSettings
 {
     public string? DeepLApiKey { get; set; }
 }
 
-[Serializable]
 public class TranslationSettings
 {
     #region Core Controls
-
-    // --- Core Controls ---
 
     /// <summary>
     /// Enable or disable all translation features of the plugin.

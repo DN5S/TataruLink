@@ -6,8 +6,8 @@ using TataruLink.Configuration;
 namespace TataruLink.Models;
 
 /// <summary>
-/// Represents a complete record of a single translation event, including all relevant metadata.
-/// This object is used for caching, formatting, and future analytics.
+/// Encapsulates the complete result of a single translation operation, including contextual metadata.
+/// This immutable record serves as the data transfer object throughout the translation pipeline.
 /// </summary>
 public class TranslationRecord(
     string originalText,
@@ -19,43 +19,83 @@ public class TranslationRecord(
     string? detectedSourceLanguage,
     string targetLanguage)
 {
+    #region Metadata
+    
+    /// <summary>
+    /// A unique identifier for this specific translation event.
+    /// </summary>
+    public Guid Id { get; } = Guid.NewGuid();
+
+    /// <summary>
+    /// The UTC timestamp when the translation record was created.
+    /// </summary>
+    public DateTime Timestamp { get; } = DateTime.UtcNow;
+    
+    /// <summary>
+    /// The number of characters in the original text, useful for API consumption tracking.
+    /// </summary>
+    public int CharacterCount => OriginalText.Length;
+    
+    /// <summary>
+    /// The time taken to receive a response from the translation engine, in milliseconds.
+    /// This value is enriched by the translation engine.
+    /// </summary>
+    public long TimeTakenMs { get; init; }
+
+    /// <summary>
+    /// A value indicating whether this record was retrieved from the cache.
+    /// This value is enriched by the cache service.
+    /// </summary>
+    public bool FromCache { get; set; }
+
+    #endregion
+
     #region Original Message Context
 
+    /// <summary>
+    /// The original, untranslated text of the message.
+    /// </summary>
     public string OriginalText { get; } = originalText;
+
+    /// <summary>
+    /// The sender's name of the original message.
+    /// </summary>
     public string Sender { get; } = sender;
+
+    /// <summary>
+    /// The chat type (e.g., Say, Party, Shout) of the original message.
+    /// </summary>
     public XivChatType ChatType { get; } = chatType;
 
     #endregion
 
     #region Translation Details
 
+    /// <summary>
+    /// The resulting translated text.
+    /// </summary>
     public string TranslatedText { get; } = translatedText;
+
+    /// <summary>
+    /// The translation engine that produced this result.
+    /// </summary>
     public TranslationEngine EngineUsed { get; } = engineUsed;
 
     /// <summary>
-    /// The source language used for the translation. Can be "auto" or a specific code.
+    /// The source language provided for the translation request (e.g., "auto", "ja").
     /// </summary>
     public string SourceLanguage { get; } = sourceLanguage;
 
     /// <summary>
-    /// The language code automatically detected by the engine. Null if detection was off or failed.
+    /// The source language automatically detected by the translation engine, if applicable.
+    /// This may be null if language detection was disabled or the engine does not provide this information.
     /// </summary>
     public string? DetectedSourceLanguage { get; } = detectedSourceLanguage;
 
     /// <summary>
-    /// The target language for the translation, specified by the user's configuration.
+    /// The target language requested for the translation (e.g., "en").
     /// </summary>
     public string TargetLanguage { get; } = targetLanguage;
-
-    #endregion
-
-    #region Metadata
-
-    public Guid Id { get; } = Guid.NewGuid();
-    public DateTime Timestamp { get; } = DateTime.UtcNow;
-    public int CharacterCount => OriginalText.Length;
-    public long TimeTakenMs { get; set; }
-    public bool FromCache { get; set; }
 
     #endregion
 }

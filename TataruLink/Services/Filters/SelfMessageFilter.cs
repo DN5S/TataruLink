@@ -6,18 +6,24 @@ using TataruLink.Services.Interfaces;
 namespace TataruLink.Services.Filters;
 
 /// <summary>
-/// Filter that checks if messages from the player themselves should be translated.
+/// A filter that checks if messages sent by the player themselves should be translated,
+/// based on the 'TranslateMyOwnMessages' configuration setting.
 /// </summary>
 public class SelfMessageFilter(Configuration.Configuration configuration, IClientState clientState) : IChatFilter
 {
+    /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)
     {
+        // LocalPlayer can be null during zone transitions or loading screens.
         var localPlayerName = clientState.LocalPlayer?.Name.TextValue;
+        
+        // If the sender is the local player, translate only if the configuration allows it.
+        if (localPlayerName != null && sender == localPlayerName)
+        {
+            return configuration.Translation.TranslateMyOwnMessages;
+        }
 
-        // If the sender is the local player...
-        return sender != localPlayerName ||
-               // ...translate only if the configuration says so.
-               configuration.Translation.TranslateMyOwnMessages;
-        // If it's not our message, this filter doesn't apply.
+        // If the message is not from the local player, this filter does not apply.
+        return true;
     }
 }

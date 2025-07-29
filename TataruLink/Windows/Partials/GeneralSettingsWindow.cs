@@ -7,6 +7,9 @@ using TataruLink.Windows.Interfaces;
 
 namespace TataruLink.Windows.Partials;
 
+/// <summary>
+/// A partial window for displaying and managing the main configuration settings of the plugin.
+/// </summary>
 public class GeneralSettingsWindow(Configuration.Configuration configuration) : IConfigWindowPartial
 {
     public bool Draw()
@@ -139,15 +142,6 @@ public class GeneralSettingsWindow(Configuration.Configuration configuration) : 
         ImGui.TextDisabled(
             "Placeholders: {sender}, {original}, {translated}, {engine}, {time}, " +
             "{charCount}, {detectedLang}, {fromCache}, {chatType}");
-
-        // TODO: Translation Color Picker
-        // Where is Color Table?
-        /*
-        var color = ImGui.ColorConvertU32ToFloat4(displaySettings.TranslationColor);
-        if (!ImGui.ColorEdit4("Translation Color", ref color)) return configChanged;
-        displaySettings.TranslationColor = ImGui.ColorConvertFloat4ToU32(color);
-        configChanged = true;
-        */
 
         #endregion
 

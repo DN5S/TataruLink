@@ -17,6 +17,10 @@ using TataruLink.Windows;
 
 namespace TataruLink;
 
+/// <summary>
+/// The main entry point for the TataruLink plugin.
+/// This class is responsible for initializing all services, windows, and event handlers.
+/// </summary>
 public sealed class Plugin : IDalamudPlugin
 {
     #region Services from Dalamud
@@ -30,7 +34,8 @@ public sealed class Plugin : IDalamudPlugin
     #endregion
 
     #region TataruLink Services 
-
+    
+    // These services are mutable and re-initialized when the configuration changes.
     private ICacheService cacheService = null!;
     private ITranslationService translationService = null!;
     private IChatProcessor chatProcessor = null!;
@@ -56,8 +61,7 @@ public sealed class Plugin : IDalamudPlugin
     #endregion
     
     #region Other Fields and Properties
-    
-    private readonly Action toggleConfigAction;
+
     public Configuration.Configuration Configuration { get; }
     
     #endregion
@@ -127,7 +131,6 @@ public sealed class Plugin : IDalamudPlugin
         #region Setup Hooks
 
         // Set up hooks
-        toggleConfigAction = () => configWindow.Toggle();
         this.pluginInterface.UiBuilder.Draw += windowSystem.Draw;
         this.chatGui.ChatMessage += OnChatMessage;
 
@@ -137,8 +140,8 @@ public sealed class Plugin : IDalamudPlugin
     }
     
     /// <summary>
-    /// Centralized method to build and wire up all of our services.
-    /// This is now automatically called whenever the configuration is saved.
+    /// Centralized method to build and wire up all services.
+    /// This is automatically called on startup and whenever the configuration is saved.
     /// </summary>
     private void InitializeServices()
     {
@@ -172,21 +175,11 @@ public sealed class Plugin : IDalamudPlugin
         chatMessageFormatter = new ChatMessageFormatter(Configuration);
     }
     
-    private void OnCommand(string command, string args)
-    {
-        mainWindow.Toggle();
-    }
+    #region Command Handlers
     
-    private void OnConfigCommand(string command, string args)
-    {
-        log.Debug("Config command executed. Toggling config window.");
-        configWindow.Toggle();
-    }
-    
-    private void OnOverlayCommand(string command, string args)
-    {
-        chatOverlayWindow.Toggle();
-    }
+    private void OnCommand(string command, string args) => mainWindow.Toggle();
+    private void OnConfigCommand(string command, string args) => configWindow.Toggle();
+    private void OnOverlayCommand(string command, string args) => chatOverlayWindow.Toggle();
     
     private void OnTestCommand(string command, string args)
     {
@@ -216,10 +209,11 @@ public sealed class Plugin : IDalamudPlugin
             catch (Exception ex)
             {
                 log.Error(ex, "An error occurred during test command execution.");
-                chatGui.Print("Test translation failed. Check logs for details.");
             }
         });
     }
+    
+    #endregion
     
     private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
@@ -228,11 +222,10 @@ public sealed class Plugin : IDalamudPlugin
         var senderText = sender.TextValue;
         var messageText = message.TextValue;
         
-        if (!chatProcessor.FilterMessage(type, senderText, messageText))
-        {
-            return; // The message was filtered out, do nothing further.
-        }
+        // 1. Main Thread: Run fast, thread-sensitive filters.
+        if (!chatProcessor.FilterMessage(type, senderText, messageText)) return;
         
+        // 2. Background Thread: Run slow, network-bound translation.
         Task.Run(async () =>
         {
             try
@@ -240,18 +233,14 @@ public sealed class Plugin : IDalamudPlugin
                 var translationRecord = await chatProcessor.ExecuteTranslationAsync(type, senderText, messageText);
                 if (translationRecord != null)
                 {
-                    // Use the formatter to create a properly formatted SeString
                     var formattedMessage = chatMessageFormatter.FormatMessage(translationRecord);
                     var displayMode = Configuration.Display.DisplayMode;
+
                     if (displayMode is TranslationDisplayMode.InGameChat or TranslationDisplayMode.Both)
-                    {
                         chatGui.Print(formattedMessage);
-                    }
 
                     if (displayMode is TranslationDisplayMode.SeparateWindow or TranslationDisplayMode.Both)
-                    {
                         chatOverlayWindow.AddLog(formattedMessage);
-                    }
                 }
             }
             catch (Exception ex)
@@ -265,20 +254,19 @@ public sealed class Plugin : IDalamudPlugin
     {
         log.Info("TataruLink is shutting down.");
 
-        // Unsubscribe from all events to prevent memory leaks
+        // Unsubscribe from all events to prevent memory leaks.
         Configuration.OnSave -= InitializeServices;
         chatGui.ChatMessage -= OnChatMessage;
-        pluginInterface.UiBuilder.OpenConfigUi -= toggleConfigAction;
+        pluginInterface.UiBuilder.OpenConfigUi -= configWindow.Toggle;
         pluginInterface.UiBuilder.Draw -= windowSystem.Draw;
         
-        // Remove all command handlers
+        // Remove all command handlers.
         commandManager.RemoveHandler(CommandName);
         commandManager.RemoveHandler(OverlayCommandName);
         commandManager.RemoveHandler(ConfigCommandName);
         commandManager.RemoveHandler(TestCommandName);
         
         windowSystem.RemoveAllWindows();
-        configWindow.Dispose();
         (cacheService as IDisposable)?.Dispose();
     }
 }

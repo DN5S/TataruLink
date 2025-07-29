@@ -2,22 +2,28 @@
 using System.Net.Http;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
-using TataruLink.Services.Interfaces;
 using TataruLink.Configuration;
 using TataruLink.Models;
+using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services.Engines;
 
 /// <summary>
-/// An abstract base class for translation engines to share common functionality.
-/// Manages a static HttpClient instance for efficiency.
+/// Provides a foundational abstract class for translation engines, sharing common infrastructure.
 /// </summary>
+/// <remarks>
+/// This class manages a static <see cref="HttpClient"/> instance to promote reuse and prevent
+/// socket exhaustion, a common issue when creating many HttpClient instances.
+/// It also provides a logger instance for derived classes.
+/// </remarks>
 public abstract class BaseTranslationEngine(IPluginLog log) : ITranslationEngine
 {
-    // Use a static HttpClient to avoid socket exhaustion.
     protected static readonly HttpClient HttpClient = new();
     protected readonly IPluginLog Log = log;
 
+    /// <inheritdoc />
     public abstract TranslationEngine EngineType { get; }
+
+    /// <inheritdoc />
     public abstract Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
 }

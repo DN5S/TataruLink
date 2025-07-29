@@ -2,34 +2,38 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web;
-using Dalamud.Game.Text;
 using Dalamud.Plugin.Services;
 using TataruLink.Configuration;
+using TataruLink.Services.Interfaces;
 using TataruLink.Models;
 
 namespace TataruLink.Services.Engines;
 
 /// <summary>
-/// Translation engine implementation for Google Translate.
-/// Uses the unofficial, free translation API with robust parsing.
+/// An implementation of <see cref="ITranslationEngine"/> that uses the unofficial Google Translate API.
 /// </summary>
+/// <remarks>
+/// This engine relies on an undocumented API endpoint used by Google's public translation services.
+/// It does not require an API key but may be unstable or subject to change without notice.
+/// Includes robust parsing to handle potential variations in the response structure.
+/// </remarks>
 public class GoogleTranslateEngine(IPluginLog log) : BaseTranslationEngine(log)
 {
     private const string ApiUrlTemplate =
         "https://translate.googleapis.com/translate_a/single?client=gtx&sl={0}&tl={1}&dt=t&q={2}";
 
+    /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.Google;
 
-    public override async Task<TranslationRecord?> TranslateAsync(
-        string text, string sourceLanguage, string targetLanguage)
+    /// <inheritdoc />
+    public override async Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
     {
         if (string.IsNullOrEmpty(text)) return null;
 
-        var stopwatch = Stopwatch.StartNew(); // Records Process Time
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var url = string.Format(ApiUrlTemplate,
@@ -41,8 +45,6 @@ public class GoogleTranslateEngine(IPluginLog log) : BaseTranslationEngine(log)
             response.EnsureSuccessStatusCode();
 
             var jsonResponse = await response.Content.ReadAsStringAsync();
-
-            // Defensive parsing and creating the record are now combined.
             var (translatedText, detectedLang) = ParseGoogleTranslateResponse(jsonResponse);
             stopwatch.Stop();
 
@@ -51,78 +53,52 @@ public class GoogleTranslateEngine(IPluginLog log) : BaseTranslationEngine(log)
             return new TranslationRecord(
                 originalText: text,
                 translatedText: translatedText,
-                sender: "",                     // This layer doesn't know the sender. It will be filled in by ChatProcessor.
-                chatType: default(XivChatType), // This layer doesn't know the chat type.
-                engineUsed: this.EngineType,
+                sender: "",
+                chatType: default,
+                engineUsed: EngineType,
                 sourceLanguage: sourceLanguage,
                 detectedSourceLanguage: detectedLang,
                 targetLanguage: targetLanguage
             ) { TimeTakenMs = stopwatch.ElapsedMilliseconds };
         }
-        catch (HttpRequestException httpEx)
-        {
-            stopwatch.Stop();
-            Log.Warning(
-                httpEx, "[GoogleTranslateEngine] Request failed. The service might be temporarily unavailable.");
-            return null;
-        }
-        catch (JsonException jsonEx)
-        {
-            stopwatch.Stop();
-            Log.Warning(
-                jsonEx, "[GoogleTranslateEngine] Failed to parse JSON response. The API structure may have changed.");
-            return null;
-        }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            Log.Error(ex, "[GoogleTranslateEngine] Translation failed.");
+            Log.Error(ex, "[GoogleTranslateEngine] An unexpected error occurred during translation.");
             return null;
         }
     }
 
+    /// <summary>
+    /// Defensively parses the JSON response from the unofficial Google Translate API.
+    /// </summary>
     private (string, string?) ParseGoogleTranslateResponse(string jsonResponse)
     {
-        // This method now returns both the translated text and the detected language.
-        // ... (robust parsing logic) ...
-        // Example of returning detected language:
-        // var detectedLang = root.GetArrayLength() > 2 && root[2].ValueKind == JsonValueKind.String ? root[2].GetString() : null;
-        // return (concatenatedText, detectedLang);
-        
-        // For brevity, returning the previous implementation's result. This needs to be enhanced.
         try
         {
             using var doc = JsonDocument.Parse(jsonResponse);
             var root = doc.RootElement;
 
-            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
-                return (string.Empty, null);
+            // 1. Root must be a non-empty array.
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0) return (string.Empty, null);
 
+            // 2. The first element must be an array containing translation blocks.
             var translationBlocks = root[0];
-            if (translationBlocks.ValueKind != JsonValueKind.Array || translationBlocks.GetArrayLength() == 0)
-                return (string.Empty, null);
+            if (translationBlocks.ValueKind != JsonValueKind.Array || translationBlocks.GetArrayLength() == 0) return (string.Empty, null);
 
-            // Extract Translated
+            // 3. Aggregate translated text from all blocks.
             var translatedText = string.Concat(translationBlocks.EnumerateArray()
-                                                                .Select(block =>
-                                                                            block.ValueKind == JsonValueKind.Array &&
-                                                                            block.GetArrayLength() > 0
-                                                                                ? block[0].GetString()
-                                                                                : null)
-                                                                .Where(str => !string.IsNullOrEmpty(str)));
+                .Select(block => block.ValueKind == JsonValueKind.Array && block.GetArrayLength() > 0 ? block[0].GetString() : null)
+                .Where(str => !string.IsNullOrEmpty(str)));
 
-            // Extract DetectedLang (Google API Response: [[[translation]], null, "detected_lang"])
-            string? detectedLang = null;
-            if (root.GetArrayLength() > 2 && root[2].ValueKind == JsonValueKind.String)
-            {
-                detectedLang = root[2].GetString();
-            }
+            // 4. The detected language is typically the third element in the root array.
+            var detectedLang = root.GetArrayLength() > 2 && root[2].ValueKind == JsonValueKind.String ? root[2].GetString() : null;
 
             return (translatedText, detectedLang);
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
-            Log.Error(ex, "[GoogleTranslateEngine] Error during robust JSON parsing.");
+            Log.Warning(ex, "[GoogleTranslateEngine] Failed to parse JSON response. The API structure may have changed.");
             return (string.Empty, null);
         }
     }
