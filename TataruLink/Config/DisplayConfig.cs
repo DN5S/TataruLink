@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Configuration/DisplaySettings.cs
+﻿// File: TataruLink/Config/DisplayConfig.cs
 
 namespace TataruLink.Config;
 
@@ -7,9 +7,20 @@ namespace TataruLink.Config;
 /// </summary>
 public enum TranslationDisplayMode
 {
-    InGameChat,     // Print to the default game chat window.
-    SeparateWindow, // Print to our custom overlay window only.
-    Both            // Print to both locations.
+    /// <summary>
+    /// Display translations in the default in-game chat window.
+    /// </summary>
+    InGameChat,
+
+    /// <summary>
+    /// Display translations only in the dedicated, movable overlay window.
+    /// </summary>
+    SeparateWindow,
+
+    /// <summary>
+    /// Display translations in both the in-game chat and the overlay window.
+    /// </summary>
+    Both
 }
 
 /// <summary>

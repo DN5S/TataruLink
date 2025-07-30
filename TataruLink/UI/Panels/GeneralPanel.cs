@@ -1,44 +1,47 @@
-﻿// TataruLink/Windows/Partials/GeneralSettingsUI.cs
+﻿// File: TataruLink/UI/Panels/GeneralPanel.cs
 
 using System;
 using ImGuiNET;
 using TataruLink.Config;
 using TataruLink.Interfaces.UI;
-using TataruLink.Resources;
 
 namespace TataruLink.UI.Panels;
 
 /// <summary>
-/// A partial window for displaying and managing the main configuration settings of the plugin.
+/// A settings panel for managing the core configuration of the plugin.
+/// This includes translation engine settings, language preferences, and API keys.
 /// </summary>
 public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
 {
+    /// <inheritdoc />
     public bool Draw()
     {
         var configChanged = false;
-        var translationSettings = tataruConfig.Translation;
-        var displaySettings = tataruConfig.Display;
+        // For clarity, get direct references to the specific config sections.
+        var translationSettings = tataruConfig.TranslationSettings;
+        var displaySettings = tataruConfig.DisplaySettings;
+        var apiSettings = tataruConfig.ApiSettings;
 
         #region Core Controls
 
+        // ImGui requires local variables to be passed by reference.
+        // We create them here to make the code cleaner and avoid direct manipulation of config properties in the UI calls.
         var enableTranslations = translationSettings.EnableTranslations;
-        if (ImGui.Checkbox(Strings.GeneralEnableTranslations, ref enableTranslations))
+        if (ImGui.Checkbox("Enable Translations", ref enableTranslations))
         {
             translationSettings.EnableTranslations = enableTranslations;
             configChanged = true;
         }
 
-        ImGui.Separator();
-
         var enableAutomaticChatTranslation = translationSettings.EnableAutomaticChatTranslation;
-        if (ImGui.Checkbox(Strings.GeneralEnableAutoChat, ref enableAutomaticChatTranslation))
+        if (ImGui.Checkbox("Enable Automatic Chat Translation", ref enableAutomaticChatTranslation))
         {
             translationSettings.EnableAutomaticChatTranslation = enableAutomaticChatTranslation;
             configChanged = true;
         }
 
         var translateMyOwnMessages = translationSettings.TranslateMyOwnMessages;
-        if (ImGui.Checkbox(Strings.GeneralTranslateOwn, ref translateMyOwnMessages))
+        if (ImGui.Checkbox("Translate My Own Messages", ref translateMyOwnMessages))
         {
             translationSettings.TranslateMyOwnMessages = translateMyOwnMessages;
             configChanged = true;
@@ -46,14 +49,13 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
 
         #endregion
 
-        ImGui.Spacing();
         ImGui.Separator();
         
         #region Engine and Language
 
         var engineNames = Enum.GetNames<TranslationEngine>();
         var currentEngineIndex = (int)translationSettings.Engine;
-        if (ImGui.Combo(Strings.GeneralEngine, ref currentEngineIndex, engineNames, engineNames.Length))
+        if (ImGui.Combo("Engine", ref currentEngineIndex, engineNames, engineNames.Length))
         {
             translationSettings.Engine = (TranslationEngine)currentEngineIndex;
             configChanged = true;
@@ -61,23 +63,24 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
 
         // TODO: Replace with a real language list from a service or a static list.
         var translateTo = translationSettings.TranslateTo;
-        if (ImGui.InputText(Strings.GeneralTranslateTo, ref translateTo, 5))
+        if (ImGui.InputText("Translate To", ref translateTo, 5))
         {
             translationSettings.TranslateTo = translateTo;
             configChanged = true;
         }
 
         var enableLanguageDetection = translationSettings.EnableLanguageDetection;
-        if (ImGui.Checkbox(Strings.GeneralEnableLangDetect, ref enableLanguageDetection))
+        if (ImGui.Checkbox("Enable Language Detection", ref enableLanguageDetection))
         {
             translationSettings.EnableLanguageDetection = enableLanguageDetection;
             configChanged = true;
         }
 
+        // Only show the 'From Language' input if auto-detection is disabled.
         if (!translationSettings.EnableLanguageDetection)
         {
             var fromLanguage = translationSettings.FromLanguage;
-            if (ImGui.InputText(Strings.GeneralFromLanguage, ref fromLanguage, 5))
+            if (ImGui.InputText("From Language", ref fromLanguage, 5))
             {
                 translationSettings.FromLanguage = fromLanguage;
                 configChanged = true;
@@ -86,16 +89,14 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
 
         #endregion
         
-        ImGui.Spacing();
         ImGui.Separator();
 
         #region API Keys
 
-        ImGui.Text(Strings.GeneralAPIKeys);
+        ImGui.Text("API Keys");
 
-        var apiSettings = tataruConfig.Apis;
         var deepLKey = apiSettings.DeepLApiKey ?? string.Empty;
-        if (ImGui.InputText(Strings.GeneralDeepLKey, ref deepLKey, 100, ImGuiInputTextFlags.Password))
+        if (ImGui.InputText("DeepL API Key", ref deepLKey, 100, ImGuiInputTextFlags.Password))
         {
             apiSettings.DeepLApiKey = deepLKey;
             configChanged = true;
@@ -103,37 +104,34 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
 
         #endregion
         
-        ImGui.Spacing();
         ImGui.Separator();
         
         #region Display Settings
         
         ImGui.Text("Display Settings");
         
-        // --- Display Mode Radio Buttons ---
         ImGui.Text("Output Mode:");
         ImGui.SameLine();
-        if (ImGui.RadioButton("In-Game Chat", tataruConfig.Display.DisplayMode == TranslationDisplayMode.InGameChat))
+        if (ImGui.RadioButton("In-Game Chat", displaySettings.DisplayMode == TranslationDisplayMode.InGameChat))
         {
-            tataruConfig.Display.DisplayMode = TranslationDisplayMode.InGameChat;
+            displaySettings.DisplayMode = TranslationDisplayMode.InGameChat;
             configChanged = true;
         }
         ImGui.SameLine();
-        if (ImGui.RadioButton("Overlay Window", tataruConfig.Display.DisplayMode == TranslationDisplayMode.SeparateWindow))
+        if (ImGui.RadioButton("Overlay Window", displaySettings.DisplayMode == TranslationDisplayMode.SeparateWindow))
         {
-            tataruConfig.Display.DisplayMode = TranslationDisplayMode.SeparateWindow;
+            displaySettings.DisplayMode = TranslationDisplayMode.SeparateWindow;
             configChanged = true;
         }
         ImGui.SameLine();
-        if (ImGui.RadioButton("Both", tataruConfig.Display.DisplayMode == TranslationDisplayMode.Both))
+        if (ImGui.RadioButton("Both", displaySettings.DisplayMode == TranslationDisplayMode.Both))
         {
-            tataruConfig.Display.DisplayMode = TranslationDisplayMode.Both;
+            displaySettings.DisplayMode = TranslationDisplayMode.Both;
             configChanged = true;
         }
 
         ImGui.Separator();
         
-        // Translation Format Input
         var translationFormat = displaySettings.TranslationFormat;
         if (ImGui.InputText("Translation Format", ref translationFormat, 256))
         {

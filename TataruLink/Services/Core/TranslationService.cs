@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Services/TranslationService.cs
+﻿// File: TataruLink/Services/Core/TranslationService.cs
 
 using System;
 using System.Collections.Generic;
@@ -14,8 +14,8 @@ using TataruLink.Models;
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// The main service that orchestrates translation tasks.
-/// It coordinates between the cache, various translation engines, and formatting.
+/// Implements <see cref="ITranslationService"/> to orchestrate the entire translation pipeline.
+/// It coordinates caching, execution via different translation engines, and final message formatting.
 /// </summary>
 public class TranslationService : ITranslationService
 {
@@ -24,7 +24,9 @@ public class TranslationService : ITranslationService
     private readonly ICacheService cacheService;
     private readonly IMessageFormatter formatter;
     private readonly IReadOnlyDictionary<TranslationEngine, ITranslationEngine> engines;
-    
+
+    // A unique, non-standard separator to join and split text segments.
+    // This is designed to be unlikely to appear in normal chat and to be preserved by translation engines.
     private const string TranslationSeparator = "[TTR]";
 
     public TranslationService(
@@ -38,6 +40,9 @@ public class TranslationService : ITranslationService
         this.translationConfig = translationConfig;
         this.cacheService = cacheService;
         this.formatter = formatter;
+
+        // The DI container injects the collection of ITranslationEngine implementations.
+        // We convert it to a dictionary for efficient O(1) lookups by engine type.
         engines = translationEngines.ToDictionary(engine => engine.EngineType);
 
         this.log.Info($"TranslationService initialized with {engines.Count} engines.");
@@ -50,95 +55,110 @@ public class TranslationService : ITranslationService
         string sender,
         XivChatType chatType)
     {
+        // Join all text segments into a single string for a single API call.
         var combinedText = string.Join(TranslationSeparator, textsToTranslate);
         var sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
         var targetLang = translationConfig.TranslateTo;
 
-        var record = await TranslateAsync(combinedText, sourceLang, targetLang);
-        if (record == null) return null;
-        
-        // Complete Form of `TranslationRecord`
-        var finalRecord = new TranslationResults(
-            combinedText, record.TranslatedText, sender, chatType,
-            record.EngineUsed, record.SourceLanguage, record.DetectedSourceLanguage, record.TargetLanguage
-        ) { TimeTakenMs = record.TimeTakenMs, FromCache = record.FromCache };
-        
-        if (!record.FromCache && translationConfig.UseCache)
+        // Perform the core translation logic, including caching and fallbacks.
+        var translationResult = await TranslateAsync(combinedText, sourceLang, targetLang);
+        if (translationResult == null) return null; // Translation failed or was skipped.
+
+        // The initial result from TranslateAsync is partial. We now enrich it with the full context.
+        var finalResult = new TranslationResult(
+            combinedText, translationResult.TranslatedText, sender, chatType,
+            translationResult.EngineUsed, translationResult.SourceLanguage, translationResult.DetectedSourceLanguage, targetLang
+        ) { TimeTakenMs = translationResult.TimeTakenMs, FromCache = translationResult.FromCache };
+
+        // If the result did not come from the cache, add it now for future requests.
+        if (!finalResult.FromCache && translationConfig.UseCache)
         {
-            cacheService.Set(finalRecord);
+            cacheService.Set(finalResult);
         }
 
-        var translatedSegments = finalRecord.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
+        var translatedSegments = finalResult.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
 
+        // --- Defensive Check ---
+        // Verify that the translation engine preserved our separator.
         if (translatedSegments.Length == textsToTranslate.Count)
-            return formatter.FormatMessage(finalRecord, payloadTemplate, translatedSegments);
+        {
+            // If segment counts match, proceed with formatting.
+            return formatter.FormatMessage(finalResult, payloadTemplate, translatedSegments);
+        }
+
+        // If counts mismatch, the engine likely altered or removed the separator.
+        // Log a warning and use a fallback format to avoid crashing and to display the raw result.
         log.Warning($"Translation segment mismatch. Expected {textsToTranslate.Count}, got {translatedSegments.Length}. Engine may have altered separator. Fallback formatting will be used.");
         var fallbackBuilder = new SeStringBuilder();
         foreach (var payload in payloadTemplate.OfType<Payload>())
         {
             fallbackBuilder.Add(payload);
         }
-        fallbackBuilder.AddText($" (Translation Error: {record.TranslatedText})");
+        fallbackBuilder.AddText($" (Translation Error: {translationResult.TranslatedText})");
         return fallbackBuilder.Build();
-
     }
-    
-    private async Task<TranslationResults?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+
+    /// <summary>
+    /// Handles the core translation logic, including cache checks, primary engine execution, and fallback attempts.
+    /// </summary>
+    private async Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            log.Debug("Empty or whitespace text provided for translation.");
+            log.Debug("Skipping translation for empty or whitespace text.");
             return null;
         }
 
+        // 1. Attempt to retrieve from the cache first.
         if (translationConfig.UseCache &&
-            cacheService.TryGet(text, sourceLanguage, targetLanguage, out var cachedRecord))
+            cacheService.TryGet(text, sourceLanguage, targetLanguage, out var cachedResult))
         {
             log.Debug($"Cache hit for: \"{text}\" ({sourceLanguage} -> {targetLanguage})");
-            return cachedRecord;
+            return cachedResult;
         }
 
-        log.Debug($"Cache miss for: \"{text}\". Proceeding with translation.");
+        log.Debug($"Cache miss for: \"{text}\". Proceeding with API translation.");
 
+        // 2. Attempt translation with the primary engine.
         var primaryEngineType = translationConfig.Engine;
-        var resultRecord = await ExecuteTranslationAsync(primaryEngineType, text, sourceLanguage, targetLanguage);
+        var result = await ExecuteTranslationAsync(primaryEngineType, text, sourceLanguage, targetLanguage);
 
-        if (resultRecord == null && translationConfig.EnableFallback)
+        // 3. If primary fails and fallback is enabled, attempt with the fallback engine.
+        if (result == null && translationConfig.EnableFallback)
         {
             log.Warning($"Primary engine ({primaryEngineType}) failed. Attempting fallback.");
             var fallbackEngineType = translationConfig.FallbackEngine;
 
             if (fallbackEngineType != primaryEngineType)
             {
-                resultRecord = await ExecuteTranslationAsync(fallbackEngineType, text, sourceLanguage, targetLanguage);
-
-                if (resultRecord != null)
+                result = await ExecuteTranslationAsync(fallbackEngineType, text, sourceLanguage, targetLanguage);
+                if (result != null)
                 {
                     log.Info($"Fallback engine ({fallbackEngineType}) succeeded where primary failed.");
                 }
             }
             else
             {
-                log.Warning("Fallback engine is the same as the primary. Skipping fallback.");
+                log.Warning("Fallback engine is the same as the primary. Skipping fallback attempt.");
             }
         }
 
-        if (resultRecord == null)
+        if (result == null)
         {
             log.Warning($"All translation attempts failed for: \"{text}\"");
         }
 
-        return resultRecord;
+        return result;
     }
 
     /// <summary>
-    /// Executes translation using a specific engine.
+    /// Executes translation using a specific engine implementation.
     /// </summary>
-    private async Task<TranslationResults?> ExecuteTranslationAsync(TranslationEngine engineType, string text, string source, string target)
+    private async Task<TranslationResult?> ExecuteTranslationAsync(TranslationEngine engineType, string text, string source, string target)
     {
         if (!engines.TryGetValue(engineType, out var engine))
         {
-            log.Error($"Translation engine '{engineType}' is not registered or available.");
+            log.Error($"Translation engine '{engineType}' is not registered or available in the DI container.");
             return null;
         }
 
@@ -156,7 +176,7 @@ public class TranslationService : ITranslationService
         }
         catch (Exception ex)
         {
-            log.Error(ex, $"An unexpected error occurred while executing {engineType} engine.");
+            log.Error(ex, $"An unexpected error occurred while executing the {engineType} engine.");
             return null;
         }
     }

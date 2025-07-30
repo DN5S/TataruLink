@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Windows/Partials/ChatTypesUI.cs
+﻿// File: TataruLink/UI/Panels/ChatTypesPanel.cs
 
 using ImGuiNET;
 using TataruLink.Config;
@@ -9,46 +9,52 @@ using TataruLink.Utilities;
 namespace TataruLink.UI.Panels;
 
 /// <summary>
-/// A partial window responsible for rendering the UI for enabling or disabling translations for specific chat types.
-/// This directly configures the behavior of the <see cref="ChatTypeMessageFilter"/>.
+/// A settings panel responsible for rendering the UI for enabling or disabling translations for specific chat types.
+/// This panel directly configures the <see cref="TranslationConfig.EnabledChatTypes"/> set,
+/// which is used by the <see cref="ChatTypeMessageFilter"/>.
 /// </summary>
 public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel
 {
+    /// <inheritdoc />
     public bool Draw()
     {
         var configChanged = false;
-        var enabledChatTypes = tataruConfig.Translation.EnabledChatTypes;
+        var enabledChatTypes = tataruConfig.TranslationSettings.EnabledChatTypes;
 
-        // TODO: Replace with a localized string from Strings.resx
         ImGui.Text("Enable translation for each chat type category.");
         ImGui.Text("Changes will be applied to all channels within that category.");
         ImGui.Separator();
 
-        // Iterate over each category (e.g., "General", "Linkshells") and display its chat types in a table.
+        // Iterate over each category defined in our central utility class.
         foreach (var category in ChatTypeUtilities.CategorizedChatTypesForDisplay)
         {
             if (!ImGui.CollapsingHeader(category.Key)) continue;
 
-            if (!ImGui.BeginTable($"Table_{category.Key}", 2,
-                                  ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV)) continue;
+            if (!ImGui.BeginTable($"Table_{category.Key}", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV)) continue;
+            
+            // For each chat type in the category, create a checkbox.
             foreach (var chatType in category.Value)
             {
                 ImGui.TableNextColumn();
 
-                // The checkbox's state is determined by whether the type exists in the HashSet.
+                // The state of the checkbox is directly determined by the presence of the chatType in the HashSet.
                 var isEnabled = enabledChatTypes.Contains(chatType);
-                // The checkbox's label is retrieved from the helper for a user-friendly name.
-                if (!ImGui.Checkbox(ChatTypeUtilities.GetDisplayName(chatType), ref isEnabled)) continue;
-                // When the checkbox state changes, we modify the HashSet accordingly.
-                if (isEnabled)
+                
+                // The checkbox's label is the user-friendly name from our utility class.
+                if (ImGui.Checkbox(ChatTypeUtilities.GetDisplayName(chatType), ref isEnabled))
                 {
-                    enabledChatTypes.Add(chatType);
+                    // If the user changes the checkbox state, update the underlying HashSet.
+                    if (isEnabled)
+                    {
+                        enabledChatTypes.Add(chatType);
+                    }
+                    else
+                    {
+                        enabledChatTypes.Remove(chatType);
+                    }
+                    // Flag that the configuration has changed and needs to be saved.
+                    configChanged = true;
                 }
-                else
-                {
-                    enabledChatTypes.Remove(chatType);
-                }
-                configChanged = true;
             }
             ImGui.EndTable();
         }

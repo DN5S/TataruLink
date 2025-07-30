@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Services/Engines/GoogleTranslateEngine.cs
+﻿// File: TataruLink/Services/Translation/Engines/GoogleTranslationEngine.cs
 
 using System;
 using System.Diagnostics;
@@ -14,12 +14,12 @@ using TataruLink.Models;
 namespace TataruLink.Services.Translation.Engines;
 
 /// <summary>
-/// An implementation of <see cref="ITranslationEngine"/> that uses the unofficial Google Translate API.
+/// An implementation of <see cref="ITranslationEngine"/> that uses the unofficial, public Google Translate API.
 /// </summary>
 /// <remarks>
-/// This engine relies on an undocumented API endpoint used by Google's public translation services.
-/// It does not require an API key but may be unstable or subject to change without notice.
-/// Includes robust parsing to handle potential variations in the response structure.
+/// This engine relies on an undocumented API endpoint. It does not require an API key, making it a free option,
+/// but its response structure may change without notice, potentially breaking this implementation.
+/// The parsing logic is designed to be as robust and defensive as possible to mitigate this risk.
 /// </remarks>
 public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log)
 {
@@ -30,7 +30,7 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
     public override TranslationEngine EngineType => TranslationEngine.Google;
 
     /// <inheritdoc />
-    public override async Task<TranslationResults?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+    public override async Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
     {
         if (string.IsNullOrEmpty(text)) return null;
 
@@ -51,10 +51,10 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
 
             if (string.IsNullOrEmpty(translatedText)) return null;
 
-            return new TranslationResults(
+            return new TranslationResult(
                 originalText: text,
                 translatedText: translatedText,
-                sender: "",
+                sender: string.Empty, // Sender and ChatType are context-specific, enriched later.
                 chatType: default,
                 engineUsed: EngineType,
                 sourceLanguage: sourceLanguage,
@@ -65,42 +65,43 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
         catch (Exception ex)
         {
             stopwatch.Stop();
-            Log.Error(ex, "[GoogleTranslateEngine] An unexpected error occurred during translation.");
+            Log.Error(ex, "[GoogleTranslateEngine] An unexpected error occurred. The API may be down or the endpoint may have changed.");
             return null;
         }
     }
 
     /// <summary>
     /// Defensively parses the JSON response from the unofficial Google Translate API.
+    /// The response is a complex, multi-level JSON array.
     /// </summary>
-    private (string, string?) ParseGoogleTranslateResponse(string jsonResponse)
+    private (string? TranslatedText, string? DetectedLanguage) ParseGoogleTranslateResponse(string jsonResponse)
     {
         try
         {
             using var doc = JsonDocument.Parse(jsonResponse);
             var root = doc.RootElement;
 
-            // 1. Root must be a non-empty array.
-            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0) return (string.Empty, null);
+            // The root must be a non-empty array.
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0) return (null, null);
 
-            // 2. The first element must be an array containing translation blocks.
+            // The first element must be an array containing the translation blocks.
             var translationBlocks = root[0];
-            if (translationBlocks.ValueKind != JsonValueKind.Array || translationBlocks.GetArrayLength() == 0) return (string.Empty, null);
+            if (translationBlocks.ValueKind != JsonValueKind.Array || translationBlocks.GetArrayLength() == 0) return (null, null);
 
-            // 3. Aggregate translated text from all blocks.
+            // Aggregate the first string from each block, which contains the translated segment.
             var translatedText = string.Concat(translationBlocks.EnumerateArray()
                 .Select(block => block.ValueKind == JsonValueKind.Array && block.GetArrayLength() > 0 ? block[0].GetString() : null)
-                .Where(str => !string.IsNullOrEmpty(str)));
+                .Where(s => !string.IsNullOrEmpty(s)));
 
-            // 4. The detected language is typically the third element in the root array.
+            // The detected language code is typically the third element in the root array.
             var detectedLang = root.GetArrayLength() > 2 && root[2].ValueKind == JsonValueKind.String ? root[2].GetString() : null;
 
             return (translatedText, detectedLang);
         }
         catch (JsonException ex)
         {
-            Log.Warning(ex, "[GoogleTranslateEngine] Failed to parse JSON response. The API structure may have changed.");
-            return (string.Empty, null);
+            Log.Warning(ex, "[GoogleTranslateEngine] Failed to parse JSON response. The API structure has likely changed.");
+            return (null, null);
         }
     }
 }

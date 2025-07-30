@@ -1,14 +1,18 @@
-﻿// File: TataruLink/Windows/Interfaces/IConfigWindowPartial.cs
+﻿// File: TataruLink/Interfaces/UI/ISettingsPanel.cs
+
 namespace TataruLink.Interfaces.UI;
 
 /// <summary>
-/// Defines a contract for a UI component that can be drawn as part of a larger configuration window.
+/// Defines a contract for a self-contained UI component that can be rendered
+/// as a panel or tab within a larger settings window.
 /// </summary>
 public interface ISettingsPanel
 {
     /// <summary>
-    /// Draws the UI elements for this partial view.
+    /// Draws the ImGui UI elements for this settings panel.
     /// </summary>
-    /// <returns>true if any configuration setting was changed during this draw call; otherwise, false.</returns>
+    /// <returns>
+    /// <c>true</c> if the user changed any configuration setting during this draw call; otherwise, <c>false</c>.
+    /// </returns>
     bool Draw();
 }

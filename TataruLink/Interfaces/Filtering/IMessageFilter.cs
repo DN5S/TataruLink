@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Services/Interfaces/IChatFilter.cs
+﻿// File: TataruLink/Interfaces/Filtering/IMessageFilter.cs
 
 using Dalamud.Game.Text;
 

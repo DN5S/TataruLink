@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Configuration/TranslationSettings.cs
+﻿// File: TataruLink/Config/TranslationConfig.cs
 
 using System.Collections.Generic;
 using Dalamud.Game.Text;
@@ -9,11 +9,16 @@ public enum TranslationEngine
 {
     Google,
     DeepL
-    // TODO: Add other translation engines.
 }
 
+/// <summary>
+/// Holds API-related settings for external translation services.
+/// </summary>
 public class ApiSettings
 {
+    /// <summary>
+    /// Gets or sets the API key for the DeepL service.
+    /// </summary>
     public string? DeepLApiKey { get; set; }
 }
 
@@ -22,32 +27,35 @@ public class TranslationConfig
     #region Core Controls
 
     /// <summary>
-    /// Enable or disable all translation features of the plugin.
+    /// Gets or sets a value indicating whether all translation features are globally enabled.
+    /// This is the master switch for the plugin's core functionality.
     /// </summary>
     public bool EnableTranslations { get; set; } = true;
 
     /// <summary>
-    /// Toggles the automatic chat translation feature.
+    /// Gets or sets a value indicating whether incoming chat messages should be translated automatically.
     /// </summary>
     public bool EnableAutomaticChatTranslation { get; set; } = true;
 
     /// <summary>
-    /// The translation engine to be used (e.g., Google, DeepL).
+    /// Gets or sets the primary translation engine to be used for all translation tasks.
     /// </summary>
     public TranslationEngine Engine { get; set; } = TranslationEngine.Google;
-    
+
     /// <summary>
-    /// Toggles the use of automatic language detection for the source text.
+    /// Gets or sets a value indicating whether the source language should be automatically detected.
     /// </summary>
     public bool EnableLanguageDetection { get; set; } = true;
-    
+
     /// <summary>
-    /// If language detection is disabled, this specifies the language to translate FROM (e.g., "ko", "en", "ja").
+    /// Gets or sets the source language to assume when language detection is disabled.
+    /// Must be a valid language code (e.g., "ja", "en").
     /// </summary>
     public string FromLanguage { get; set; } = "ja";
-    
+
     /// <summary>
-    /// The language to translate text INTO. This is the language you will read. (e.g., "ko", "en", "ja").
+    /// Gets or sets the target language for all translations.
+    /// This is the language the user wants to read (e.g., "ko", "en").
     /// </summary>
     public string TranslateTo { get; set; } = "ko";
 
@@ -56,8 +64,8 @@ public class TranslationConfig
     #region Translation Targets
 
     /// <summary>
-    /// Stores the set of chat types for which translation is enabled.
-    /// Using a HashSet provides optimal O(1) performance for checking if a type is enabled.
+    /// Gets or sets the collection of chat types for which translation is enabled.
+    /// Using a HashSet provides O(1) lookups for optimal performance in the message filter.
     /// </summary>
     public HashSet<XivChatType> EnabledChatTypes { get; set; } =
     [
@@ -75,28 +83,26 @@ public class TranslationConfig
     #region Translation Rules
 
     /// <summary>
-    /// Determines whether to translate messages sent by the player.
+    /// Gets or sets a value indicating whether messages sent by the player should also be translated.
     /// </summary>
     public bool TranslateMyOwnMessages { get; set; }
-    
-    // TODO: Add Rules Here
-    
+
     #endregion
 
     #region Advanced Features
 
     /// <summary>
-    /// If the primary translation engine fails, retry with the fallback engine.
+    /// Gets or sets a value indicating whether to attempt translation with a fallback engine if the primary engine fails.
     /// </summary>
     public bool EnableFallback { get; set; } = false;
-    
+
     /// <summary>
-    /// The fallback translation engine.
+    /// Gets or sets the translation engine to use as a fallback.
     /// </summary>
     public TranslationEngine FallbackEngine { get; set; } = TranslationEngine.Google;
 
     /// <summary>
-    /// Toggles the use of a cache for previously translated sentences.
+    /// Gets or sets a value indicating whether to use a cache for previously translated sentences to reduce API calls.
     /// </summary>
     public bool UseCache { get; set; } = true;
 

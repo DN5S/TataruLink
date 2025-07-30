@@ -22,6 +22,9 @@ public interface ITranslationEngine
     /// <param name="text">The text to translate.</param>
     /// <param name="sourceLanguage">The source language code (e.g., "ja", "auto").</param>
     /// <param name="targetLanguage">The target language code (e.g., "en").</param>
-    /// <returns>A task that represents the translation operation. The result contains the generated TranslationRecord, or null on failure.</returns>
-    Task<TranslationResults?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
+    /// <returns>
+    /// A task that represents the translation operation.
+    /// The result contains the generated <see cref="TranslationResult"/>, or null on failure.
+    /// </returns>
+    Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
 }

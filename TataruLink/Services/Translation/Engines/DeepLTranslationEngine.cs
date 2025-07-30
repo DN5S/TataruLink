@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Services/Engines/DeepLTranslateEngine.cs
+﻿// File: TataruLink/Services/Translation/Engines/DeepLTranslationEngine.cs
 
 using System;
 using System.Diagnostics;
@@ -16,14 +16,14 @@ using TataruLink.Models;
 namespace TataruLink.Services.Translation.Engines;
 
 /// <summary>
-/// An implementation of <see cref="ITranslationEngine"/> that uses the DeepL API.
+/// An implementation of <see cref="ITranslationEngine"/> that uses the official DeepL API.
 /// This engine supports both Free and Pro API endpoints.
 /// </summary>
 public class DeepLTranslationEngine : TranslationEngineBase
 {
     private const string FreeApiUrl = "https://api-free.deepl.com/v2/translate";
     private const string ProApiUrl = "https://api.deepl.com/v2/translate";
-    
+
     private readonly string apiKey;
     private readonly string apiUrl;
 
@@ -48,18 +48,19 @@ public class DeepLTranslationEngine : TranslationEngineBase
     }
 
     /// <inheritdoc />
-    public override async Task<TranslationResults?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+    public override async Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
     {
         if (string.IsNullOrEmpty(text)) return null;
 
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            // The DeepL API requires the `source_lang` parameter to be omitted for language auto-detection.
+            // The DeepL API requires the `source_lang` parameter to be omitted entirely for auto-detection.
+            // A conditional anonymous object is created to handle this requirement cleanly.
             object requestBody = string.Equals(sourceLanguage, "auto", StringComparison.OrdinalIgnoreCase)
                 ? new { text = new[] { text }, target_lang = targetLanguage.ToUpper() }
                 : new { text = new[] { text }, target_lang = targetLanguage.ToUpper(), source_lang = sourceLanguage.ToUpper() };
-            
+
             using var request = new HttpRequestMessage(HttpMethod.Post, apiUrl);
             request.Headers.Authorization = new AuthenticationHeaderValue("DeepL-Auth-Key", apiKey);
             request.Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
@@ -69,17 +70,17 @@ public class DeepLTranslationEngine : TranslationEngineBase
 
             var jsonResponse = await response.Content.ReadFromJsonAsync<JsonElement>();
             stopwatch.Stop();
-            
+
             var translation = jsonResponse.GetProperty("translations")[0];
             var translatedText = translation.GetProperty("text").GetString();
             var detectedLang = translation.GetProperty("detected_source_language").GetString();
 
             if (string.IsNullOrEmpty(translatedText)) return null;
 
-            return new TranslationResults(
+            return new TranslationResult(
                 originalText: text,
                 translatedText: translatedText,
-                sender: "", 
+                sender: string.Empty, // Sender and ChatType are context-specific, enriched later.
                 chatType: default,
                 engineUsed: EngineType,
                 sourceLanguage: sourceLanguage,
@@ -90,7 +91,7 @@ public class DeepLTranslationEngine : TranslationEngineBase
         catch (Exception ex)
         {
             stopwatch.Stop();
-            Log.Error(ex, $"[DeepLTranslateEngine] Translation failed. Ensure API key is valid and endpoint ({apiUrl}) is correct.");
+            Log.Error(ex, $"[DeepLTranslateEngine] Translation failed. Ensure API key is valid and endpoint ({apiUrl}) is correct. Check account usage limits.");
             return null;
         }
     }

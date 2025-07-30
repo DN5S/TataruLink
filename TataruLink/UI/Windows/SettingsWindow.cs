@@ -1,4 +1,4 @@
-﻿// File: TataruLink/Windows/ConfigWindow.cs
+﻿// File: TataruLink/UI/Windows/SettingsWindow.cs
 
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,6 @@ using Dalamud.Interface.Windowing;
 using ImGuiNET;
 using TataruLink.Interfaces.Services;
 using TataruLink.Interfaces.UI;
-using TataruLink.Resources;
 using TataruLink.UI.Panels;
 
 namespace TataruLink.UI.Windows;
@@ -18,12 +17,11 @@ namespace TataruLink.UI.Windows;
 /// </summary>
 public class SettingsWindow : Window, IDisposable
 {
-    private readonly IConfigService configManager;
-    
-    private readonly List<ISettingsPanel> settingPartials = [];
-    private readonly List<string> tabNames = [Strings.ConfigTabGeneral, Strings.ConfigTabChatTypes];
+    private readonly IConfigService configService;
+    private readonly List<ISettingsPanel> settingsPanels = [];
+    private readonly List<string> tabNames = ["General", "Chat Types"]; // Reverted to hardcoded strings as per instruction.
 
-    public SettingsWindow(IConfigService configManager) : base(Strings.ConfigWindowTitle)
+    public SettingsWindow(IConfigService configService) : base("TataruLink Settings") // Reverted.
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -31,12 +29,12 @@ public class SettingsWindow : Window, IDisposable
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
 
-        this.configManager = configManager;
-        var configuration = configManager.Config;
+        this.configService = configService;
+        var configuration = configService.Config;
 
-        // Initialize and add all UI partials that will be rendered as tabs.
-        settingPartials.Add(new GeneralPanel(configuration));
-        settingPartials.Add(new ChatTypesPanel(configuration));
+        // Initialize and add all UI panels that will be rendered as tabs.
+        settingsPanels.Add(new GeneralPanel(configuration));
+        settingsPanels.Add(new ChatTypesPanel(configuration));
     }
 
     public void Dispose() { }
@@ -48,18 +46,24 @@ public class SettingsWindow : Window, IDisposable
 
         if (ImGui.BeginTabBar("SettingTabs"))
         {
-            for (var i = 0; i < settingPartials.Count; i++)
+            for (var i = 0; i < settingsPanels.Count; i++)
             {
                 if (!ImGui.BeginTabItem(tabNames[i])) continue;
-                configChanged |= settingPartials[i].Draw();
+
+                // Each panel's Draw method returns true if a setting was changed.
+                // We use the |= operator to aggregate the results. If any panel returns true,
+                // configChanged will become true and remain true for the duration of the loop.
+                configChanged |= settingsPanels[i].Draw();
+
                 ImGui.EndTabItem();
             }
             ImGui.EndTabBar();
         }
 
+        // If any panel indicated a change, save the entire configuration.
         if (configChanged)
         {
-            configManager.Save();
+            configService.Save();
         }
     }
 }

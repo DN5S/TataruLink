@@ -1,16 +1,17 @@
-﻿// File: TataruLink/Models/TranslationRecord.cs
+﻿// File: TataruLink/Models/TranslationResult.cs
 
 using System;
 using Dalamud.Game.Text;
 using TataruLink.Config;
+using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Models;
 
 /// <summary>
 /// Encapsulates the complete result of a single translation operation, including contextual metadata.
-/// This immutable record serves as the data transfer object throughout the translation pipeline.
+/// This immutable object serves as the data transfer object throughout the translation pipeline.
 /// </summary>
-public class TranslationResults(
+public class TranslationResult(
     string originalText,
     string translatedText,
     string sender,
@@ -28,7 +29,7 @@ public class TranslationResults(
     public Guid Id { get; } = Guid.NewGuid();
 
     /// <summary>
-    /// The UTC timestamp when the translation record was created.
+    /// The UTC timestamp indicating when the translation result was created.
     /// </summary>
     public DateTime Timestamp { get; } = DateTime.UtcNow;
     
@@ -39,13 +40,13 @@ public class TranslationResults(
     
     /// <summary>
     /// The time taken to receive a response from the translation engine, in milliseconds.
-    /// This value is enriched by the translation engine.
+    /// This value is enriched by the responsible <see cref="ITranslationEngine"/>.
     /// </summary>
     public long TimeTakenMs { get; init; }
 
     /// <summary>
-    /// A value indicating whether this record was retrieved from the cache.
-    /// This value is enriched by the cache service.
+    /// A value indicating whether this result was retrieved from the cache.
+    /// This value is enriched by the <see cref="ICacheService"/>.
     /// </summary>
     public bool FromCache { get; set; }
 
@@ -59,7 +60,7 @@ public class TranslationResults(
     public string OriginalText { get; } = originalText;
 
     /// <summary>
-    /// The sender's name of the original message.
+    /// The sender's name from the original message.
     /// </summary>
     public string Sender { get; } = sender;
 
