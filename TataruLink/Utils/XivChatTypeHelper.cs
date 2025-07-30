@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿// File: TataruLink/Utils/XivChatTypeHelper.cs
+using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.Text;
 using TataruLink.Localization;
