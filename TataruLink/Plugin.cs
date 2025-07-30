@@ -156,17 +156,21 @@ public sealed class Plugin : IDalamudPlugin
 
         // Register core services
         serviceCollection.AddSingleton<ICacheService, CacheService>();
-        serviceCollection.AddSingleton<ITranslationService, TranslationService>();
-        serviceCollection.AddSingleton<IChatProcessor, ChatProcessor>();
         serviceCollection.AddSingleton<IChatMessageFormatter, ChatMessageFormatter>();
+        serviceCollection.AddSingleton<ITranslationService, TranslationService>(); // Depends on ICacheService, IChatMessageFormatter
+        serviceCollection.AddSingleton<IChatProcessor, ChatProcessor>(); // Depends on ITranslationService
 
         // Register translation engines
         serviceCollection.AddSingleton<ITranslationEngine, GoogleTranslateEngine>();
         if (!string.IsNullOrEmpty(configManager.Config.Apis.DeepLApiKey))
         {
-            serviceCollection.AddSingleton<ITranslationEngine>(s => new DeepLTranslateEngine(
-                                                                   configManager.Config.Apis.DeepLApiKey, false,
-                                                                   s.GetRequiredService<IPluginLog>()));
+            serviceCollection.AddSingleton<ITranslationEngine>
+            (s =>
+                new DeepLTranslateEngine
+                (
+                    configManager.Config.Apis.DeepLApiKey, false, s.GetRequiredService<IPluginLog>()
+                )
+            );
         }
 
         // Register chat filters

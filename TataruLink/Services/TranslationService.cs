@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using TataruLink.Configuration;
 using TataruLink.Models;
@@ -12,47 +14,87 @@ namespace TataruLink.Services;
 
 /// <summary>
 /// The main service that orchestrates translation tasks.
-/// It coordinates between the cache and various translation engines.
+/// It coordinates between the cache, various translation engines, and formatting.
 /// </summary>
 public class TranslationService : ITranslationService
 {
     private readonly IPluginLog log;
     private readonly TranslationSettings translationSettings;
     private readonly ICacheService cacheService;
+    private readonly IChatMessageFormatter formatter;
     private readonly IReadOnlyDictionary<TranslationEngine, ITranslationEngine> engines;
+    
+    private const string TranslationSeparator = "[TTR]";
 
     public TranslationService(
         IPluginLog log,
         TranslationSettings translationSettings,
         ICacheService cacheService,
+        IChatMessageFormatter formatter,
         IEnumerable<ITranslationEngine> translationEngines)
     {
         this.log = log;
         this.translationSettings = translationSettings;
         this.cacheService = cacheService;
+        this.formatter = formatter;
         engines = translationEngines.ToDictionary(engine => engine.EngineType);
-        
+
         this.log.Info($"TranslationService initialized with {engines.Count} engines.");
     }
 
     /// <inheritdoc />
-    public async Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+    public async Task<SeString?> ProcessTranslationRequestAsync(
+        List<string> textsToTranslate,
+        List<Payload?> payloadTemplate,
+        string sender,
+        XivChatType chatType)
     {
-        // Input validation
+        var combinedText = string.Join(TranslationSeparator, textsToTranslate);
+        var sourceLang = translationSettings.EnableLanguageDetection ? "auto" : translationSettings.FromLanguage;
+        var targetLang = translationSettings.TranslateTo;
+
+        var record = await TranslateAsync(combinedText, sourceLang, targetLang);
+        if (record == null) return null;
+        
+        // Complete Form of `TranslationRecord`
+        var finalRecord = new TranslationRecord(
+            combinedText, record.TranslatedText, sender, chatType,
+            record.EngineUsed, record.SourceLanguage, record.DetectedSourceLanguage, record.TargetLanguage
+        ) { TimeTakenMs = record.TimeTakenMs, FromCache = record.FromCache };
+        
+        if (!record.FromCache && translationSettings.UseCache)
+        {
+            cacheService.Set(finalRecord);
+        }
+
+        var translatedSegments = finalRecord.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
+
+        if (translatedSegments.Length == textsToTranslate.Count)
+            return formatter.FormatMessage(finalRecord, payloadTemplate, translatedSegments);
+        log.Warning($"Translation segment mismatch. Expected {textsToTranslate.Count}, got {translatedSegments.Length}. Engine may have altered separator. Fallback formatting will be used.");
+        var fallbackBuilder = new SeStringBuilder();
+        foreach (var payload in payloadTemplate.OfType<Payload>())
+        {
+            fallbackBuilder.Add(payload);
+        }
+        fallbackBuilder.AddText($" (Translation Error: {record.TranslatedText})");
+        return fallbackBuilder.Build();
+
+    }
+    
+    private async Task<TranslationRecord?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+    {
         if (string.IsNullOrWhiteSpace(text))
         {
             log.Debug("Empty or whitespace text provided for translation.");
             return null;
         }
 
-        // 1. Check cache first with validation
         if (translationSettings.UseCache && cacheService.TryGet(text, out var cachedRecord))
         {
-            // Validate that cached record matches current translation parameters
             if (IsValidCachedRecord(cachedRecord, sourceLanguage, targetLanguage))
             {
                 log.Debug($"Valid cache hit for: \"{text}\"");
-                // Note: FromCache is already set by CacheService.TryGet()
                 return cachedRecord;
             }
             else
@@ -60,14 +102,12 @@ public class TranslationService : ITranslationService
                 log.Debug($"Cache hit found but parameters don't match. Proceeding with fresh translation.");
             }
         }
-        
+
         log.Debug($"Cache miss for: \"{text}\". Proceeding with translation.");
 
-        // 2. Try translating with the primary engine.
         var primaryEngineType = translationSettings.Engine;
         var resultRecord = await ExecuteTranslationAsync(primaryEngineType, text, sourceLanguage, targetLanguage);
 
-        // 3. If primary fails and fallback is enabled, try the fallback engine.
         if (resultRecord == null && translationSettings.EnableFallback)
         {
             log.Warning($"Primary engine ({primaryEngineType}) failed. Attempting fallback.");
@@ -76,7 +116,7 @@ public class TranslationService : ITranslationService
             if (fallbackEngineType != primaryEngineType)
             {
                 resultRecord = await ExecuteTranslationAsync(fallbackEngineType, text, sourceLanguage, targetLanguage);
-                
+
                 if (resultRecord != null)
                 {
                     log.Info($"Fallback engine ({fallbackEngineType}) succeeded where primary failed.");
@@ -102,21 +142,17 @@ public class TranslationService : ITranslationService
     private static bool IsValidCachedRecord(TranslationRecord? cachedRecord, string sourceLanguage, string targetLanguage)
     {
         if (cachedRecord == null) return false;
-        
-        // Check if the target language matches
+
         if (!string.Equals(cachedRecord.TargetLanguage, targetLanguage, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
-        
-        // For source language, we need to be more flexible:
-        // - If the current request uses "auto", any cached record is potentially valid
-        // - If the current request specifies a language, it should match the cached record's source or detected language
+
         if (string.Equals(sourceLanguage, "auto", StringComparison.OrdinalIgnoreCase)) return true;
         var matchesSource = string.Equals(cachedRecord.SourceLanguage, sourceLanguage, StringComparison.OrdinalIgnoreCase);
         var matchesDetected = !string.IsNullOrEmpty(cachedRecord.DetectedSourceLanguage) && 
                               string.Equals(cachedRecord.DetectedSourceLanguage, sourceLanguage, StringComparison.OrdinalIgnoreCase);
-            
+
         return matchesSource || matchesDetected;
     }
 
@@ -135,12 +171,12 @@ public class TranslationService : ITranslationService
         {
             log.Debug($"Translating with {engineType} engine...");
             var result = await engine.TranslateAsync(text, source, target);
-            
+
             if (result != null)
             {
                 log.Debug($"Translation successful with {engineType}: \"{text}\" -> \"{result.TranslatedText}\"");
             }
-            
+
             return result;
         }
         catch (Exception ex)

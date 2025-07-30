@@ -9,7 +9,6 @@ using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
-using TataruLink.Configuration;
 using TataruLink.Models;
 using TataruLink.Services.Interfaces;
 
@@ -23,34 +22,23 @@ public class ChatProcessor : IChatProcessor
 {
     private readonly IPluginLog log;
     private readonly ITranslationService translationService;
-    private readonly IChatMessageFormatter formatter;
     private readonly IEnumerable<IChatFilter> filters;
-    private readonly ICacheService cacheService;
-    private readonly TranslationSettings translationSettings;
 
     private readonly ConcurrentQueue<ChatMessage> messageQueue = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly SemaphoreSlim semaphore = new(10); // Max 10 concurrent translations
     private readonly Task dispatcherTask;
-    
-    private const string TranslationSeparator = "[TTR]"; // Separator between translated text segments.
 
     public event Action<SeString>? OnTranslationReady; 
     
     public ChatProcessor(
         IPluginLog log,
         ITranslationService translationService,
-        IChatMessageFormatter formatter,
-        IEnumerable<IChatFilter> filters,
-        ICacheService cacheService,
-        TranslationSettings translationSettings)
+        IEnumerable<IChatFilter> filters)
     {
         this.log = log;
         this.translationService = translationService;
-        this.formatter = formatter;
         this.filters = filters;
-        this.translationSettings = translationSettings;
-        this.cacheService = cacheService;
 
         dispatcherTask = Task.Run(ProcessQueueAsync);
         log.Info("ChatProcessor pipeline started.");
@@ -85,62 +73,38 @@ public class ChatProcessor : IChatProcessor
         {
             var messageText = chatMessage.Message.TextValue;
             var senderText = chatMessage.Sender.TextValue;
-            
+
             if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, senderText, messageText)))
             {
                 return;
             }
-            
-            // Deconstruct the SeString into a template and text segment
+
             var payloadTemplate = new List<Payload?>();
             var textsToTranslate = new List<string>();
-            
+
             foreach (var payload in chatMessage.Message.Payloads)
             {
                 if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
                 {
                     textsToTranslate.Add(textPayload.Text);
-                    payloadTemplate.Add(null); // Placeholder for translated text
+                    payloadTemplate.Add(null); // Placeholder
                 }
                 else
                 {
                     payloadTemplate.Add(payload);
                 }
             }
-            
+
             if (textsToTranslate.Count == 0) return;
 
-            var combinedText = string.Join(TranslationSeparator, textsToTranslate);
-            var sourceLang = translationSettings.EnableLanguageDetection ? "auto" : translationSettings.FromLanguage;
-            var targetLang = translationSettings.TranslateTo;
+            // Delegate the entire translation and formatting job to the TranslationService
+            var formattedMessage = await translationService.ProcessTranslationRequestAsync(
+                                       textsToTranslate, payloadTemplate, senderText, chatMessage.Type);
 
-            var record = await translationService.TranslateAsync(combinedText, sourceLang, targetLang);
-            if (record == null) return;
-            
-            var translatedSegments = record.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
-            
-            if (translatedSegments.Length != textsToTranslate.Count)
+            if (formattedMessage != null)
             {
-                log.Warning($"Translation segment mismatch. Expected {textsToTranslate.Count}, got {translatedSegments.Length}. Engine may have altered separator. Falling back to simple append.");
-                var fallbackBuilder = new SeStringBuilder().Append(chatMessage.Message);
-                fallbackBuilder.AddText($" (Translation Error: {record.TranslatedText})");
-                OnTranslationReady?.Invoke(fallbackBuilder.Build());
-                return;
+                OnTranslationReady?.Invoke(formattedMessage);
             }
-            
-            var enrichedRecord = new TranslationRecord(
-                combinedText, record.TranslatedText, senderText, chatMessage.Type,
-                record.EngineUsed, record.SourceLanguage, record.DetectedSourceLanguage, record.TargetLanguage
-            ) { TimeTakenMs = record.TimeTakenMs, FromCache = record.FromCache };
-            
-            var formattedMessage = formatter.FormatMessage(enrichedRecord, payloadTemplate, translatedSegments);
-            
-            if (!enrichedRecord.FromCache && translationSettings.UseCache)
-            {
-                cacheService.Set(enrichedRecord);
-            }
-            
-            OnTranslationReady?.Invoke(formattedMessage);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -158,15 +122,13 @@ public class ChatProcessor : IChatProcessor
         cancellationTokenSource.Cancel();
         try
         {
-            // Wait for the dispatcher to stop, but not forever.
-            dispatcherTask.Wait(1000); 
+            dispatcherTask.Wait(1000);
         }
         catch (AggregateException ex)
         {
-            // Log exceptions that aren't task cancellation.
             ex.Handle(e => e is TaskCanceledException);
         }
-        
+
         cancellationTokenSource.Dispose();
         semaphore.Dispose();
         log.Info("ChatProcessor pipeline stopped.");
