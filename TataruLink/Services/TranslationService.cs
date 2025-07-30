@@ -90,17 +90,11 @@ public class TranslationService : ITranslationService
             return null;
         }
 
-        if (translationSettings.UseCache && cacheService.TryGet(text, out var cachedRecord))
+        if (translationSettings.UseCache &&
+            cacheService.TryGet(text, sourceLanguage, targetLanguage, out var cachedRecord))
         {
-            if (IsValidCachedRecord(cachedRecord, sourceLanguage, targetLanguage))
-            {
-                log.Debug($"Valid cache hit for: \"{text}\"");
-                return cachedRecord;
-            }
-            else
-            {
-                log.Debug($"Cache hit found but parameters don't match. Proceeding with fresh translation.");
-            }
+            log.Debug($"Cache hit for: \"{text}\" ({sourceLanguage} -> {targetLanguage})");
+            return cachedRecord;
         }
 
         log.Debug($"Cache miss for: \"{text}\". Proceeding with translation.");

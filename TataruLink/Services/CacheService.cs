@@ -2,7 +2,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
@@ -64,12 +65,13 @@ public class CacheService : ICacheService, IDisposable
     }
     
     /// <inheritdoc />
-    public bool TryGet(string originalText, out TranslationRecord? record)
+    public bool TryGet(string originalText, string sourceLanguage, string targetLanguage, out TranslationRecord? record)
     {
-        if (memoryCache.TryGetValue(originalText, out record) && record != null)
+        var key = GetCacheKey(originalText, sourceLanguage, targetLanguage);
+        if (memoryCache.TryGetValue(key, out record) && record != null)
         {
             Statistics.IncrementHit();
-            record.FromCache = true; // Mark the record as having been retrieved from the cache.
+            record.FromCache = true;
             return true;
         }
 
@@ -81,6 +83,7 @@ public class CacheService : ICacheService, IDisposable
     /// <inheritdoc />
     public void Set(TranslationRecord record)
     {
+        var key = GetCacheKey(record.OriginalText, record.SourceLanguage, record.TargetLanguage);
         var entryOptions = new MemoryCacheEntryOptions
         {
             SlidingExpiration = options.DefaultSlidingExpiration,
@@ -89,19 +92,19 @@ public class CacheService : ICacheService, IDisposable
             Priority = CacheItemPriority.Normal
         };
         
-        entryOptions.RegisterPostEvictionCallback((key, _, _, state) =>
+        entryOptions.RegisterPostEvictionCallback((cacheKey, _, _, state) =>
         {
-            ((ConcurrentDictionary<string, bool>)state!).TryRemove(key.ToString()!, out _);
+            ((ConcurrentDictionary<string, bool>)state!).TryRemove(cacheKey.ToString()!, out _);
         }, cacheKeys);
 
-        memoryCache.Set(record.OriginalText, record, entryOptions);
-        cacheKeys.TryAdd(record.OriginalText, true);
+        memoryCache.Set(key, record, entryOptions);
+        cacheKeys.TryAdd(key, true);
     }
 
     /// <inheritdoc />
     public IEnumerable<TranslationRecord> GetHistory()
     {
-        foreach (var key in cacheKeys.Keys.ToList())
+        foreach (var key in cacheKeys.Keys)
         {
             if (memoryCache.TryGetValue(key, out TranslationRecord? record))
             {
@@ -109,15 +112,14 @@ public class CacheService : ICacheService, IDisposable
             }
         }
     }
-
-    /// <inheritdoc />
-    public void Clear()
-    {
-        cacheKeys.Clear();
-        (memoryCache as MemoryCache)?.Compact(1.0);
-        Statistics.Reset();
-    }
     
+    private static string GetCacheKey(string originalText, string sourceLanguage, string targetLanguage)
+    {
+        var keyComponents = $"{originalText}|{sourceLanguage.ToLower()}|{targetLanguage.ToLower()}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyComponents));
+        return Convert.ToBase64String(bytes);
+    }
+
     /// <summary>
     /// Asynchronously pre-loads the cache with a collection of translation records.
     /// This is useful for restoring a persistent cache from a file on plugin startup.
@@ -132,6 +134,14 @@ public class CacheService : ICacheService, IDisposable
                 Set(record);
             }
         });
+    }
+    
+    /// <inheritdoc />
+    public void Clear()
+    {
+        cacheKeys.Clear();
+        (memoryCache as MemoryCache)?.Compact(1.0);
+        Statistics.Reset();
     }
     
     public void Dispose()

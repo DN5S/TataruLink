@@ -1,10 +1,10 @@
 ﻿// File: TataruLink/Services/ChatProcessor.cs
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -15,22 +15,18 @@ using TataruLink.Services.Interfaces;
 namespace TataruLink.Services;
 
 /// <summary>
-/// The high-level service that orchestrates the chat translation pipeline.
-/// It applies filters and, if they pass, coordinates with the TranslationService to perform the translation.
+/// Orchestrates the chat translation pipeline using a TPL Dataflow ActionBlock.
 /// </summary>
 public class ChatProcessor : IChatProcessor
 {
     private readonly IPluginLog log;
     private readonly ITranslationService translationService;
     private readonly IEnumerable<IChatFilter> filters;
-
-    private readonly ConcurrentQueue<ChatMessage> messageQueue = new();
+    private readonly ActionBlock<ChatMessage> translationBlock;
     private readonly CancellationTokenSource cancellationTokenSource = new();
-    private readonly SemaphoreSlim semaphore = new(10); // Max 10 concurrent translations
-    private readonly Task dispatcherTask;
 
-    public event Action<SeString>? OnTranslationReady; 
-    
+    public event Action<SeString>? OnTranslationReady;
+
     public ChatProcessor(
         IPluginLog log,
         ITranslationService translationService,
@@ -40,31 +36,23 @@ public class ChatProcessor : IChatProcessor
         this.translationService = translationService;
         this.filters = filters;
 
-        dispatcherTask = Task.Run(ProcessQueueAsync);
-        log.Info("ChatProcessor pipeline started.");
+        var executionOptions = new ExecutionDataflowBlockOptions
+        {
+            MaxDegreeOfParallelism = 10,
+            CancellationToken = cancellationTokenSource.Token
+        };
+        
+        translationBlock = new ActionBlock<ChatMessage>(
+            async chatMessage => await HandleMessageAsync(chatMessage),
+            executionOptions);
+
+        log.Info($"ChatProcessor pipeline started with {executionOptions.MaxDegreeOfParallelism} max concurrency.");
     }
     
     /// <inheritdoc />
     public void EnqueueMessage(XivChatType type, SeString sender, SeString message)
     {
-        messageQueue.Enqueue(new ChatMessage(type, sender, message));
-    }
-    
-    private async Task ProcessQueueAsync()
-    {
-        var token = cancellationTokenSource.Token;
-        while (!token.IsCancellationRequested)
-        {
-            if (messageQueue.TryDequeue(out var chatMessage))
-            {
-                await semaphore.WaitAsync(token);
-                _ = Task.Run(() => HandleMessageAsync(chatMessage), token);
-            }
-            else
-            {
-                await Task.Delay(50, token);
-            }
-        }
+        translationBlock.Post(new ChatMessage(type, sender, message));
     }
     
     private async Task HandleMessageAsync(ChatMessage chatMessage)
@@ -87,7 +75,7 @@ public class ChatProcessor : IChatProcessor
                 if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
                 {
                     textsToTranslate.Add(textPayload.Text);
-                    payloadTemplate.Add(null); // Placeholder
+                    payloadTemplate.Add(null);
                 }
                 else
                 {
@@ -97,7 +85,6 @@ public class ChatProcessor : IChatProcessor
 
             if (textsToTranslate.Count == 0) return;
 
-            // Delegate the entire translation and formatting job to the TranslationService
             var formattedMessage = await translationService.ProcessTranslationRequestAsync(
                                        textsToTranslate, payloadTemplate, senderText, chatMessage.Type);
 
@@ -110,27 +97,23 @@ public class ChatProcessor : IChatProcessor
         {
             log.Error(ex, $"Error processing message: {chatMessage.Message.TextValue}");
         }
-        finally
-        {
-            semaphore.Release();
-        }
     }
     
     /// <inheritdoc />
     public void Dispose()
     {
+        translationBlock.Complete();
         cancellationTokenSource.Cancel();
         try
         {
-            dispatcherTask.Wait(1000);
+            translationBlock.Completion.Wait(1500);
         }
         catch (AggregateException ex)
         {
-            ex.Handle(e => e is TaskCanceledException);
+            ex.Handle(e => e is TaskCanceledException || e is OperationCanceledException);
         }
-
+        
         cancellationTokenSource.Dispose();
-        semaphore.Dispose();
         log.Info("ChatProcessor pipeline stopped.");
     }
 }
