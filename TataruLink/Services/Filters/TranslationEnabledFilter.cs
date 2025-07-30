@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/Services/Filters/TranslationEnabledFilter.cs
 using Dalamud.Game.Text;
+using TataruLink.Configuration;
 using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services.Filters;
@@ -8,11 +9,11 @@ namespace TataruLink.Services.Filters;
 /// A filter that acts as the primary switch for translation features.
 /// It checks if both global translations and automatic chat translations are enabled.
 /// </summary>
-public class TranslationEnabledFilter(Configuration.Configuration configuration) : IChatFilter
+public class TranslationEnabledFilter(TranslationSettings translationSettings) : IChatFilter
 {
     /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)
     {
-        return configuration.Translation is { EnableTranslations: true, EnableAutomaticChatTranslation: true };
+        return translationSettings is { EnableTranslations: true, EnableAutomaticChatTranslation: true };
     }
 }

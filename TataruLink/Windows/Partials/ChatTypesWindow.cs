@@ -1,5 +1,4 @@
 ﻿// File: TataruLink/Windows/Partials/ChatTypesUI.cs
-using System.Linq;
 using ImGuiNET;
 using TataruLink.Services.Filters;
 using TataruLink.Utils;
