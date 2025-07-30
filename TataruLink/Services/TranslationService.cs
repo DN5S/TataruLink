@@ -17,18 +17,18 @@ namespace TataruLink.Services;
 public class TranslationService : ITranslationService
 {
     private readonly IPluginLog log;
-    private readonly Configuration.Configuration configuration;
+    private readonly TranslationSettings translationSettings;
     private readonly ICacheService cacheService;
     private readonly IReadOnlyDictionary<TranslationEngine, ITranslationEngine> engines;
 
     public TranslationService(
         IPluginLog log,
-        Configuration.Configuration configuration,
+        TranslationSettings translationSettings,
         ICacheService cacheService,
         IEnumerable<ITranslationEngine> translationEngines)
     {
         this.log = log;
-        this.configuration = configuration;
+        this.translationSettings = translationSettings;
         this.cacheService = cacheService;
         engines = translationEngines.ToDictionary(engine => engine.EngineType);
         
@@ -46,7 +46,7 @@ public class TranslationService : ITranslationService
         }
 
         // 1. Check cache first with validation
-        if (configuration.Translation.UseCache && cacheService.TryGet(text, out var cachedRecord))
+        if (translationSettings.UseCache && cacheService.TryGet(text, out var cachedRecord))
         {
             // Validate that cached record matches current translation parameters
             if (IsValidCachedRecord(cachedRecord, sourceLanguage, targetLanguage))
@@ -64,14 +64,14 @@ public class TranslationService : ITranslationService
         log.Debug($"Cache miss for: \"{text}\". Proceeding with translation.");
 
         // 2. Try translating with the primary engine.
-        var primaryEngineType = configuration.Translation.Engine;
+        var primaryEngineType = translationSettings.Engine;
         var resultRecord = await ExecuteTranslationAsync(primaryEngineType, text, sourceLanguage, targetLanguage);
 
         // 3. If primary fails and fallback is enabled, try the fallback engine.
-        if (resultRecord == null && configuration.Translation.EnableFallback)
+        if (resultRecord == null && translationSettings.EnableFallback)
         {
             log.Warning($"Primary engine ({primaryEngineType}) failed. Attempting fallback.");
-            var fallbackEngineType = configuration.Translation.FallbackEngine;
+            var fallbackEngineType = translationSettings.FallbackEngine;
 
             if (fallbackEngineType != primaryEngineType)
             {

@@ -1,6 +1,7 @@
 ﻿// File: TataruLink/Services/Filters/SelfMessageFilter.cs
 using Dalamud.Game.Text;
 using Dalamud.Plugin.Services;
+using TataruLink.Configuration;
 using TataruLink.Services.Interfaces;
 
 namespace TataruLink.Services.Filters;
@@ -9,7 +10,7 @@ namespace TataruLink.Services.Filters;
 /// A filter that checks if messages sent by the player themselves should be translated,
 /// based on the 'TranslateMyOwnMessages' configuration setting.
 /// </summary>
-public class SelfMessageFilter(Configuration.Configuration configuration, IClientState clientState) : IChatFilter
+public class SelfMessageFilter(TranslationSettings translationSettings, IClientState clientState) : IChatFilter
 {
     /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)
@@ -23,7 +24,7 @@ public class SelfMessageFilter(Configuration.Configuration configuration, IClien
             // If the sender is the local player, translate only if the configuration allows it.
             if (localPlayerName != null && sender == localPlayerName)
             {
-                return configuration.Translation.TranslateMyOwnMessages;
+                return translationSettings.TranslateMyOwnMessages;
             }
 
             // If the message is not from the local player, this filter does not apply.
@@ -31,7 +32,7 @@ public class SelfMessageFilter(Configuration.Configuration configuration, IClien
         }
         catch (System.InvalidOperationException)
         {
-            // If we can't access LocalPlayer (not on main thread), assume it's not our message
+            // If we can't access LocalPlayer (not on the main thread), assume it's not our message
             return true;
         }
     }

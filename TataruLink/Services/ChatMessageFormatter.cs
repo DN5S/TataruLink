@@ -1,6 +1,7 @@
 ﻿// File: TataruLink/Services/ChatMessageFormatter.cs
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using TataruLink.Configuration;
 using TataruLink.Models;
 using TataruLink.Services.Interfaces;
 using TataruLink.Utils;
@@ -10,12 +11,11 @@ namespace TataruLink.Services;
 /// <summary>
 /// A service that formats a <see cref="TranslationRecord"/> into a decorated <see cref="SeString"/> for display.
 /// </summary>
-public class ChatMessageFormatter(Configuration.Configuration configuration) : IChatMessageFormatter
+public class ChatMessageFormatter(DisplaySettings displaySettings) : IChatMessageFormatter
 {
     /// <inheritdoc />
     public SeString FormatMessage(TranslationRecord record)
     {
-        var displaySettings = configuration.Display;
         var format = displaySettings.TranslationFormat;
         
         // Replace all available placeholders.

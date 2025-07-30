@@ -150,7 +150,9 @@ public sealed class Plugin : IDalamudPlugin
         // 1. Register the existing configManager instance as the implementation for IConfigurationManager.
         serviceCollection.AddSingleton(configManager);
         // 2. Register the Configuration object held by the manager.
-        serviceCollection.AddSingleton(configManager.Config);
+        serviceCollection.AddSingleton(configManager.Config.Apis);
+        serviceCollection.AddSingleton(configManager.Config.Translation);
+        serviceCollection.AddSingleton(configManager.Config.Display);
 
         // Register core services
         serviceCollection.AddSingleton<ICacheService, CacheService>();
@@ -218,8 +220,8 @@ public sealed class Plugin : IDalamudPlugin
         {
             try
             {
-                var chatProcessor = services?.GetRequiredService<IChatProcessor>();
-                chatProcessor?.EnqueueMessage(type, senderValue, messageValue);
+                var chatProcessor = services.GetRequiredService<IChatProcessor>();
+                chatProcessor.EnqueueMessage(type, senderValue, messageValue);
             }
             catch (Exception ex)
             {
@@ -232,10 +234,9 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnTranslationReady(SeString formattedMessage)
     {
-        var configuration = services?.GetRequiredService<Configuration.Configuration>();
-        if (configuration == null) return;
+        var displaySettings = services.GetRequiredService<DisplaySettings>();
 
-        var displayMode = configuration.Display.DisplayMode;
+        var displayMode = displaySettings.DisplayMode;
 
         // The framework call is now here, in the main plugin class.
         framework.RunOnFrameworkThread(() =>
@@ -245,14 +246,13 @@ public sealed class Plugin : IDalamudPlugin
                 if (displayMode is not TranslationDisplayMode.SeparateWindow)
                     chatGui.Print(formattedMessage);
                 if (displayMode is not TranslationDisplayMode.InGameChat)
-                    chatOverlayWindow?.AddLog(formattedMessage);
+                    chatOverlayWindow.AddLog(formattedMessage);
             }
             catch (Exception ex)
             {
                 log.Error($"Error displaying translation: {ex}");
             }
         });
-
     }
 
     public void Dispose()

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
+using TataruLink.Configuration;
 using TataruLink.Models;
 using TataruLink.Services.Interfaces;
 
@@ -24,7 +25,7 @@ public class ChatProcessor : IChatProcessor
     private readonly IChatMessageFormatter formatter;
     private readonly IEnumerable<IChatFilter> filters;
     private readonly ICacheService cacheService;
-    private readonly Configuration.Configuration configuration;
+    private readonly TranslationSettings translationSettings;
 
     private readonly ConcurrentQueue<ChatMessage> messageQueue = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
@@ -39,13 +40,13 @@ public class ChatProcessor : IChatProcessor
         IChatMessageFormatter formatter,
         IEnumerable<IChatFilter> filters,
         ICacheService cacheService,
-        Configuration.Configuration configuration)
+        TranslationSettings translationSettings)
     {
         this.log = log;
         this.translationService = translationService;
         this.formatter = formatter;
         this.filters = filters;
-        this.configuration = configuration;
+        this.translationSettings = translationSettings;
         this.cacheService = cacheService;
 
         dispatcherTask = Task.Run(ProcessQueueAsync);
@@ -84,8 +85,8 @@ public class ChatProcessor : IChatProcessor
                 return;
             }
 
-            var sourceLang = configuration.Translation.EnableLanguageDetection ? "auto" : configuration.Translation.FromLanguage;
-            var targetLang = configuration.Translation.TranslateTo;
+            var sourceLang = translationSettings.EnableLanguageDetection ? "auto" : translationSettings.FromLanguage;
+            var targetLang = translationSettings.TranslateTo;
 
             var record = await translationService.TranslateAsync(chatMessage.Message, sourceLang, targetLang);
             if (record == null) return;
@@ -97,7 +98,7 @@ public class ChatProcessor : IChatProcessor
             var formattedMessage = formatter.FormatMessage(enrichedRecord);
             
             // If the record was newly translated (not from cache), store the complete, enriched version in the cache.
-            if (!enrichedRecord.FromCache && configuration.Translation.UseCache)
+            if (!enrichedRecord.FromCache && translationSettings.UseCache)
             {
                 cacheService.Set(enrichedRecord);
             }

@@ -35,7 +35,7 @@ public class MainWindow : Window, IDisposable
             cacheService.Clear();
         }
         ImGui.SameLine();
-        ImGui.InputTextWithHint("##searchbox", "Search Original/Translated Text...", ref searchText, 256);
+        ImGui.InputTextWithHint("##Search", "Search Original/Translated Text...", ref searchText, 256);
         ImGui.Separator();
 
         var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit;
