@@ -1,4 +1,5 @@
 ﻿// File: TataruLink/Models/ChatMessage.cs
+
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 
