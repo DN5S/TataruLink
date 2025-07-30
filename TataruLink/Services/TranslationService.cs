@@ -44,8 +44,8 @@ public class TranslationService : ITranslationService
 
     /// <inheritdoc />
     public async Task<SeString?> ProcessTranslationRequestAsync(
-        List<string> textsToTranslate,
-        List<Payload?> payloadTemplate,
+        IReadOnlyList<string> textsToTranslate,
+        IReadOnlyList<Payload?> payloadTemplate,
         string sender,
         XivChatType chatType)
     {
@@ -128,26 +128,6 @@ public class TranslationService : ITranslationService
         }
 
         return resultRecord;
-    }
-    
-    /// <summary>
-    /// Validates that a cached record matches the current translation parameters.
-    /// </summary>
-    private static bool IsValidCachedRecord(TranslationRecord? cachedRecord, string sourceLanguage, string targetLanguage)
-    {
-        if (cachedRecord == null) return false;
-
-        if (!string.Equals(cachedRecord.TargetLanguage, targetLanguage, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (string.Equals(sourceLanguage, "auto", StringComparison.OrdinalIgnoreCase)) return true;
-        var matchesSource = string.Equals(cachedRecord.SourceLanguage, sourceLanguage, StringComparison.OrdinalIgnoreCase);
-        var matchesDetected = !string.IsNullOrEmpty(cachedRecord.DetectedSourceLanguage) && 
-                              string.Equals(cachedRecord.DetectedSourceLanguage, sourceLanguage, StringComparison.OrdinalIgnoreCase);
-
-        return matchesSource || matchesDetected;
     }
 
     /// <summary>

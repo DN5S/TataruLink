@@ -17,5 +17,5 @@ public interface IChatMessageFormatter
     /// <param name="payloadTemplate">A template list of payloads from the original message, with nulls as placeholders for text.</param>
     /// <param name="translatedSegments">An array of translated text segments corresponding to the placeholders.</param>
     /// <returns>A formatted SeString ready for display.</returns>
-    SeString FormatMessage(TranslationRecord record, List<Payload?> payloadTemplate, string[] translatedSegments);
+    SeString FormatMessage(TranslationRecord record, IReadOnlyList<Payload?> payloadTemplate, string[] translatedSegments);
 }

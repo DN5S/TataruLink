@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/Services/ChatProcessor.cs
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -55,38 +56,56 @@ public class ChatProcessor : IChatProcessor
         translationBlock.Post(new ChatMessage(type, sender, message));
     }
     
-    private async Task HandleMessageAsync(ChatMessage chatMessage)
+private async Task HandleMessageAsync(ChatMessage chatMessage)
     {
+        var messageText = chatMessage.Message.TextValue;
+        if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender.TextValue, messageText)))
+        {
+            return;
+        }
+
+        var payloads = chatMessage.Message.Payloads;
+        var payloadCount = payloads.Count;
+
+        // 1. Count Pass
+        var textPayloadCount = 0;
+        foreach (var payload in payloads)
+        {
+            if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
+            {
+                textPayloadCount++;
+            }
+        }
+        if (textPayloadCount == 0) return;
+
+        // 2. Rent
+        var payloadTemplate = ArrayPool<Payload?>.Shared.Rent(payloadCount);
+        var textsToTranslate = ArrayPool<string>.Shared.Rent(textPayloadCount);
+
         try
         {
-            var messageText = chatMessage.Message.TextValue;
-            var senderText = chatMessage.Sender.TextValue;
-
-            if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, senderText, messageText)))
+            // 3. Populate Pass
+            var textIndex = 0;
+            for (var i = 0; i < payloadCount; i++)
             {
-                return;
-            }
-
-            var payloadTemplate = new List<Payload?>();
-            var textsToTranslate = new List<string>();
-
-            foreach (var payload in chatMessage.Message.Payloads)
-            {
+                var payload = payloads[i];
                 if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
                 {
-                    textsToTranslate.Add(textPayload.Text);
-                    payloadTemplate.Add(null);
+                    textsToTranslate[textIndex++] = textPayload.Text;
+                    payloadTemplate[i] = null;
                 }
                 else
                 {
-                    payloadTemplate.Add(payload);
+                    payloadTemplate[i] = payload;
                 }
             }
-
-            if (textsToTranslate.Count == 0) return;
+            
+            // 4. Data Transfer: ArraySegment
+            var textsSegment = new ArraySegment<string>(textsToTranslate, 0, textPayloadCount);
+            var templateSegment = new ArraySegment<Payload?>(payloadTemplate, 0, payloadCount);
 
             var formattedMessage = await translationService.ProcessTranslationRequestAsync(
-                                       textsToTranslate, payloadTemplate, senderText, chatMessage.Type);
+                textsSegment, templateSegment, chatMessage.Sender.TextValue, chatMessage.Type);
 
             if (formattedMessage != null)
             {
@@ -95,7 +114,12 @@ public class ChatProcessor : IChatProcessor
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            log.Error(ex, $"Error processing message: {chatMessage.Message.TextValue}");
+            log.Error(ex, $"Error processing message: {messageText}");
+        }
+        finally
+        {
+            ArrayPool<Payload?>.Shared.Return(payloadTemplate);
+            ArrayPool<string>.Shared.Return(textsToTranslate);
         }
     }
     

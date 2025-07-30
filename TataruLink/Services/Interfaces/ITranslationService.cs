@@ -22,8 +22,8 @@ public interface ITranslationService
     /// <param name="chatType">The chat type of the original message.</param>
     /// <returns>A task that represents the operation. The result contains the final, formatted SeString, or null if translation failed.</returns>
     Task<SeString?> ProcessTranslationRequestAsync(
-        List<string> textsToTranslate,
-        List<Payload?> payloadTemplate,
+        IReadOnlyList<string> textsToTranslate,
+        IReadOnlyList<Payload?> payloadTemplate,
         string sender,
         XivChatType chatType);
 }

@@ -16,7 +16,7 @@ namespace TataruLink.Services;
 public class ChatMessageFormatter(DisplaySettings displaySettings) : IChatMessageFormatter
 {
     /// <inheritdoc />
-    public SeString FormatMessage(TranslationRecord record, List<Payload?> payloadTemplate, string[] translatedSegments)
+    public SeString FormatMessage(TranslationRecord record, IReadOnlyList<Payload?> payloadTemplate, string[] translatedSegments)
     {
         var format = displaySettings.TranslationFormat;
         var builder = new SeStringBuilder();
