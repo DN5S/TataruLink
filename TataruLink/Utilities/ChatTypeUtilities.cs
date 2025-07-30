@@ -98,9 +98,9 @@ public static class ChatTypeUtilities
         {
             // The range check `case >= X and <= Y`: is a C# 9.0 pattern matching feature.
             >= (ushort)XivChatType.Ls1 and <= (ushort)XivChatType.Ls8 =>
-                $"Linkshell-{typeCode - (ushort)XivChatType.Ls1 + 1}",
+                $"Linkshell{typeCode - (ushort)XivChatType.Ls1 + 1}",
             >= (ushort)XivChatType.CrossLinkShell1 and <= (ushort)XivChatType.CrossLinkShell8 =>
-                $"CWLS-{typeCode - (ushort)XivChatType.CrossLinkShell1 + 1}",
+                $"CWLS{typeCode - (ushort)XivChatType.CrossLinkShell1 + 1}",
             // For any other unhandled type, fall back to the default enum name.
             _ => type.ToString()
         };

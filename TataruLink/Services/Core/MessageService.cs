@@ -88,11 +88,13 @@ public class MessageService : IMessageService
         var textPayloadCount = 0;
         foreach (var payload in payloads)
         {
-            if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
+            if ((payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text)) ||
+                (payload is AutoTranslatePayload autoPayload && !string.IsNullOrWhiteSpace(autoPayload.Text)))
             {
                 textPayloadCount++;
             }
         }
+
         if (textPayloadCount == 0) return; // No text to translate.
 
         // 2. Rent from ArrayPool: Rent arrays from a shared pool instead of allocating new ones.
@@ -109,7 +111,18 @@ public class MessageService : IMessageService
                 if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
                 {
                     // For text payloads, store the text and leave a null placeholder in the template.
-                    textsToTranslate[textIndex++] = textPayload.Text;
+                    var cleanText = System.Text.RegularExpressions.Regex.Replace(
+                        textPayload.Text.Trim(), @"\s+", " ");
+
+                    textsToTranslate[textIndex++] = cleanText;
+                    payloadTemplate[i] = null;
+                }
+                else if (payload is AutoTranslatePayload autoPayload && !string.IsNullOrWhiteSpace(autoPayload.Text))
+                {
+                    var cleanText = System.Text.RegularExpressions.Regex.Replace(
+                        autoPayload.Text.Trim(), @"\s+", " ");
+
+                    textsToTranslate[textIndex++] = cleanText;
                     payloadTemplate[i] = null;
                 }
                 else

@@ -24,7 +24,7 @@ public interface IMessageService : IDisposable
     /// Enqueues a raw chat message for asynchronous processing in the translation pipeline.
     /// </summary>
     /// <remarks>
-    /// This method is designed to be called from the main game thread and must return quickly to avoid blocking UI.
+    /// This method is designed to be called from the main game thread and must return quickly to avoid blocking the UI.
     /// </remarks>
     /// <param name="type">The <see cref="XivChatType"/> of the message.</param>
     /// <param name="sender">The sender of the message.</param>

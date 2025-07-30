@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
@@ -27,7 +28,8 @@ public class TranslationService : ITranslationService
 
     // A unique, non-standard separator to join and split text segments.
     // This is designed to be unlikely to appear in normal chat and to be preserved by translation engines.
-    private const string TranslationSeparator = "[TTR]";
+    // Only use structured translation with DeepL
+    private const string DeepLSeparator = "⒯";
 
     public TranslationService(
         IPluginLog log,
@@ -44,7 +46,6 @@ public class TranslationService : ITranslationService
         // The DI container injects the collection of ITranslationEngine implementations.
         // We convert it to a dictionary for efficient O(1) lookups by engine type.
         engines = translationEngines.ToDictionary(engine => engine.EngineType);
-
         this.log.Info($"TranslationService initialized with {engines.Count} engines.");
     }
 
@@ -55,8 +56,13 @@ public class TranslationService : ITranslationService
         string sender,
         XivChatType chatType)
     {
+        var primaryEngine = translationConfig.Engine;
+        
         // Join all text segments into a single string for a single API call.
-        var combinedText = string.Join(TranslationSeparator, textsToTranslate);
+        // Use structured translation only for DeepL, simple concatenation for others
+        var separator = primaryEngine == TranslationEngine.DeepL ? DeepLSeparator : " ";
+        var combinedText = string.Join(separator, textsToTranslate);
+    
         var sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
         var targetLang = translationConfig.TranslateTo;
 
@@ -75,26 +81,36 @@ public class TranslationService : ITranslationService
         {
             cacheService.Set(finalResult);
         }
-
-        var translatedSegments = finalResult.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
-
-        // --- Defensive Check ---
-        // Verify that the translation engine preserved our separator.
-        if (translatedSegments.Length == textsToTranslate.Count)
+        
+        // Only attempt structured formatting for DeepL
+        if (finalResult.EngineUsed == TranslationEngine.DeepL)
         {
-            // If segment counts match, proceed with formatting.
-            return formatter.FormatMessage(finalResult, payloadTemplate, translatedSegments);
+            var translatedSegments = finalResult.TranslatedText.Split([DeepLSeparator], StringSplitOptions.None);
+
+            // --- Defensive Check ---
+            // Verify that the translation engine preserved our separator.
+            if (translatedSegments.Length == textsToTranslate.Count)
+            {
+                // Clean up segments
+                for (var i = 0; i < translatedSegments.Length; i++)
+                {
+                    translatedSegments[i] = translatedSegments[i].Trim();
+                }
+                return formatter.FormatMessage(finalResult, payloadTemplate, translatedSegments);
+            }
+
+            log.Warning($"DeepL structure preservation failed. Expected {textsToTranslate.Count}, got {translatedSegments.Length}. Falling back to simple format.");
         }
 
-        // If counts mismatch, the engine likely altered or removed the separator.
-        // Log a warning and use a fallback format to avoid crashing and to display the raw result.
-        log.Warning($"Translation segment mismatch. Expected {textsToTranslate.Count}, got {translatedSegments.Length}. Engine may have altered separator. Fallback formatting will be used.");
         var fallbackBuilder = new SeStringBuilder();
         foreach (var payload in payloadTemplate.OfType<Payload>())
         {
-            fallbackBuilder.Add(payload);
+            if (payload is not TextPayload && payload is not AutoTranslatePayload)
+            {
+                fallbackBuilder.Add(payload);
+            }
         }
-        fallbackBuilder.AddText($" (Translation Error: {translationResult.TranslatedText})");
+        fallbackBuilder.AddText($"[{finalResult.EngineUsed}] {finalResult.TranslatedText}");
         return fallbackBuilder.Build();
     }
 
