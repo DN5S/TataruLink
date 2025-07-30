@@ -24,11 +24,6 @@ public class DisplaySettings
     public string TranslationFormat { get; set; } = "[{engine}] {translated}";
 
     /// <summary>
-    /// Gets or sets the key for the color from the UIColor sheet to be used for the translated text.
-    /// </summary>
-    public uint TranslationColor { get; set; } = 0; // Default: A nice light blue
-
-    /// <summary>
     /// Gets or sets the mode determining the output location for translated messages.
     /// </summary>
     public TranslationDisplayMode DisplayMode { get; set; } = TranslationDisplayMode.InGameChat;

@@ -15,5 +15,5 @@ public interface IChatProcessor : IDisposable
     /// Enqueues a raw chat message for processing.
     /// This method is designed to be called from the main game thread and must return quickly.
     /// </summary>
-    void EnqueueMessage(XivChatType type, string sender, string message);
+    void EnqueueMessage(XivChatType type, SeString sender, SeString message);
 }

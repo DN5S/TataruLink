@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 using TataruLink.Configuration;
 using TataruLink.Models;
@@ -29,8 +30,10 @@ public class ChatProcessor : IChatProcessor
 
     private readonly ConcurrentQueue<ChatMessage> messageQueue = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
-    private readonly SemaphoreSlim semaphore = new(10); // Max 5 concurrent translations
+    private readonly SemaphoreSlim semaphore = new(10); // Max 10 concurrent translations
     private readonly Task dispatcherTask;
+    
+    private const string TranslationSeparator = "[TTR]"; // Separator between translated text segments.
 
     public event Action<SeString>? OnTranslationReady; 
     
@@ -54,7 +57,7 @@ public class ChatProcessor : IChatProcessor
     }
     
     /// <inheritdoc />
-    public void EnqueueMessage(XivChatType type, string sender, string message)
+    public void EnqueueMessage(XivChatType type, SeString sender, SeString message)
     {
         messageQueue.Enqueue(new ChatMessage(type, sender, message));
     }
@@ -80,24 +83,58 @@ public class ChatProcessor : IChatProcessor
     {
         try
         {
-            if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender, chatMessage.Message)))
+            var messageText = chatMessage.Message.TextValue;
+            var senderText = chatMessage.Sender.TextValue;
+            
+            if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, senderText, messageText)))
             {
                 return;
             }
+            
+            // Deconstruct the SeString into a template and text segment
+            var payloadTemplate = new List<Payload?>();
+            var textsToTranslate = new List<string>();
+            
+            foreach (var payload in chatMessage.Message.Payloads)
+            {
+                if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
+                {
+                    textsToTranslate.Add(textPayload.Text);
+                    payloadTemplate.Add(null); // Placeholder for translated text
+                }
+                else
+                {
+                    payloadTemplate.Add(payload);
+                }
+            }
+            
+            if (textsToTranslate.Count == 0) return;
 
+            var combinedText = string.Join(TranslationSeparator, textsToTranslate);
             var sourceLang = translationSettings.EnableLanguageDetection ? "auto" : translationSettings.FromLanguage;
             var targetLang = translationSettings.TranslateTo;
 
-            var record = await translationService.TranslateAsync(chatMessage.Message, sourceLang, targetLang);
+            var record = await translationService.TranslateAsync(combinedText, sourceLang, targetLang);
             if (record == null) return;
             
+            var translatedSegments = record.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
+            
+            if (translatedSegments.Length != textsToTranslate.Count)
+            {
+                log.Warning($"Translation segment mismatch. Expected {textsToTranslate.Count}, got {translatedSegments.Length}. Engine may have altered separator. Falling back to simple append.");
+                var fallbackBuilder = new SeStringBuilder().Append(chatMessage.Message);
+                fallbackBuilder.AddText($" (Translation Error: {record.TranslatedText})");
+                OnTranslationReady?.Invoke(fallbackBuilder.Build());
+                return;
+            }
+            
             var enrichedRecord = new TranslationRecord(
-                record.OriginalText, record.TranslatedText, chatMessage.Sender, chatMessage.Type,
+                combinedText, record.TranslatedText, senderText, chatMessage.Type,
                 record.EngineUsed, record.SourceLanguage, record.DetectedSourceLanguage, record.TargetLanguage
             ) { TimeTakenMs = record.TimeTakenMs, FromCache = record.FromCache };
-            var formattedMessage = formatter.FormatMessage(enrichedRecord);
             
-            // If the record was newly translated (not from cache), store the complete, enriched version in the cache.
+            var formattedMessage = formatter.FormatMessage(enrichedRecord, payloadTemplate, translatedSegments);
+            
             if (!enrichedRecord.FromCache && translationSettings.UseCache)
             {
                 cacheService.Set(enrichedRecord);
@@ -107,7 +144,7 @@ public class ChatProcessor : IChatProcessor
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            log.Error(ex, $"Error processing message: {chatMessage.Message}");
+            log.Error(ex, $"Error processing message: {chatMessage.Message.TextValue}");
         }
         finally
         {

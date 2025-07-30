@@ -198,9 +198,10 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         var chatProcessor = services.GetRequiredService<IChatProcessor>();
+        var testSender = new SeStringBuilder().AddText("Test").Build();
+        var testMessage = new SeStringBuilder().AddText(args).Build();
 
-        chatProcessor.EnqueueMessage(XivChatType.Echo, "Test", args);
-
+        chatProcessor.EnqueueMessage(XivChatType.Echo, testSender, testMessage);
         chatGui.Print($"Test message enqueued: \"{args}\"");
     }
 
@@ -210,18 +211,19 @@ public sealed class Plugin : IDalamudPlugin
         XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         if (isHandled) return;
-        
-        var senderValue = sender.TextValue;
-        var messageValue = message.TextValue;
 
-        if (string.IsNullOrEmpty(messageValue)) return;
+        if (message.Payloads.Count == 0) return;
+        
+        var senderCopy = sender;
+        var messageCopy = message;
+
         
         framework.RunOnFrameworkThread(() =>
         {
             try
             {
                 var chatProcessor = services.GetRequiredService<IChatProcessor>();
-                chatProcessor.EnqueueMessage(type, senderValue, messageValue);
+                chatProcessor.EnqueueMessage(type, senderCopy, messageCopy);
             }
             catch (Exception ex)
             {
@@ -237,8 +239,7 @@ public sealed class Plugin : IDalamudPlugin
         var displaySettings = services.GetRequiredService<DisplaySettings>();
 
         var displayMode = displaySettings.DisplayMode;
-
-        // The framework call is now here, in the main plugin class.
+        
         framework.RunOnFrameworkThread(() =>
         {
             try
