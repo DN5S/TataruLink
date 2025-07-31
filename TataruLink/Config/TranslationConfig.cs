@@ -66,19 +66,6 @@ public class TranslationConfig
         { XivChatType.FreeCompany, TranslationEngine.Google },
         { XivChatType.Echo, TranslationEngine.Gemini }
     };
-    
-    /// <summary>
-    /// Provides backward compatibility for older configurations.
-    /// This property should not be used directly for new logic.
-    /// </summary>
-    [Obsolete("Use ChatTypeEngineMap instead for engine-specific configurations.")]
-    public HashSet<XivChatType> EnabledChatTypes
-    {
-        // Getter remains for backward compatibility with older config files
-        get => ChatTypeEngineMap.Keys.ToHashSet();
-        // Setter is no-op to prevent conflicts, new logic should modify ChatTypeEngineMap
-        set { /* This is a no-op to ensure old configurations don't break loading */ }
-    }
 
     #endregion
 

@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using TataruLink.Models;
+using TataruLink.Services.Core;
 
 namespace TataruLink.Interfaces.Services;
 
@@ -10,6 +11,11 @@ namespace TataruLink.Interfaces.Services;
 /// </summary>
 public interface ICacheService
 {
+    /// <summary>
+    /// Gets the cache performance statistics.
+    /// </summary>
+    CacheStatistics Statistics { get; }
+
     /// <summary>
     /// Attempts to retrieve a translation record from the cache using a composite key of the text and languages.
     /// </summary>
