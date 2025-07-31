@@ -8,18 +8,9 @@ namespace TataruLink.Config;
 public enum TranslationEngine
 {
     Google,
-    DeepL
-}
-
-/// <summary>
-/// Holds API-related settings for external translation services.
-/// </summary>
-public class ApiSettings
-{
-    /// <summary>
-    /// Gets or sets the API key for the DeepL service.
-    /// </summary>
-    public string? DeepLApiKey { get; set; }
+    DeepL,
+    Ollama,
+    Gemini
 }
 
 public class TranslationConfig
@@ -28,7 +19,7 @@ public class TranslationConfig
 
     /// <summary>
     /// Gets or sets a value indicating whether all translation features are globally enabled.
-    /// This is the master switch for the plugin's core functionality.
+    /// This is the primary switch for the plugin's core functionality.
     /// </summary>
     public bool EnableTranslations { get; set; } = true;
 
@@ -106,5 +97,31 @@ public class TranslationConfig
     /// </summary>
     public bool UseCache { get; set; } = true;
 
+    #endregion
+    
+    #region LLM Prompts
+    
+    /// <summary>
+    /// Gets or sets the prompt template for the Gemini translation engine.
+    /// </summary>
+    public string GeminiPromptTemplate { get; set; } = """
+                                                       You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
+                                                       Preserve the game's context and tone. Only output the translated text.
+
+                                                       Text to translate: "{text}"
+                                                       Translation:
+                                                       """;
+
+    /// <summary>
+    /// Gets or sets the prompt template for the Ollama translation engine.
+    /// </summary>
+    public string OllamaPromptTemplate { get; set; } = """
+                                                       You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
+                                                       Preserve the game's context and tone. Only output the translated text.
+                                                       
+                                                       Text to translate: "{text}"
+                                                       Translation:
+                                                       """;
+    
     #endregion
 }

@@ -15,7 +15,7 @@ public class TataruConfig : IPluginConfiguration
     /// <summary>
     /// Gets or sets the settings related to external APIs.
     /// </summary>
-    public ApiSettings ApiSettings { get; set; } = new();
+    public ApiConfig ApiConfig { get; set; } = new();
 
     /// <summary>
     /// Gets or sets the settings related to the core translation logic.
