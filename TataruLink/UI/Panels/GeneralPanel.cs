@@ -53,22 +53,25 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
         ImGui.Separator();
         
         #region Engine and Language
-
-        var engineNames = Enum.GetNames<TranslationEngine>();
-        var currentEngineIndex = (int)translationSettings.Engine;
-        if (ImGui.Combo("Engine", ref currentEngineIndex, engineNames, engineNames.Length))
+        
+        // The "From Language" input is now always visible but contextually more important.
+        var fromLanguage = translationSettings.FromLanguage;
+        if (ImGui.InputText("From Language", ref fromLanguage, 5))
         {
-            translationSettings.Engine = (TranslationEngine)currentEngineIndex;
+            translationSettings.FromLanguage = fromLanguage;
             configChanged = true;
         }
-
-        // TODO: Replace with a real language list from a service or a static list.
+        ImGui.SameLine();
+        ImGui.TextDisabled("(Used when auto-detection is off, or as a hint for LLMs)");
+        
         var translateTo = translationSettings.TranslateTo;
         if (ImGui.InputText("Translate To", ref translateTo, 5))
         {
             translationSettings.TranslateTo = translateTo;
             configChanged = true;
         }
+        ImGui.SameLine();
+        ImGui.TextDisabled("(e.g., ko, en, ja)");
 
         var enableLanguageDetection = translationSettings.EnableLanguageDetection;
         if (ImGui.Checkbox("Enable Language Detection", ref enableLanguageDetection))
@@ -76,17 +79,8 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
             translationSettings.EnableLanguageDetection = enableLanguageDetection;
             configChanged = true;
         }
-
-        // Only show the 'From Language' input if auto-detection is disabled.
-        if (!translationSettings.EnableLanguageDetection)
-        {
-            var fromLanguage = translationSettings.FromLanguage;
-            if (ImGui.InputText("From Language", ref fromLanguage, 5))
-            {
-                translationSettings.FromLanguage = fromLanguage;
-                configChanged = true;
-            }
-        }
+        ImGui.TextDisabled("Note: Auto-detection is primarily supported by Google and DeepL.");
+        ImGui.TextDisabled("LLM-based engines (Gemini, Ollama) perform best with a specific 'From Language'.");
 
         #endregion
         

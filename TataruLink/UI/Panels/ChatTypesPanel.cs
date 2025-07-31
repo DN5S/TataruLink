@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/UI/Panels/ChatTypesPanel.cs
 
+using System;
 using ImGuiNET;
 using TataruLink.Config;
 using TataruLink.Interfaces.UI;
@@ -15,14 +16,14 @@ namespace TataruLink.UI.Panels;
 /// </summary>
 public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel
 {
+    private readonly string[] engineNames = Enum.GetNames<TranslationEngine>();
     /// <inheritdoc />
     public bool Draw()
     {
         var configChanged = false;
-        var enabledChatTypes = tataruConfig.TranslationSettings.EnabledChatTypes;
+        var chatTypeEngineMap = tataruConfig.TranslationSettings.ChatTypeEngineMap;
 
-        ImGui.Text("Enable translation for each chat type category.");
-        ImGui.Text("Changes will be applied to all channels within that category.");
+        ImGui.TextWrapped("Enable translation for specific chat types and assign a translation engine to each.");
         ImGui.Separator();
 
         // Iterate over each category defined in our central utility class.
@@ -30,32 +31,60 @@ public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel
         {
             if (!ImGui.CollapsingHeader(category.Key)) continue;
 
-            if (!ImGui.BeginTable($"Table_{category.Key}", 2, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV)) continue;
-            
-            // For each chat type in the category, create a checkbox.
+            if (!ImGui.BeginTable($"Table_{category.Key}", 3,
+                                  ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV)) continue;
+
+            ImGui.TableSetupColumn("Enabled", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupColumn("Chat Type", ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn("Translation Engine", ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableHeadersRow();
+
             foreach (var chatType in category.Value)
             {
-                ImGui.TableNextColumn();
+                ImGui.TableNextRow();
 
-                // The state of the checkbox is directly determined by the presence of the chatType in the HashSet.
-                var isEnabled = enabledChatTypes.Contains(chatType);
-                
-                // The checkbox's label is the user-friendly name from our utility class.
-                if (ImGui.Checkbox(ChatTypeUtilities.GetDisplayName(chatType), ref isEnabled))
+                // --- Column 1: Enable/Disable Checkbox ---
+                ImGui.TableNextColumn();
+                var isEnabled = chatTypeEngineMap.ContainsKey(chatType);
+                if (ImGui.Checkbox($"##enable_{chatType}", ref isEnabled))
                 {
-                    // If the user changes the checkbox state, update the underlying HashSet.
                     if (isEnabled)
                     {
-                        enabledChatTypes.Add(chatType);
+                        // When enabling, add with a default engine (e.g., Google).
+                        chatTypeEngineMap[chatType] = TranslationEngine.Google;
                     }
                     else
                     {
-                        enabledChatTypes.Remove(chatType);
+                        chatTypeEngineMap.Remove(chatType);
                     }
-                    // Flag that the configuration has changed and needs to be saved.
+
                     configChanged = true;
                 }
+
+                // --- Column 2: Chat Type Name ---
+                ImGui.TableNextColumn();
+                ImGui.Text(ChatTypeUtilities.GetDisplayName(chatType));
+
+                // --- Column 3: Engine Selector Dropdown ---
+                ImGui.TableNextColumn();
+                if (isEnabled)
+                {
+                    var currentEngine = chatTypeEngineMap[chatType];
+                    var currentIndex = Array.IndexOf(engineNames, currentEngine.ToString());
+
+                    ImGui.SetNextItemWidth(-1); // Make combo box fill the column
+                    if (ImGui.Combo($"##engine_{chatType}", ref currentIndex, engineNames, engineNames.Length))
+                    {
+                        chatTypeEngineMap[chatType] = Enum.Parse<TranslationEngine>(engineNames[currentIndex]);
+                        configChanged = true;
+                    }
+                }
+                else
+                {
+                    ImGui.TextDisabled("(Disabled)");
+                }
             }
+
             ImGui.EndTable();
         }
 

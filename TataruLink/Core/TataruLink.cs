@@ -6,6 +6,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Microsoft.Extensions.DependencyInjection;
 using TataruLink.Interfaces.Core;
+using TataruLink.Interfaces.Services;
 using TataruLink.UI.Windows;
 
 namespace TataruLink.Core;
@@ -45,7 +46,13 @@ public sealed class TataruLink : IDalamudPlugin
             var windowSystem = services.GetRequiredService<WindowSystem>();
             var hookManager = services.GetRequiredService<IChatHookManager>();
             var tataruCommandManager = services.GetRequiredService<Interfaces.Core.ICommandManager>();
+            
+            // Services required for dynamic reconfiguration
+            var configService = services.GetRequiredService<IConfigService>();
+            var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
 
+            configService.OnConfigChanged += engineFactory.ClearCache;
+            
             // Initialize core components.
             hookManager.Initialize();
             tataruCommandManager.Initialize();
@@ -54,6 +61,7 @@ public sealed class TataruLink : IDalamudPlugin
             pluginInterface.UiBuilder.Draw += windowSystem.Draw;
             pluginInterface.UiBuilder.OpenConfigUi += () => services.GetRequiredService<SettingsWindow>().Toggle();
             pluginInterface.UiBuilder.OpenMainUi += () => services.GetRequiredService<MainWindow>().Toggle();
+            
             
             log.Info("TataruLink started successfully.");
         }
@@ -76,23 +84,24 @@ public sealed class TataruLink : IDalamudPlugin
             // The service provider might be null if the constructor failed early.
             if (services == null) return;
             
-            var pi = services.GetService<IDalamudPluginInterface>();
-            var windowSystem = services.GetService<WindowSystem>();
-            if (pi != null && windowSystem != null)
-            {
-                pi.UiBuilder.Draw -= windowSystem.Draw;
-            }
-            
-            // Dispose of managed services safely.
-            services.GetService<IChatHookManager>()?.Dispose();
-            services.GetService<Interfaces.Core.ICommandManager>()?.Dispose();
-            
-            // The WindowSystem itself doesn't need to be disposed of, but its windows should be removed.
-            windowSystem?.RemoveAllWindows();
-            
-            // Dispose the service provider itself to clean up all singleton instances.
+            var pi = services.GetRequiredService<IDalamudPluginInterface>();
+            var windowSystem = services.GetRequiredService<WindowSystem>();
+            var configService = services.GetRequiredService<IConfigService>();
+            var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
+
+            // --- 1. Unsubscribe from external and static events ---
+            // These are connections our DI container does not manage, so we must manually sever them.
+            pi.UiBuilder.Draw -= windowSystem.Draw;
+            configService.OnConfigChanged -= engineFactory.ClearCache;
+
+            // --- 2. Clean up UI ---
+            windowSystem.RemoveAllWindows();
+        
+            // --- 3. Dispose the entire DI container ---
+            // This single call will automatically call Dispose() on all registered IDisposable services,
+            // such as ChatHookManager and CommandManager.
             services.Dispose();
-            
+        
             log.Info("TataruLink shut down successfully.");
         }
         catch (Exception ex)
