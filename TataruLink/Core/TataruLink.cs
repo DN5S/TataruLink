@@ -1,10 +1,10 @@
-﻿// File: TataruLink/Core/TataruLink.cs
-
+﻿
 using System;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Microsoft.Extensions.DependencyInjection;
+using TataruLink.Attributes;
 using TataruLink.Interfaces.Core;
 using TataruLink.Interfaces.Services;
 using TataruLink.UI.Windows;
@@ -20,6 +20,7 @@ public sealed class TataruLink : IDalamudPlugin
 {
     private readonly ServiceProvider? services;
     private readonly IPluginLog log;
+    private readonly CommandManager commandManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TataruLink"/> class.
@@ -27,7 +28,7 @@ public sealed class TataruLink : IDalamudPlugin
     /// </summary>
     public TataruLink(
         IDalamudPluginInterface pluginInterface,
-        Dalamud.Plugin.Services.ICommandManager commandManager,
+        ICommandManager dalamudCommandManager,
         IPluginLog log,
         IChatGui chatGui,
         IClientState clientState,
@@ -40,28 +41,28 @@ public sealed class TataruLink : IDalamudPlugin
         {
             // Configure the dependency injection container with all required services.
             services = Services.Providers.ServiceProvider.ConfigureServices(
-                pluginInterface, commandManager, log, chatGui, clientState, framework);
+                pluginInterface, dalamudCommandManager, log, chatGui, clientState, framework);
 
             // Retrieve essential services from the container.
             var windowSystem = services.GetRequiredService<WindowSystem>();
             var hookManager = services.GetRequiredService<IChatHookManager>();
-            var tataruCommandManager = services.GetRequiredService<Interfaces.Core.ICommandManager>();
+            
+            // Create and initialize the command manager with this instance as the command host
+            this.commandManager = new CommandManager(dalamudCommandManager, this);
+            this.commandManager.Initialize();
             
             // Services required for dynamic reconfiguration
             var configService = services.GetRequiredService<IConfigService>();
             var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
-
             configService.OnConfigChanged += engineFactory.ClearCache;
             
             // Initialize core components.
             hookManager.Initialize();
-            tataruCommandManager.Initialize();
             
             // Subscribe to the UI Builder events for drawing windows and handling config commands.
             pluginInterface.UiBuilder.Draw += windowSystem.Draw;
             pluginInterface.UiBuilder.OpenConfigUi += () => services.GetRequiredService<SettingsWindow>().Toggle();
             pluginInterface.UiBuilder.OpenMainUi += () => services.GetRequiredService<MainWindow>().Toggle();
-            
             
             log.Info("TataruLink started successfully.");
         }
@@ -84,22 +85,24 @@ public sealed class TataruLink : IDalamudPlugin
             // The service provider might be null if the constructor failed early.
             if (services == null) return;
             
+            // Dispose command manager first
+            this.commandManager?.Dispose();
+
             var pi = services.GetRequiredService<IDalamudPluginInterface>();
             var windowSystem = services.GetRequiredService<WindowSystem>();
             var configService = services.GetRequiredService<IConfigService>();
             var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
 
             // --- 1. Unsubscribe from external and static events ---
-            // These are connections our DI container does not manage, so we must manually sever them.
             pi.UiBuilder.Draw -= windowSystem.Draw;
+            pi.UiBuilder.OpenConfigUi -= () => services.GetRequiredService<SettingsWindow>().Toggle();
+            pi.UiBuilder.OpenMainUi -= () => services.GetRequiredService<MainWindow>().Toggle();
             configService.OnConfigChanged -= engineFactory.ClearCache;
 
             // --- 2. Clean up UI ---
             windowSystem.RemoveAllWindows();
         
             // --- 3. Dispose the entire DI container ---
-            // This single call will automatically call Dispose() on all registered IDisposable services,
-            // such as ChatHookManager and CommandManager.
             services.Dispose();
         
             log.Info("TataruLink shut down successfully.");
@@ -109,4 +112,47 @@ public sealed class TataruLink : IDalamudPlugin
             log.Error(ex, "An error occurred during TataruLink shutdown.");
         }
     }
+    
+    #region Command Handlers
+
+    [Command("/tatarulink")]
+    [HelpMessage("Opens the main window, showing translation history and statistics.")]
+    private void OpenMainWindow(string command, string args)
+    {
+        services?.GetRequiredService<MainWindow>().Toggle();
+    }
+
+    [Command("/tataruoverlay")]
+    [HelpMessage("Toggles the real-time translation overlay window.")]
+    private void ToggleOverlayWindow(string command, string args)
+    {
+        services?.GetRequiredService<TranslationOverlayWindow>().Toggle();
+    }
+
+    [Command("/tataruconfig")]
+    [HelpMessage("Opens the settings window to configure TataruLink.")]
+    private void OpenConfigWindow(string command, string args)
+    {
+        services?.GetRequiredService<SettingsWindow>().Toggle();
+    }
+
+    [Command("/tatarutest")]
+    [HelpMessage("Sends a test message for translation. Usage: /tatarutest <text>")]
+    private void OnTestCommand(string command, string args)
+    {
+        var chatGui = services!.GetRequiredService<IChatGui>();
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            chatGui.Print("Usage: /tatarutest <text to translate>");
+            return;
+        }
+
+        var messageService = services!.GetRequiredService<IMessageService>();
+        var testSender = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder().AddText("Test").Build();
+        var testMessage = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder().AddText(args).Build();
+        messageService.EnqueueMessage(Dalamud.Game.Text.XivChatType.Echo, testSender, testMessage);
+        chatGui.Print($"Test message enqueued: \"{args}\"");
+    }
+    
+    #endregion
 }

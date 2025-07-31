@@ -1,78 +1,94 @@
-﻿// File: TataruLink/Core/CommandManager.cs
-
+﻿
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using Dalamud.Game.Command;
-using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
-using TataruLink.Interfaces.Services;
-using TataruLink.UI.Windows;
-using Core_ICommandManager = TataruLink.Interfaces.Core.ICommandManager;
+using TataruLink.Attributes;
 
 namespace TataruLink.Core;
 
 /// <summary>
-/// Manages the registration and handling of all slash commands for the plugin.
+/// Automatically discovers and registers command methods marked with [Command] attributes.
+/// This provides a declarative approach to command registration using reflection.
 /// </summary>
-public class CommandManager(
-    ICommandManager commandManager,
-    IChatGui chatGui,
-    IMessageService messageService,
-    MainWindow mainWindow,
-    SettingsWindow settingsWindow,
-    TranslationOverlayWindow translationOverlayWindow)
-    : Core_ICommandManager
+public class CommandManager : IDisposable
 {
-    private const string CommandName = "/tatarulink";
-    private const string OverlayCommandName = "/tataruoverlay";
-    private const string ConfigCommandName = "/tataruconfig";
-    private const string TestCommandName = "/tatarutest";
+    private readonly ICommandManager dalamudCommandManager;
+    private readonly object commandHost;
+    private readonly List<string> registeredCommands = [];
 
-    /// <inheritdoc />
-    public void Initialize()
+    public CommandManager(ICommandManager dalamudCommandManager, object commandHost)
     {
-        commandManager.AddHandler(CommandName, new CommandInfo((_, _) => mainWindow.Toggle())
-        {
-            HelpMessage = "Opens the main window, showing translation history and statistics."
-        });
-        commandManager.AddHandler(OverlayCommandName, new CommandInfo((_, _) => translationOverlayWindow.Toggle())
-        {
-            HelpMessage = "Toggles the real-time translation overlay window."
-        });
-        commandManager.AddHandler(ConfigCommandName, new CommandInfo((_, _) => settingsWindow.Toggle())
-        {
-            HelpMessage = "Opens the settings window to configure TataruLink."
-        });
-        commandManager.AddHandler(TestCommandName, new CommandInfo(OnTestCommand)
-        {
-            HelpMessage = "Sends a test message for translation. Usage: /tatarutest <text>"
-        });
+        this.dalamudCommandManager = dalamudCommandManager;
+        this.commandHost = commandHost;
     }
 
     /// <summary>
-    /// Handles the test command execution.
+    /// Registers all plugin commands with Dalamud's command manager.
     /// </summary>
-    /// <param name="command">The command used.</param>
-    /// <param name="args">The arguments provided with the command.</param>
-    private void OnTestCommand(string command, string args)
+    public void Initialize()
     {
-        if (string.IsNullOrWhiteSpace(args))
-        {
-            chatGui.Print("Usage: /tatarutest <text to translate>");
-            return;
-        }
+        var methods = commandHost.GetType()
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.NonPublic)
+            .Where(m => m.GetCustomAttribute<CommandAttribute>() != null);
 
-        var testSender = new SeStringBuilder().AddText("Test").Build();
-        var testMessage = new SeStringBuilder().AddText(args).Build();
-        messageService.EnqueueMessage(XivChatType.Echo, testSender, testMessage);
-        chatGui.Print($"Test message enqueued: \"{args}\"");
+        foreach (var method in methods)
+        {
+            RegisterCommandMethod(method);
+        }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Registers a single command method with Dalamud's command system.
+    /// </summary>
+    private void RegisterCommandMethod(MethodInfo method)
+    {
+        var commandAttr = method.GetCustomAttribute<CommandAttribute>()!;
+        var helpAttr = method.GetCustomAttribute<HelpMessageAttribute>();
+        var commandName = commandAttr.Command;
+
+        // Validate method signature
+        var parameters = method.GetParameters();
+        if (parameters.Length != 2 || 
+            parameters[0].ParameterType != typeof(string) || 
+            parameters[1].ParameterType != typeof(string))
+        {
+            throw new InvalidOperationException(
+                $"Command method '{method.Name}' must have signature: void MethodName(string command, string args)");
+        }
+
+        var commandInfo = new CommandInfo((cmd, args) => 
+        {
+            try
+            {
+                method.Invoke(commandHost, [cmd, args]);
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't crash the plugin
+                var innerEx = ex is TargetInvocationException tie ? tie.InnerException : ex;
+                throw new InvalidOperationException($"Error executing command '{commandName}': {innerEx?.Message}", innerEx);
+            }
+        })
+        {
+            HelpMessage = helpAttr?.HelpMessage ?? string.Empty
+        };
+
+        dalamudCommandManager.AddHandler(commandName, commandInfo);
+        registeredCommands.Add(commandName);
+    }
+
+    /// <summary>
+    /// Disposes all registered commands.
+    /// </summary>
     public void Dispose()
     {
-        commandManager.RemoveHandler(CommandName);
-        commandManager.RemoveHandler(OverlayCommandName);
-        commandManager.RemoveHandler(ConfigCommandName);
-        commandManager.RemoveHandler(TestCommandName);
+        foreach (var commandName in registeredCommands)
+        {
+            dalamudCommandManager.RemoveHandler(commandName);
+        }
+        registeredCommands.Clear();
     }
 }

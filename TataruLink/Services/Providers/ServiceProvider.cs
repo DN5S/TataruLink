@@ -27,7 +27,7 @@ public static class ServiceProvider
     /// </summary>
     /// <returns>A configured <see cref="Microsoft.Extensions.DependencyInjection.ServiceProvider"/> instance.</returns>
     public static Microsoft.Extensions.DependencyInjection.ServiceProvider ConfigureServices(
-        IDalamudPluginInterface pluginInterface, Dalamud.Plugin.Services.ICommandManager commandManager, IPluginLog log,
+        IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IPluginLog log,
         IChatGui chatGui, IClientState clientState, IFramework framework)
     {
         var services = new ServiceCollection();
@@ -50,7 +50,7 @@ public static class ServiceProvider
     /// Registers core services provided by the Dalamud framework.
     /// </summary>
     private static void RegisterDalamudServices(IServiceCollection services, IDalamudPluginInterface pluginInterface,
-        Dalamud.Plugin.Services.ICommandManager commandManager, IPluginLog log, IChatGui chatGui, IClientState clientState, IFramework framework)
+        ICommandManager commandManager, IPluginLog log, IChatGui chatGui, IClientState clientState, IFramework framework)
     {
         services.AddSingleton(pluginInterface);
         services.AddSingleton(commandManager);
@@ -109,7 +109,6 @@ public static class ServiceProvider
     private static void RegisterManagers(IServiceCollection services)
     {
         services.AddSingleton<IChatHookManager, ChatHookManager>();
-        services.AddSingleton<Interfaces.Core.ICommandManager, CommandManager>();
     }
 
     /// <summary>
