@@ -14,8 +14,8 @@ public class ChatTypeMessageFilter(TranslationConfig translationConfig) : IMessa
     /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)
     {
-        // This check uses the EnabledChatTypes HashSet for an optimal O(1) lookup,
+        // This check uses the ChatTypeEngineMap for an optimal O(1) lookup,
         // ensuring high performance even with frequent chat messages.
-        return translationConfig.EnabledChatTypes.Contains(type);
+        return translationConfig.ChatTypeEngineMap.ContainsKey(type);
     }
 }

@@ -40,7 +40,6 @@ public static class ServiceProvider
         RegisterDalamudServices(services, pluginInterface, commandManager, log, chatGui, clientState, framework);
         RegisterConfigurationServices(services, configService, tataruConfig);
         RegisterCoreServices(services);
-        RegisterTranslationEngines(services, tataruConfig.ApiConfig, tataruConfig.TranslationSettings);
         RegisterChatFilters(services);
         RegisterManagers(services);
         RegisterWindows(services);
@@ -85,39 +84,11 @@ public static class ServiceProvider
     {
         services.AddSingleton<ICacheService, CacheService>();
         services.AddSingleton<IMessageFormatter, MessageFormatter>();
+        services.AddSingleton<ITranslationEngineFactory, TranslationEngineFactory>();
         services.AddSingleton<ITranslationService, TranslationService>();
         services.AddSingleton<IMessageService, MessageService>();
     }
-
-    /// <summary>
-    /// Registers the available translation engine implementations.
-    /// </summary>
-    private static void RegisterTranslationEngines(IServiceCollection services, ApiConfig apiConfig, TranslationConfig translationConfig)
-    {
-        // Google Translate is always available as the default, key-less option.
-        services.AddSingleton<ITranslationEngine, GoogleTranslationEngine>();
-        
-        // The DeepL engine is registered conditionally. It is only available for injection
-        // if the user has provided a valid API key in the configuration.
-        if (!string.IsNullOrEmpty(apiConfig.DeepLApiKey))
-        {
-            services.AddSingleton<ITranslationEngine>(s => new DeepLTranslationEngine(
-                apiConfig, false, s.GetRequiredService<IPluginLog>()));
-        }
-        
-        if (!string.IsNullOrEmpty(apiConfig.GeminiApiKey))
-        {
-            services.AddSingleton<ITranslationEngine>(s => new GeminiTranslationEngine(
-                apiConfig, translationConfig, s.GetRequiredService<IPluginLog>()));
-        }
-        
-        if (!string.IsNullOrEmpty(apiConfig.OllamaEndpoint))
-        {
-            services.AddSingleton<ITranslationEngine>(s => new OllamaTranslationEngine(
-                apiConfig, translationConfig, s.GetRequiredService<IPluginLog>()));
-        }
-    }
-
+    
     /// <summary>
     /// Registers all message filter implementations.
     /// </summary>

@@ -1,6 +1,8 @@
 ﻿// File: TataruLink/Config/TranslationConfig.cs
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Dalamud.Game.Text;
 
 namespace TataruLink.Config;
@@ -55,19 +57,33 @@ public class TranslationConfig
     #region Translation Targets
 
     /// <summary>
-    /// Gets or sets the collection of chat types for which translation is enabled.
-    /// Using a HashSet provides O(1) lookups for optimal performance in the message filter.
+    /// Gets or sets the mapping of chat types to specific translation engines.
+    /// Only the chat types present as keys in this dictionary will be translated.
     /// </summary>
-    public HashSet<XivChatType> EnabledChatTypes { get; set; } =
-    [
-        XivChatType.Say,
-        XivChatType.Party,
-        XivChatType.CrossParty,
-        XivChatType.Alliance,
-        XivChatType.TellIncoming,
-        XivChatType.FreeCompany,
-        XivChatType.Echo
-    ];
+    public Dictionary<XivChatType, TranslationEngine> ChatTypeEngineMap { get; set; } = new()
+    {
+        // Default settings for new users
+        { XivChatType.Say, TranslationEngine.Google },
+        { XivChatType.Party, TranslationEngine.Google },
+        { XivChatType.CrossParty, TranslationEngine.Google },
+        { XivChatType.Alliance, TranslationEngine.Google },
+        { XivChatType.TellIncoming, TranslationEngine.DeepL },
+        { XivChatType.FreeCompany, TranslationEngine.Google },
+        { XivChatType.Echo, TranslationEngine.Gemini }
+    };
+    
+    /// <summary>
+    /// Provides backward compatibility for older configurations.
+    /// This property should not be used directly for new logic.
+    /// </summary>
+    [Obsolete("Use ChatTypeEngineMap instead for engine-specific configurations.")]
+    public HashSet<XivChatType> EnabledChatTypes
+    {
+        // Getter remains for backward compatibility with older config files
+        get => ChatTypeEngineMap.Keys.ToHashSet();
+        // Setter is no-op to prevent conflicts, new logic should modify ChatTypeEngineMap
+        set { /* This is a no-op to ensure old configurations don't break loading */ }
+    }
 
     #endregion
 
@@ -107,9 +123,6 @@ public class TranslationConfig
     public string GeminiPromptTemplate { get; set; } = """
                                                        You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
                                                        Preserve the game's context and tone. Only output the translated text.
-
-                                                       Text to translate: "{text}"
-                                                       Translation:
                                                        """;
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/Services/Core/ConfigService.cs
 
+using System;
 using Dalamud.Plugin;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
@@ -13,6 +14,8 @@ namespace TataruLink.Services.Core;
 public class ConfigService : IConfigService
 {
     private readonly IDalamudPluginInterface pluginInterface;
+    
+    public event Action? OnConfigChanged;
     
     /// <inheritdoc />
     public TataruConfig Config { get; }
@@ -38,5 +41,6 @@ public class ConfigService : IConfigService
     public void Save()
     {
         pluginInterface.SavePluginConfig(Config);
+        OnConfigChanged?.Invoke();
     }
 }
