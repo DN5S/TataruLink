@@ -68,7 +68,7 @@ public class GeminiTranslationEngine : TranslationEngineBase
             // Build the API endpoint URL with the configured model and API key
             var url = string.Format(ApiUrlTemplate, apiConfig.GeminiModel, apiConfig.GeminiApiKey);
             // Process the user-defined prompt template with language placeholders
-            var systemPrompt = ProcessPromptTemplate(sourceLanguage, targetLanguage, text);
+            var systemPrompt = ProcessPromptTemplate(sourceLanguage, targetLanguage);
             // Create the request body using Gemini's 3-turn conversational format for optimal quality
             var requestBody = CreateConversationalRequestBody(systemPrompt, text);
 
@@ -131,7 +131,7 @@ public class GeminiTranslationEngine : TranslationEngineBase
     /// <param name="targetLanguage">The target language code.</param>
     /// <param name="text">The text to be translated (used for {text} placeholder if present).</param>
     /// <returns>The processed system prompt ready for the conversation.</returns>
-    private string ProcessPromptTemplate(string sourceLanguage, string targetLanguage, string text)
+    private string ProcessPromptTemplate(string sourceLanguage, string targetLanguage)
     {
         return translationConfig.GeminiPromptTemplate
                                 .Replace("{source_lang}", sourceLanguage, StringComparison.OrdinalIgnoreCase)
