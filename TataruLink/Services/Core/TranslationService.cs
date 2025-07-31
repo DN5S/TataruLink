@@ -65,7 +65,19 @@ public class TranslationService : ITranslationService
         var separator = engineForThisChatType != TranslationEngine.Google ? StructureSeparator : " ";
         var combinedText = string.Join(separator, textsToTranslate);
     
-        var sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
+        string sourceLang;
+        // LLM engines do not reliably support 'auto' detection.
+        // We will always provide them with the user-configured 'FromLanguage' as a hint.
+        if (engineForThisChatType is TranslationEngine.Gemini or TranslationEngine.Ollama)
+        {
+            sourceLang = translationConfig.FromLanguage;
+            log.Debug($"LLM engine ({engineForThisChatType}) detected. Using explicit source language: {sourceLang}");
+        }
+        else
+        {
+            // Traditional engines can use the auto-detection feature.
+            sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
+        }
         var targetLang = translationConfig.TranslateTo;
 
         // Perform the core translation logic, including caching and fallbacks.

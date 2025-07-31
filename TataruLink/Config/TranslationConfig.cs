@@ -29,12 +29,7 @@ public class TranslationConfig
     /// Gets or sets a value indicating whether incoming chat messages should be translated automatically.
     /// </summary>
     public bool EnableAutomaticChatTranslation { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the primary translation engine to be used for all translation tasks.
-    /// </summary>
-    public TranslationEngine Engine { get; set; } = TranslationEngine.Google;
-
+    
     /// <summary>
     /// Gets or sets a value indicating whether the source language should be automatically detected.
     /// </summary>
