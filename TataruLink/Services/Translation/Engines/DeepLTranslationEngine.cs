@@ -23,8 +23,8 @@ public class DeepLTranslationEngine : TranslationEngineBase
 {
     private const string FreeApiUrl = "https://api-free.deepl.com/v2/translate";
     private const string ProApiUrl = "https://api.deepl.com/v2/translate";
+    private readonly ApiConfig apiConfig;
 
-    private readonly string apiKey;
     private readonly string apiUrl;
 
     /// <inheritdoc />
@@ -33,17 +33,17 @@ public class DeepLTranslationEngine : TranslationEngineBase
     /// <summary>
     /// Initializes a new instance of the <see cref="DeepLTranslationEngine"/> class.
     /// </summary>
-    /// <param name="apiKey">The DeepL API key. Must not be null or empty.</param>
+    /// <param name="apiConfig"></param>
     /// <param name="useProApi">A value indicating whether to use the Pro API endpoint.</param>
     /// <param name="log">The plugin log service.</param>
     /// <exception cref="ArgumentException">Thrown if the API key is null or whitespace.</exception>
-    public DeepLTranslationEngine(string apiKey, bool useProApi, IPluginLog log) : base(log)
+    public DeepLTranslationEngine(ApiConfig apiConfig, bool useProApi, IPluginLog log) : base(log)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
+        if (string.IsNullOrWhiteSpace(apiConfig.DeepLApiKey))
         {
-            throw new ArgumentException("DeepL API key cannot be null or whitespace.", nameof(apiKey));
+            throw new ArgumentException("DeepL API key cannot be null or whitespace.", nameof(apiConfig.DeepLApiKey));
         }
-        this.apiKey = apiKey;
+        this.apiConfig = apiConfig;
         apiUrl = useProApi ? ProApiUrl : FreeApiUrl;
     }
 
@@ -62,7 +62,7 @@ public class DeepLTranslationEngine : TranslationEngineBase
                 : new { text = new[] { text }, target_lang = targetLanguage.ToUpper(), source_lang = sourceLanguage.ToUpper() };
 
             using var request = new HttpRequestMessage(HttpMethod.Post, apiUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("DeepL-Auth-Key", apiKey);
+            request.Headers.Authorization = new AuthenticationHeaderValue("DeepL-Auth-Key", apiConfig.DeepLApiKey);
             request.Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
             var response = await HttpClient.SendAsync(request);

@@ -1,6 +1,7 @@
 ﻿// File: TataruLink/UI/Panels/GeneralPanel.cs
 
 using System;
+using System.Numerics;
 using ImGuiNET;
 using TataruLink.Config;
 using TataruLink.Interfaces.UI;
@@ -20,7 +21,7 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
         // For clarity, get direct references to the specific config sections.
         var translationSettings = tataruConfig.TranslationSettings;
         var displaySettings = tataruConfig.DisplaySettings;
-        var apiSettings = tataruConfig.ApiSettings;
+        var apiConfig = tataruConfig.ApiConfig;
 
         #region Core Controls
 
@@ -93,13 +94,71 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
 
         #region API Keys
 
-        ImGui.Text("API Keys");
+        ImGui.Text("API Keys / Endpoints");
 
-        var deepLKey = apiSettings.DeepLApiKey ?? string.Empty;
+        var deepLKey = apiConfig.DeepLApiKey ?? string.Empty;
         if (ImGui.InputText("DeepL API Key", ref deepLKey, 100, ImGuiInputTextFlags.Password))
         {
-            apiSettings.DeepLApiKey = deepLKey;
+            apiConfig.DeepLApiKey = deepLKey;
             configChanged = true;
+        }
+        
+        var geminiKey = apiConfig.GeminiApiKey ?? string.Empty;
+        if (ImGui.InputText("Gemini API Key", ref geminiKey, 100, ImGuiInputTextFlags.Password))
+        {
+            apiConfig.GeminiApiKey = geminiKey;
+            configChanged = true;
+        }
+        
+        var geminiModel = apiConfig.GeminiModel;
+        if (ImGui.InputText("Gemini Model Name", ref geminiModel, 100))
+        {
+            apiConfig.GeminiModel = geminiModel;
+            configChanged = true;
+        }
+        
+        var ollamaEndpoint = apiConfig.OllamaEndpoint;
+        if (ImGui.InputText("Ollama Endpoint URL", ref ollamaEndpoint, 200))
+        {
+            apiConfig.OllamaEndpoint = ollamaEndpoint;
+            configChanged = true;
+        }
+        
+        var ollamaModel = apiConfig.OllamaModel;
+        if (ImGui.InputText("Ollama Model Name", ref ollamaModel, 100))
+        {
+            apiConfig.OllamaModel = ollamaModel;
+            configChanged = true;
+        }
+
+        #endregion
+        
+        ImGui.Separator();
+
+        #region LLM Prompts
+
+        if (ImGui.CollapsingHeader("LLM Prompts"))
+        {
+            ImGui.TextDisabled("Configure prompts for LLM translators. Use placeholders: {text}, {source_lang}, {target_lang}");
+            ImGui.Spacing();
+
+            ImGui.Text("Gemini Prompt");
+            var geminiPrompt = translationSettings.GeminiPromptTemplate;
+            if (ImGui.InputTextMultiline("##GeminiPrompt", ref geminiPrompt, 2048, new Vector2(-1, 120)))
+            {
+                translationSettings.GeminiPromptTemplate = geminiPrompt;
+                configChanged = true;
+            }
+            
+            ImGui.Spacing();
+
+            ImGui.Text("Ollama Prompt");
+            var ollamaPrompt = translationSettings.OllamaPromptTemplate;
+            if (ImGui.InputTextMultiline("##OllamaPrompt", ref ollamaPrompt, 2048, new Vector2(-1, 120)))
+            {
+                translationSettings.OllamaPromptTemplate = ollamaPrompt;
+                configChanged = true;
+            }
         }
 
         #endregion

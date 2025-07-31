@@ -40,7 +40,7 @@ public static class ServiceProvider
         RegisterDalamudServices(services, pluginInterface, commandManager, log, chatGui, clientState, framework);
         RegisterConfigurationServices(services, configService, tataruConfig);
         RegisterCoreServices(services);
-        RegisterTranslationEngines(services, tataruConfig.ApiSettings);
+        RegisterTranslationEngines(services, tataruConfig.ApiConfig, tataruConfig.TranslationSettings);
         RegisterChatFilters(services);
         RegisterManagers(services);
         RegisterWindows(services);
@@ -73,7 +73,7 @@ public static class ServiceProvider
         // Register each configuration section as a singleton. This allows other services
         // to depend directly on specific settings (e.g., TranslationConfig) without needing
         // to couple themselves to the entire IConfigService.
-        services.AddSingleton(tataruConfig.ApiSettings);
+        services.AddSingleton(tataruConfig.ApiConfig);
         services.AddSingleton(tataruConfig.TranslationSettings);
         services.AddSingleton(tataruConfig.DisplaySettings);
     }
@@ -92,17 +92,29 @@ public static class ServiceProvider
     /// <summary>
     /// Registers the available translation engine implementations.
     /// </summary>
-    private static void RegisterTranslationEngines(IServiceCollection services, ApiSettings apiSettings)
+    private static void RegisterTranslationEngines(IServiceCollection services, ApiConfig apiConfig, TranslationConfig translationConfig)
     {
         // Google Translate is always available as the default, key-less option.
         services.AddSingleton<ITranslationEngine, GoogleTranslationEngine>();
         
         // The DeepL engine is registered conditionally. It is only available for injection
         // if the user has provided a valid API key in the configuration.
-        if (!string.IsNullOrEmpty(apiSettings.DeepLApiKey))
+        if (!string.IsNullOrEmpty(apiConfig.DeepLApiKey))
         {
             services.AddSingleton<ITranslationEngine>(s => new DeepLTranslationEngine(
-                apiSettings.DeepLApiKey, false, s.GetRequiredService<IPluginLog>()));
+                apiConfig, false, s.GetRequiredService<IPluginLog>()));
+        }
+        
+        if (!string.IsNullOrEmpty(apiConfig.GeminiApiKey))
+        {
+            services.AddSingleton<ITranslationEngine>(s => new GeminiTranslationEngine(
+                apiConfig, translationConfig, s.GetRequiredService<IPluginLog>()));
+        }
+        
+        if (!string.IsNullOrEmpty(apiConfig.OllamaEndpoint))
+        {
+            services.AddSingleton<ITranslationEngine>(s => new OllamaTranslationEngine(
+                apiConfig, translationConfig, s.GetRequiredService<IPluginLog>()));
         }
     }
 
