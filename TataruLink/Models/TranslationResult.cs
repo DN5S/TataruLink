@@ -52,6 +52,25 @@ public class TranslationResult(
 
     #endregion
 
+    #region Statistics
+
+    /// <summary>
+    /// Gets the number of tokens in the prompt, if provided by the engine.
+    /// </summary>
+    public int? PromptTokens { get; init; }
+
+    /// <summary>
+    /// Gets the number of tokens in the generated response, if provided by the engine.
+    /// </summary>
+    public int? CompletionTokens { get; init; }
+
+    /// <summary>
+    /// Gets the total number of tokens used for the request, if provided by the engine.
+    /// </summary>
+    public int? TotalTokens { get; init; }
+
+    #endregion
+
     #region Original Message Context
 
     /// <summary>
