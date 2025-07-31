@@ -74,7 +74,8 @@ public class MainWindow : Window, IDisposable
     private void DrawHistoryTable()
     {
         const ImGuiTableFlags tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
-                                           ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Sortable;
+                                           ImGuiTableFlags.ScrollY | ImGuiTableFlags.Sortable |
+                                           ImGuiTableFlags.ScrollX;
         
         if (ImGui.BeginTable("HistoryTable", 14, tableFlags))
         {
@@ -185,7 +186,7 @@ public class MainWindow : Window, IDisposable
         if (detectedLang != "N/A" && detectedLang != result.SourceLanguage.ToUpper())
         {
             ImGui.SameLine();
-            ImGui.TextColored(new Vector4(1.0f, 0.8f, 0.0f, 1.0f), "⚠");
+            ImGui.TextColored(new Vector4(1.0f, 0.8f, 0.0f, 1.0f), "★");
             if (ImGui.IsItemHovered())
             {
                 var tooltipText = $"Detected language differs from specified source: {result.SourceLanguage.ToUpper()}";
@@ -225,14 +226,14 @@ public class MainWindow : Window, IDisposable
         
         // Original text with proper wrapping
         ImGui.TableNextColumn(); 
-        ImGui.PushTextWrapPos(ImGui.GetColumnWidth());
-        ImGui.TextWrapped(result.OriginalText);
-        ImGui.PopTextWrapPos();
+        // ImGui.PushTextWrapPos(ImGui.GetColumnWidth());
+        ImGui.Text(result.OriginalText);
+        // ImGui.PopTextWrapPos();
         
         // Translated text with proper wrapping
         ImGui.TableNextColumn(); 
-        ImGui.PushTextWrapPos(ImGui.GetColumnWidth());
-        ImGui.TextWrapped(result.TranslatedText);
-        ImGui.PopTextWrapPos();
+        // ImGui.PushTextWrapPos(ImGui.GetColumnWidth());
+        ImGui.Text(result.TranslatedText);
+        // ImGui.PopTextWrapPos();
     }
 }
