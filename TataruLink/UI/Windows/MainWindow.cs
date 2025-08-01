@@ -33,24 +33,19 @@ public class MainWindow : Window, IDisposable
     /// <inheritdoc/>
     public override void Draw()
     {
-        // PERFORMANCE FIX: Single call to GetHistory() per frame
-        // Cache the result and pass it to both header and table sections
-        var history = cacheService.GetHistory().ToList(); // Materialize once
-        
         // Header section with controls and statistics
-        DrawHeaderSection(history);
+        DrawHeaderSection();
         
         ImGui.Separator();
 
         // Main translation history table
-        DrawHistoryTable(history);
+        DrawHistoryTable();
     }
     
     /// <summary>
     /// Draws the header section containing controls and cache statistics.
     /// </summary>
-    /// <param name="history">Pre-fetched history data to avoid duplicate service calls.</param>
-    private void DrawHeaderSection(IReadOnlyList<TranslationResult> history)
+    private void DrawHeaderSection()
     {
         // First row: Action buttons
         if (ImGui.Button("Clear History"))
@@ -62,7 +57,7 @@ public class MainWindow : Window, IDisposable
         
         // Second row: Cache statistics display
         var stats = cacheService.Statistics;
-        var totalEntries = history.Count; // Use pre-fetched data instead of service call
+        var totalEntries = cacheService.GetHistory().Count();
         
         ImGui.Text($"Total Entries: {totalEntries} | Cache Hits: {stats.HitCount} | Cache Misses: {stats.MissCount}");
         ImGui.SameLine();
@@ -76,8 +71,7 @@ public class MainWindow : Window, IDisposable
    /// <summary>
     /// Draws the comprehensive translation history table with all available data.
     /// </summary>
-    /// <param name="history">Pre-fetched history data to avoid duplicate service calls.</param>
-    private void DrawHistoryTable(IReadOnlyList<TranslationResult> history)
+    private void DrawHistoryTable()
     {
         const ImGuiTableFlags tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
                                            ImGuiTableFlags.ScrollY | ImGuiTableFlags.Sortable |
@@ -103,7 +97,10 @@ public class MainWindow : Window, IDisposable
             
             ImGui.TableHeadersRow();
 
-            // Use pre-fetched history data - already sorted by timestamp (newest first)
+            // Retrieve and sort the history by timestamp (newest first)
+            var history = cacheService.GetHistory().OrderByDescending(r => r.Timestamp);
+
+            // Render each translation result in the table
             foreach (var result in history)
             {
                 // Enhanced filtering logic covering all searchable fields
