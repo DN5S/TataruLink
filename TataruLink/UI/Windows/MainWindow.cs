@@ -1,7 +1,7 @@
-﻿
-// File: TataruLink/UI/Windows/MainWindow.cs
+﻿// File: TataruLink/UI/Windows/MainWindow.cs
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
@@ -33,19 +33,24 @@ public class MainWindow : Window, IDisposable
     /// <inheritdoc/>
     public override void Draw()
     {
+        // PERFORMANCE FIX: Single call to GetHistory() per frame
+        // Cache the result and pass it to both header and table sections
+        var history = cacheService.GetHistory().ToList(); // Materialize once
+        
         // Header section with controls and statistics
-        DrawHeaderSection();
+        DrawHeaderSection(history);
         
         ImGui.Separator();
 
         // Main translation history table
-        DrawHistoryTable();
+        DrawHistoryTable(history);
     }
     
     /// <summary>
     /// Draws the header section containing controls and cache statistics.
     /// </summary>
-    private void DrawHeaderSection()
+    /// <param name="history">Pre-fetched history data to avoid duplicate service calls.</param>
+    private void DrawHeaderSection(IReadOnlyList<TranslationResult> history)
     {
         // First row: Action buttons
         if (ImGui.Button("Clear History"))
@@ -57,7 +62,7 @@ public class MainWindow : Window, IDisposable
         
         // Second row: Cache statistics display
         var stats = cacheService.Statistics;
-        var totalEntries = cacheService.GetHistory().Count();
+        var totalEntries = history.Count; // Use pre-fetched data instead of service call
         
         ImGui.Text($"Total Entries: {totalEntries} | Cache Hits: {stats.HitCount} | Cache Misses: {stats.MissCount}");
         ImGui.SameLine();
@@ -71,7 +76,8 @@ public class MainWindow : Window, IDisposable
    /// <summary>
     /// Draws the comprehensive translation history table with all available data.
     /// </summary>
-    private void DrawHistoryTable()
+    /// <param name="history">Pre-fetched history data to avoid duplicate service calls.</param>
+    private void DrawHistoryTable(IReadOnlyList<TranslationResult> history)
     {
         const ImGuiTableFlags tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
                                            ImGuiTableFlags.ScrollY | ImGuiTableFlags.Sortable |
@@ -97,10 +103,7 @@ public class MainWindow : Window, IDisposable
             
             ImGui.TableHeadersRow();
 
-            // Retrieve and sort the history by timestamp (newest first)
-            var history = cacheService.GetHistory().OrderByDescending(r => r.Timestamp);
-
-            // Render each translation result in the table
+            // Use pre-fetched history data - already sorted by timestamp (newest first)
             foreach (var result in history)
             {
                 // Enhanced filtering logic covering all searchable fields

@@ -19,7 +19,7 @@ public class SettingsWindow : Window, IDisposable
 {
     private readonly IConfigService configService;
     private readonly List<ISettingsPanel> settingsPanels = [];
-    private readonly List<string> tabNames = ["General", "Chat Types"]; // Reverted to hardcoded strings as per instruction.
+    private readonly List<string> tabNames = ["General", "Chat Types", "Glossary"];
 
     public SettingsWindow(IConfigService configService) : base("TataruLink Settings") // Reverted.
     {
@@ -35,6 +35,7 @@ public class SettingsWindow : Window, IDisposable
         // Initialize and add all UI panels that will be rendered as tabs.
         settingsPanels.Add(new GeneralPanel(configuration));
         settingsPanels.Add(new ChatTypesPanel(configuration));
+        settingsPanels.Add(new GlossaryPanel(configuration.TranslationSettings));
     }
 
     public void Dispose() { }
