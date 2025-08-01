@@ -3,10 +3,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using Dalamud.Plugin.Services;
 using Microsoft.Extensions.Caching.Memory;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
@@ -115,8 +116,13 @@ public class CacheService : ICacheService, IDisposable
         
         entryOptions.RegisterPostEvictionCallback((cacheKey, _, _, state) =>
         {
-            ((ConcurrentDictionary<string, bool>)state!).TryRemove(cacheKey.ToString()!, out _);
+            if (state is ConcurrentDictionary<string, bool> keyDict && cacheKey.ToString() is { } evictedKey
+               )
+            {
+                keyDict.TryRemove(evictedKey , out _);
+            }
         }, cacheKeys);
+
 
         memoryCache.Set(key, translationResult, entryOptions);
         cacheKeys.TryAdd(key, true);
@@ -125,14 +131,20 @@ public class CacheService : ICacheService, IDisposable
     /// <inheritdoc />
     public IEnumerable<TranslationResult> GetHistory()
     {
-        // Iterate through the key dictionary for performance, as listing IMemoryCache is not supported.
-        foreach (var key in cacheKeys.Keys)
+        var results = new List<TranslationResult>();
+
+        foreach (var cacheKey in cacheKeys.Keys)
         {
-            if (memoryCache.TryGetValue(key, out TranslationResult? result) && result != null)
+            if (memoryCache.TryGetValue(cacheKey, out TranslationResult? result) && result != null)
             {
-                yield return result;
+                results.Add(result);
+            }
+            else
+            {
+                cacheKeys.TryRemove(cacheKey, out _);
             }
         }
+        return results;
     }
     
     /// <summary>
@@ -144,22 +156,6 @@ public class CacheService : ICacheService, IDisposable
         var keyComponents = $"{originalText}|{sourceLanguage.ToLower()}|{targetLanguage.ToLower()}";
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyComponents));
         return Convert.ToBase64String(bytes);
-    }
-
-    /// <summary>
-    /// Asynchronously pre-loads the cache with a collection of translation results.
-    /// This is useful for restoring a persistent cache from a file on plugin startup.
-    /// </summary>
-    /// <param name="preloadData">An enumerable collection of <see cref="TranslationResult"/> objects to load into the cache.</param>
-    public Task WarmUpAsync(IEnumerable<TranslationResult> preloadData)
-    {
-        return Task.Run(() =>
-        {
-            foreach (var result in preloadData)
-            {
-                Set(result);
-            }
-        });
     }
     
     /// <inheritdoc />

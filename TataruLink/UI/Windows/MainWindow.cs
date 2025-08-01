@@ -1,5 +1,4 @@
-﻿
-// File: TataruLink/UI/Windows/MainWindow.cs
+﻿// File: TataruLink/UI/Windows/MainWindow.cs
 
 using System;
 using System.Linq;
@@ -99,7 +98,7 @@ public class MainWindow : Window, IDisposable
             // Retrieve and sort the history by timestamp (newest first)
             var history = cacheService.GetHistory().OrderByDescending(r => r.Timestamp);
 
-            // Render each translation result in the table
+            // Render each translation results in the table
             foreach (var result in history)
             {
                 // Enhanced filtering logic covering all searchable fields

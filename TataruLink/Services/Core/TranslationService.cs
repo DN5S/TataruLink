@@ -106,16 +106,16 @@ public class TranslationService : ITranslationService
         // Attempt to re-assemble the message structure for any engine that used the separator.
         if (engineForThisChatType != TranslationEngine.Google)
         {
-            var translatedSegments = finalResult.TranslatedText.Split([StructureSeparator], StringSplitOptions.None);
+            var translatedSegments = finalResult.TranslatedText
+                                                .Split([StructureSeparator], StringSplitOptions.None)
+                                                .Select(segment => segment.Trim())
+                                                .ToArray();
 
             if (translatedSegments.Length == textsToTranslate.Count)
             {
-                for (var i = 0; i < translatedSegments.Length; i++)
-                {
-                    translatedSegments[i] = translatedSegments[i].Trim();
-                }
                 return formatter.FormatMessage(finalResult, payloadTemplate, translatedSegments);
             }
+
 
             log.Warning($"[{finalResult.EngineUsed}] Structure preservation failed. Expected {textsToTranslate.Count} segments, but got {translatedSegments.Length}. Falling back to simple format.");
         }
@@ -197,13 +197,15 @@ public class TranslationService : ITranslationService
     /// <summary>
     /// Executes translation using a specific engine implementation.
     /// </summary>
-    private async Task<TranslationResult?> ExecuteTranslationAsync(TranslationEngine engineType, string text, string source, string target)
+    private async Task<TranslationResult?> ExecuteTranslationAsync(
+        TranslationEngine engineType, string text, string source, string target)
     {
         var engine = engineFactory.GetEngine(engineType);
-        
+
         if (engine == null)
         {
-            log.Warning($"Translation engine '{engineType}' is not available (missing API key). Fallback logic will handle this.");
+            log.Warning(
+                $"Translation engine '{engineType}' is not available (missing API key). Fallback logic will handle this.");
             return null;
         }
 
