@@ -11,7 +11,7 @@ namespace TataruLink.UI.Panels;
 
 /// <summary>
 /// A settings panel responsible for rendering the UI for enabling or disabling translations for specific chat types.
-/// This panel directly configures the <see cref="TranslationConfig.EnabledChatTypes"/> set,
+/// This panel directly configures the <see cref="TranslationConfig.ChatTypeEngineMap"/> set,
 /// which is used by the <see cref="ChatTypeMessageFilter"/>.
 /// </summary>
 public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel

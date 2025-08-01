@@ -17,29 +17,29 @@ public interface ICacheService
     CacheStatistics Statistics { get; }
 
     /// <summary>
-    /// Attempts to retrieve a translation record from the cache using a composite key of the text and languages.
+    /// Attempts to retrieve a translation result from the cache using a composite key.
     /// </summary>
     /// <param name="originalText">The original, untranslated text.</param>
     /// <param name="sourceLanguage">The source language of the translation.</param>
     /// <param name="targetLanguage">The target language of the translation.</param>
-    /// <param name="record">When this method returns, contains the cached TranslationRecord if the key was found; otherwise, null.</param>
-    /// <returns>true if a record for the specified key was found in the cache; otherwise, false.</returns>
-    bool TryGet(string originalText, string sourceLanguage, string targetLanguage, out TranslationResult? record);
+    /// <param name="result">When this method returns, contains the cached TranslationResult if found; otherwise, null.</param>
+    /// <returns>true if a result for the specified key was found in the cache; otherwise, false.</returns>
+    bool TryGet(string originalText, string sourceLanguage, string targetLanguage, out TranslationResult? result);
 
     /// <summary>
-    /// Adds or updates a TranslationRecord in the cache. The key is derived from the record's content.
+    /// Adds or updates a TranslationResult in the cache.
     /// </summary>
-    /// <param name="translationResult">The TranslationRecord to add or update.</param>
+    /// <param name="translationResult">The TranslationResult to cache.</param>
     void Set(TranslationResult translationResult);
 
     /// <summary>
-    /// Gets a snapshot of all current records in the cache.
+    /// Gets a snapshot of all current translation results in the cache.
     /// </summary>
-    /// <returns>An enumerable collection of all currently cached TranslationRecords.</returns>
+    /// <returns>An enumerable collection of all currently cached TranslationResults, ordered by recency.</returns>
     IEnumerable<TranslationResult> GetHistory();
 
     /// <summary>
-    /// Clears all entries from the cache.
+    /// Clears all entries from the cache and resets statistics.
     /// </summary>
     void Clear();
 }

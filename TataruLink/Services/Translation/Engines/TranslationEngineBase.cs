@@ -1,6 +1,7 @@
 ﻿// File: TataruLink/Services/Translation/Engines/TranslationEngineBase.cs
 
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using TataruLink.Config;
@@ -31,7 +32,7 @@ public abstract class TranslationEngineBase(IPluginLog log) : ITranslationEngine
 
     /// <inheritdoc />
     public abstract TranslationEngine EngineType { get; }
-
+    
     /// <inheritdoc />
-    public abstract Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
+    public abstract Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default);
 }

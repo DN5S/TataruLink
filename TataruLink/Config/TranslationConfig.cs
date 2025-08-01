@@ -9,10 +9,10 @@ namespace TataruLink.Config;
 
 public enum TranslationEngine
 {
-    Google,
-    DeepL,
-    Ollama,
-    Gemini
+    Google = 1,
+    DeepL = 2,
+    Ollama = 3,
+    Gemini = 4
 }
 
 public class TranslationConfig
@@ -120,7 +120,6 @@ public class TranslationConfig
     public string OutgoingTranslateTo { get; set; } = "ja";
 
     #endregion
-
     
     #region LLM Prompts
     

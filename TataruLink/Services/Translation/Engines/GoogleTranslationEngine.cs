@@ -3,9 +3,10 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Web;
 using Dalamud.Plugin.Services;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
@@ -30,7 +31,11 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
     public override TranslationEngine EngineType => TranslationEngine.Google;
 
     /// <inheritdoc />
-    public override async Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage)
+    public override async Task<TranslationResult?> TranslateAsync(
+        string text, 
+        string sourceLanguage, 
+        string targetLanguage, 
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(text)) return null;
 
@@ -38,23 +43,39 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
         try
         {
             var url = string.Format(ApiUrlTemplate,
-                                    HttpUtility.UrlEncode(sourceLanguage),
-                                    HttpUtility.UrlEncode(targetLanguage),
-                                    HttpUtility.UrlEncode(text));
+                                    Uri.EscapeDataString(sourceLanguage),
+                                    Uri.EscapeDataString(targetLanguage),
+                                    Uri.EscapeDataString(text));
 
-            var response = await HttpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
+            var response = await HttpClient.GetAsync(url, cancellationToken);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.ReasonPhrase != null)
+                {
+                    Log.Error("[GoogleTranslateEngine] HTTP error {StatusCode}: {ReasonPhrase}",
+                              (int)response.StatusCode, response.ReasonPhrase);
+                }
 
-            var jsonResponse = await response.Content.ReadAsStringAsync();
+                return null;
+            }
+
+            var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
             var (translatedText, detectedLang) = ParseGoogleTranslateResponse(jsonResponse);
             stopwatch.Stop();
 
-            if (string.IsNullOrEmpty(translatedText)) return null;
+            if (string.IsNullOrEmpty(translatedText)) 
+            {
+                Log.Warning("[GoogleTranslateEngine] Empty translation result received");
+                return null;
+            }
+
+            Log.Debug("[GoogleTranslateEngine] Translation completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
 
             return new TranslationResult(
                 originalText: text,
                 translatedText: translatedText,
-                sender: string.Empty, // Sender and ChatType are context-specific, enriched later.
+                sender: string.Empty,
                 chatType: default,
                 engineUsed: EngineType,
                 sourceLanguage: sourceLanguage,
@@ -62,10 +83,22 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
                 targetLanguage: targetLanguage
             ) { TimeTakenMs = stopwatch.ElapsedMilliseconds };
         }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            Log.Warning("[GoogleTranslateEngine] Translation cancelled after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            return null;
+        }
+        catch (HttpRequestException ex)
+        {
+            stopwatch.Stop();
+            Log.Error(ex, "[GoogleTranslateEngine] Network error occurred. The service may be unavailable");
+            return null;
+        }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            Log.Error(ex, "[GoogleTranslateEngine] An unexpected error occurred. The API may be down or the endpoint may have changed.");
+            Log.Error(ex, "[GoogleTranslateEngine] Unexpected error occurred");
             return null;
         }
     }
@@ -82,11 +115,19 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
             var root = doc.RootElement;
 
             // The root must be a non-empty array.
-            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0) return (null, null);
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0) 
+            {
+                Log.Warning("[GoogleTranslateEngine] Invalid response format: root is not an array");
+                return (null, null);
+            }
 
             // The first element must be an array containing the translation blocks.
             var translationBlocks = root[0];
-            if (translationBlocks.ValueKind != JsonValueKind.Array || translationBlocks.GetArrayLength() == 0) return (null, null);
+            if (translationBlocks.ValueKind != JsonValueKind.Array || translationBlocks.GetArrayLength() == 0) 
+            {
+                Log.Warning("[GoogleTranslateEngine] Invalid response format: no translation blocks found");
+                return (null, null);
+            }
 
             // Aggregate the first string from each block, which contains the translated segment.
             var translatedText = string.Concat(translationBlocks.EnumerateArray()
@@ -100,7 +141,12 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
         }
         catch (JsonException ex)
         {
-            Log.Warning(ex, "[GoogleTranslateEngine] Failed to parse JSON response. The API structure has likely changed.");
+            Log.Warning(ex, "[GoogleTranslateEngine] Failed to parse JSON response. The API structure may have changed");
+            return (null, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[GoogleTranslateEngine] Unexpected error during response parsing");
             return (null, null);
         }
     }
