@@ -45,6 +45,12 @@ public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel
 
                 // --- Column 1: Enable/Disable Checkbox ---
                 ImGui.TableNextColumn();
+                
+                var columnWidth = ImGui.GetColumnWidth();
+                var checkboxWidth = ImGui.GetFrameHeight();
+                var centerX = (columnWidth - checkboxWidth) * 0.5f;
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + centerX);
+                
                 var isEnabled = chatTypeEngineMap.ContainsKey(chatType);
                 if (ImGui.Checkbox($"##enable_{chatType}", ref isEnabled))
                 {
