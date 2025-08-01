@@ -64,24 +64,32 @@ public class TranslationService : ITranslationService
         // Use structured translation only for DeepL, simple concatenation for others
         var separator = engineForThisChatType != TranslationEngine.Google ? StructureSeparator : " ";
         var combinedText = string.Join(separator, textsToTranslate);
+        
+        var processedText = combinedText;
+        if (translationConfig.Glossary.Count > 0)
+        {
+            processedText = translationConfig
+                            .Glossary.Where(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.OriginalText))
+                            .Aggregate(processedText, (current, entry) => current.Replace(entry.OriginalText,
+                                           entry.ReplacementText, StringComparison.OrdinalIgnoreCase));
+        }
     
         string sourceLang;
-        // LLM engines do not reliably support 'auto' detection.
+        // LLM engines do not reliably support 'auto' detection. Also, Glossary makes 'auto' unreliable.
         // We will always provide them with the user-configured 'FromLanguage' as a hint.
-        if (engineForThisChatType is TranslationEngine.Gemini or TranslationEngine.Ollama)
+        if (engineForThisChatType is TranslationEngine.Gemini or TranslationEngine.Ollama || translationConfig.Glossary.Any(e => e.IsEnabled))
         {
             sourceLang = translationConfig.FromLanguage;
-            log.Debug($"LLM engine ({engineForThisChatType}) detected. Using explicit source language: {sourceLang}");
+            log.Debug($"LLM engine or active glossary detected. Using explicit source language: {sourceLang}");
         }
         else
         {
-            // Traditional engines can use the auto-detection feature.
             sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
         }
         var targetLang = translationConfig.TranslateTo;
 
         // Perform the core translation logic, including caching and fallbacks.
-        var translationResult = await TranslateAsync(combinedText, sourceLang, targetLang, engineForThisChatType);
+        var translationResult = await TranslateAsync(processedText, sourceLang, targetLang, engineForThisChatType);
         if (translationResult == null) return null;
 
         // The initial result from TranslateAsync is partial. We now enrich it with the full context.

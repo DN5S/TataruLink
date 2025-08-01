@@ -75,6 +75,11 @@ public class TranslationConfig
     /// Gets or sets a value indicating whether messages sent by the player should also be translated.
     /// </summary>
     public bool TranslateMyOwnMessages { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the user-defined list of glossary entries for pre-translation replacement.
+    /// </summary>
+    public List<GlossaryEntry> Glossary { get; set; } = [];
 
     #endregion
 
