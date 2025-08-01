@@ -1,5 +1,7 @@
-﻿
+﻿// File: TataruLink/Core/TataruLink.cs
+
 using System;
+using Dalamud.Game;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -152,6 +154,37 @@ public sealed class TataruLink : IDalamudPlugin
         var testMessage = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder().AddText(args).Build();
         messageService.EnqueueMessage(Dalamud.Game.Text.XivChatType.Echo, testSender, testMessage);
         chatGui.Print($"Test message enqueued: \"{args}\"");
+    }
+    
+    [Command("/tr")]
+    [HelpMessage("Translates text and copies to clipboard. Usage: /tr <text to translate>")]
+    private void OnOutgoingTranslateCommand(string command, string args)
+    {
+        var chatGui = services!.GetRequiredService<IChatGui>();
+        
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            chatGui.Print("Usage: /tr <text to translate>");
+            return;
+        }
+
+        var outgoingService = services!.GetRequiredService<IOutgoingTranslationService>();
+        var messageBuilder = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
+                             .AddText(args)
+                             .Build();
+        
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            try
+            {
+                await outgoingService.ProcessTranslationAsync(messageBuilder);
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Error in outgoing translation command");
+                chatGui.Print($"[TataruLink] Translation error: {ex.Message}");
+            }
+        });
     }
     
     #endregion

@@ -39,13 +39,13 @@ public class TranslationConfig
     /// Gets or sets the source language to assume when language detection is disabled.
     /// Must be a valid language code (e.g., "ja", "en").
     /// </summary>
-    public string FromLanguage { get; set; } = "ja";
+    public string IncomingFromLanguage { get; set; } = "ja";
 
     /// <summary>
     /// Gets or sets the target language for all translations.
     /// This is the language the user wants to read (e.g., "ko", "en").
     /// </summary>
-    public string TranslateTo { get; set; } = "ko";
+    public string IncomingTranslateTo { get; set; } = "ko";
 
     #endregion
 
@@ -101,6 +101,26 @@ public class TranslationConfig
     public bool UseCache { get; set; } = true;
 
     #endregion
+    
+    #region Outgoing Translation
+
+    /// <summary>
+    /// Gets or sets the translation engine to be used for outgoing messages.
+    /// </summary>
+    public TranslationEngine OutgoingTranslationEngine { get; set; } = TranslationEngine.Google;
+
+    /// <summary>
+    /// Gets or sets the target language for outgoing messages.
+    /// </summary>
+    public string OutgoingFromLanguage { get; set; } = "ko";
+    
+    /// <summary>
+    /// Gets or sets the target language for outgoing messages (the language to translate to).
+    /// </summary>
+    public string OutgoingTranslateTo { get; set; } = "ja";
+
+    #endregion
+
     
     #region LLM Prompts
     

@@ -79,14 +79,14 @@ public class TranslationService : ITranslationService
         // We will always provide them with the user-configured 'FromLanguage' as a hint.
         if (engineForThisChatType is TranslationEngine.Gemini or TranslationEngine.Ollama || translationConfig.Glossary.Any(e => e.IsEnabled))
         {
-            sourceLang = translationConfig.FromLanguage;
+            sourceLang = translationConfig.IncomingFromLanguage;
             log.Debug($"LLM engine or active glossary detected. Using explicit source language: {sourceLang}");
         }
         else
         {
-            sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
+            sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.IncomingFromLanguage;
         }
-        var targetLang = translationConfig.TranslateTo;
+        var targetLang = translationConfig.IncomingTranslateTo;
 
         // Perform the core translation logic, including caching and fallbacks.
         var translationResult = await TranslateAsync(processedText, sourceLang, targetLang, engineForThisChatType);

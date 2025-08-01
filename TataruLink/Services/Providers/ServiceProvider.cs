@@ -86,6 +86,7 @@ public static class ServiceProvider
         services.AddSingleton<ITranslationEngineFactory, TranslationEngineFactory>();
         services.AddSingleton<ITranslationService, TranslationService>();
         services.AddSingleton<IMessageService, MessageService>();
+        services.AddSingleton<IOutgoingTranslationService, OutgoingTranslationService>();
     }
     
     /// <summary>

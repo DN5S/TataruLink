@@ -55,19 +55,19 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
         #region Engine and Language
         
         // The "From Language" input is now always visible but contextually more important.
-        var fromLanguage = translationSettings.FromLanguage;
+        var fromLanguage = translationSettings.IncomingFromLanguage;
         if (ImGui.InputText("From Language", ref fromLanguage, 5))
         {
-            translationSettings.FromLanguage = fromLanguage;
+            translationSettings.IncomingFromLanguage = fromLanguage;
             configChanged = true;
         }
         ImGui.SameLine();
         ImGui.TextDisabled("(Used when auto-detection is off, or as a hint for LLMs)");
         
-        var translateTo = translationSettings.TranslateTo;
+        var translateTo = translationSettings.IncomingTranslateTo;
         if (ImGui.InputText("Translate To", ref translateTo, 5))
         {
-            translationSettings.TranslateTo = translateTo;
+            translationSettings.IncomingTranslateTo = translateTo;
             configChanged = true;
         }
         ImGui.SameLine();
@@ -151,6 +151,45 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
             if (ImGui.InputTextMultiline("##OllamaPrompt", ref ollamaPrompt, 2048, new Vector2(-1, 120)))
             {
                 translationSettings.OllamaPromptTemplate = ollamaPrompt;
+                configChanged = true;
+            }
+        }
+
+        #endregion
+        
+        ImGui.Separator();
+        
+        #region Outgoing Translation Settings
+
+        if (ImGui.CollapsingHeader("Outgoing Translation Settings"))
+        {
+            ImGui.TextWrapped("Translate your own messages by typing a command in the chatbox, then press Enter will copy the text.");
+
+            var outgoingFrom = translationSettings.OutgoingFromLanguage;
+            if (ImGui.InputText("Source Language", ref outgoingFrom, 5))
+            {
+                translationSettings.OutgoingFromLanguage = outgoingFrom;
+                configChanged = true;
+            }
+            ImGui.SameLine();
+            ImGui.TextDisabled("(e.g., en, ja, ko)");
+            
+            var outgoingTo = translationSettings.OutgoingTranslateTo;
+            if (ImGui.InputText("Source Language", ref outgoingTo, 5))
+            {
+                translationSettings.OutgoingFromLanguage = outgoingTo;
+                configChanged = true;
+            }
+            ImGui.SameLine();
+            ImGui.TextDisabled("(e.g., en, ja, ko)");
+
+            var currentEngine = translationSettings.OutgoingTranslationEngine;
+            var engineNames = Enum.GetNames<TranslationEngine>();
+            var currentIndex = Array.IndexOf(engineNames, currentEngine.ToString());
+            ImGui.SetNextItemWidth(200);
+            if (ImGui.Combo("Translation Engine", ref currentIndex, engineNames, engineNames.Length))
+            {
+                translationSettings.OutgoingTranslationEngine = Enum.Parse<TranslationEngine>(engineNames[currentIndex]);
                 configChanged = true;
             }
         }
