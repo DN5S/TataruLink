@@ -1,6 +1,8 @@
 ﻿// File: TataruLink/Utilities/SeStringUtils.cs
 
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -64,7 +66,7 @@ public static partial class SeStringUtils
     private static bool IsGameIcon(string text)
     {
         // Game icons in FFXIV are typically single characters in the Private Use Area of Unicode.
-        // The character '' (U+E0BB) from the log falls in this range.
+        // The character '' (U+E0BB) from the log falls in this range.
         return text.Length == 1 && text[0] >= 0xE000 && text[0] <= 0xF8FF;
     }
 
@@ -78,31 +80,90 @@ public static partial class SeStringUtils
 
     /// <summary>
     /// Reconstructs an SeString with translated text while preserving all formatting.
+    /// Parses XML-structured translation to extract individual text segments.
     /// </summary>
     public static SeString ReconstructWithTranslation(string translatedText, IReadOnlyList<Payload?> payloadTemplate)
     {
         var builder = new SeStringBuilder();
-        var translatedTextUsed = false;
+        
+        // Extract individual text segments from XML-structured translation
+        var translatedSegments = ExtractTextSegmentsFromXml(translatedText);
+        var currentSegmentIndex = 0;
 
         foreach (var payload in payloadTemplate)
         {
-            if (payload == null && !translatedTextUsed)
+            if (payload == null)
             {
-                // Insert the complete translated text at the first text position
-                builder.AddText(translatedText);
-                translatedTextUsed = true;
+                // This is a placeholder for translated text
+                if (currentSegmentIndex < translatedSegments.Count)
+                {
+                    var segment = translatedSegments[currentSegmentIndex].Trim();
+                    if (!string.IsNullOrEmpty(segment))
+                    {
+                        builder.AddText(segment);
+                    }
+                    currentSegmentIndex++;
+                }
             }
-            else if (payload != null)
+            else
             {
-                // Preserve all original payloads
+                // Preserve all original payloads (formatting, colors, etc.)
                 builder.Add(payload);
             }
-            // Skip subsequent text placeholders since we use combined translation
         }
 
         return builder.Build();
     }
 
+    /// <summary>
+    /// Extracts text content from XML-structured translation like "&lt;t&gt;text1&lt;/t&gt; &lt;t&gt;text2&lt;/t&gt;".
+    /// Falls back to splitting by common delimiters if no XML structure is found.
+    /// </summary>
+    private static List<string> ExtractTextSegmentsFromXml(string translatedText)
+    {
+        var segments = new List<string>();
+        
+        // Try to extract from XML tags first
+        var xmlMatches = XmlTagRegex().Matches(translatedText);
+        
+        if (xmlMatches.Count > 0)
+        {
+            // XML structure found - extract content from tags
+            foreach (Match match in xmlMatches)
+            {
+                var content = match.Groups[1].Value.Trim();
+                if (!string.IsNullOrEmpty(content))
+                {
+                    segments.Add(content);
+                }
+            }
+        }
+        else
+        {
+            // No XML structure - split by common delimiters and clean up
+            var rawSegments = translatedText
+                .Split(['\n', '|', '/', '。', '！', '？'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToList();
+            
+            if (rawSegments.Count > 0)
+            {
+                segments.AddRange(rawSegments);
+            }
+            else
+            {
+                // Fallback: use the entire text as a single segment
+                segments.Add(translatedText.Trim());
+            }
+        }
+        
+        return segments;
+    }
+
     [GeneratedRegex(@"\s+")]
     private static partial Regex CleanRegex();
+    
+    [GeneratedRegex(@"<t>(.*?)</t>", RegexOptions.IgnoreCase)]
+    private static partial Regex XmlTagRegex();
 }

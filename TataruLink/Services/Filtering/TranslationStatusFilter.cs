@@ -11,7 +11,7 @@ namespace TataruLink.Services.Filtering;
 /// It checks if both global translations and automatic chat translations are enabled in the configuration.
 /// This filter should be applied first in the filter chain for optimal performance.
 /// </summary>
-public class TranslationStatusFilter(TranslationConfig translationConfig) : IMessageFilter
+public sealed class TranslationStatusFilter(TranslationConfig translationConfig) : IMessageFilter
 {
     /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)

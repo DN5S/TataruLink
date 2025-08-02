@@ -1,6 +1,7 @@
 ﻿// File: TataruLink/Core/TataruLink.cs
 
 using System;
+using System.Linq;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -185,8 +186,8 @@ public sealed class TataruLink : IDalamudPlugin
         chatGui.Print($"Test message enqueued: \"{args}\"");
     }
     
-    [Command("/tr")]
-    [HelpMessage("Translates text and copies to clipboard. Usage: /tr <text to translate>")]
+    [Command("/tl")]
+    [HelpMessage("Translates text and copies to clipboard. Usage: /tl <text to translate>")]
     private void OnOutgoingTranslateCommand(string command, string args)
     {
         logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
@@ -214,6 +215,80 @@ public sealed class TataruLink : IDalamudPlugin
                 chatGui.Print($"[TataruLink] Translation error: {ex.Message}");
             }
         });
+    }
+        
+    [Command("/tg")]
+    [HelpMessage("Adds a word to the user glossary. Usage: /tg <original> <translation>")]
+    private void AddToGlossary(string command, string args)
+    {
+        logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
+        var chatGui = services!.GetRequiredService<IChatGui>();
+        
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            chatGui.Print("Usage: /tg <original> <translation>");
+            return;
+        }
+
+        try
+        {
+            // Split on space with max 2 parts to handle spaces in translation
+            var parts = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            
+            if (parts.Length < 2)
+            {
+                chatGui.Print("[TataruLink] Usage: /tg <original> <translation>");
+                return;
+            }
+
+            var originalText = parts[0].Trim();
+            var translatedText = parts[1].Trim();
+            
+            // Validate input
+            if (string.IsNullOrWhiteSpace(originalText) || string.IsNullOrWhiteSpace(translatedText))
+            {
+                chatGui.Print("[TataruLink] Original text and translation cannot be empty.");
+                return;
+            }
+
+            var glossaryManager = services!.GetRequiredService<IGlossaryManager>();
+            
+            // Get current glossary
+            var currentGlossary = glossaryManager.GetGlossary();
+            
+            // Check if entry already exists
+            var existingEntry = currentGlossary.FirstOrDefault(e => 
+                e.OriginalText.Equals(originalText, StringComparison.OrdinalIgnoreCase));
+            
+            if (existingEntry != null)
+            {
+                // Update existing entry
+                existingEntry.ReplacementText = translatedText;
+                existingEntry.IsEnabled = true;
+                chatGui.Print($"[TataruLink] Glossary entry updated: {originalText} → {translatedText}");
+            }
+            else
+            {
+                // Add new entry
+                currentGlossary.Add(new Config.GlossaryEntry
+                {
+                    OriginalText = originalText,
+                    ReplacementText = translatedText,
+                    IsEnabled = true
+                });
+                chatGui.Print($"[TataruLink] Added to glossary: {originalText} → {translatedText}");
+            }
+            
+            // Update glossary (saves and rebuilds autocomplete)
+            glossaryManager.UpdateGlossary(currentGlossary);
+            
+            logger.Information("User glossary entry added: {original} → {translated}", originalText, translatedText);
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex, "Error during glossary addition for command '{command}'", command);
+            chatGui.Print($"[TataruLink] Error adding to glossary: {ex.Message}");
+        }
     }
     
     #endregion

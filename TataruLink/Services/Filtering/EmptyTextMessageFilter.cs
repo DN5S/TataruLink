@@ -9,7 +9,7 @@ namespace TataruLink.Services.Filtering;
 /// A filter that prevents empty or whitespace-only messages from being sent for translation,
 /// avoiding unnecessary and wasteful API calls.
 /// </summary>
-public class EmptyTextMessageFilter : IMessageFilter
+public sealed class EmptyTextMessageFilter : IMessageFilter
 {
     /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)

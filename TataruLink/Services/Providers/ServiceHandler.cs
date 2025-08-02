@@ -6,6 +6,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Extensions.MicrosoftLogging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Core;
 using TataruLink.Interfaces.Core;
@@ -40,7 +41,11 @@ public static class ServiceHandler
         var tataruConfig = configService.Config;    
         
         services.AddSingleton(logger);
-        services.AddLogging(builder => builder.AddDalamudLogger(logger));
+        services.AddLogging(builder =>
+        {
+            builder.AddDalamudLogger(logger);
+            builder.SetMinimumLevel(LogLevel.Trace); 
+        });
         
         RegisterDalamudServices(services, pluginInterface, commandManager, logger, chatGui, clientState, framework, dtrBar);
         RegisterConfigurationServices(services, configService, tataruConfig);

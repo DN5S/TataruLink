@@ -1,7 +1,12 @@
-﻿// File: TataruLink/Core/ChatHookManager.cs
+﻿
+// File: TataruLink/Core/ChatHookManager.cs
 
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -29,6 +34,7 @@ public class ChatHookManager(
     : IChatHookManager
 {
     private bool isDisposed;
+    private readonly ConcurrentDictionary<string, DateTime> recentTranslations = new();
     private readonly Lock lockObject = new();
 
     /// <inheritdoc />
@@ -70,12 +76,28 @@ public class ChatHookManager(
             if (isHandled || isDisposed || message.Payloads.Count == 0)
                 return;
 
+            var messageText = message.TextValue;
+            
+            // --- CRITICAL FIX: Hash-based infinite loop prevention ---
+            var messageHash = ComputeMessageHash(messageText);
+            if (recentTranslations.TryGetValue(messageHash, out var lastSeen))
+            {
+                if (DateTime.Now - lastSeen < TimeSpan.FromSeconds(2))
+                {
+                    logger.LogTrace("Skipping recently processed message to prevent infinite loop. Hash: {hash}", messageHash);
+                    return; // Skip recently processed messages
+                }
+            }
+            
+            // Clean up old entries periodically (keep only last 30 seconds)
+            CleanupOldTranslations();
+            
             // CRITICAL: Create local copies of ref parameters immediately.
             // Capturing 'ref' parameters in a closure can lead to memory corruption if the original data is freed.
             var senderLocal = CreateOptimizedSeStringCopy(sender);
             var messageLocal = CreateOptimizedSeStringCopy(message);
             
-            logger.LogTrace("Captured chat message. Type: {type}, Sender: '{sender}'", type, sender.TextValue);
+            logger.LogTrace("Captured chat message. Type: {type}, Sender: '{sender}', Hash: {hash}", type, sender.TextValue, messageHash);
 
             // Enqueue the message for asynchronous processing.
             messageService.EnqueueMessage(type, senderLocal, messageLocal);
@@ -84,6 +106,38 @@ public class ChatHookManager(
         {
             // CRITICAL: Never let exceptions bubble up to Dalamud's chat system to prevent game instability.
             logger.LogCritical(ex, "A critical, unhandled error occurred in OnChatMessage for type {type}. The message was dropped.", type);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string ComputeMessageHash(string messageText)
+    {
+        // Use a simple but effective hash for message deduplication
+        // We use SHA256 for better collision resistance than GetHashCode()
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(messageText));
+        return Convert.ToBase64String(hashBytes)[..12]; // Use the first 12 characters for efficiency
+    }
+
+    private void CleanupOldTranslations()
+    {
+        // Only clean up every 50 messages to avoid performance impact
+        if (recentTranslations.Count < 50) return;
+        
+        var cutoff = DateTime.Now.AddSeconds(-30);
+        var keysToRemove = recentTranslations
+            .Where(kvp => kvp.Value < cutoff)
+            .Select(kvp => kvp.Key)
+            .ToList();
+            
+        foreach (var key in keysToRemove)
+        {
+            recentTranslations.TryRemove(key, out _);
+        }
+        
+        if (keysToRemove.Count > 0)
+        {
+            logger.LogTrace("Cleaned up {count} old translation hashes", keysToRemove.Count);
         }
     }
 
@@ -134,6 +188,13 @@ public class ChatHookManager(
 
             if (mode is TranslationDisplayMode.InGameChat or TranslationDisplayMode.Both)
             {
+                // --- CRITICAL: Register the translation hash BEFORE displaying ---
+                var messageText = formattedMessage.TextValue;
+                var messageHash = ComputeMessageHash(messageText);
+                recentTranslations[messageHash] = DateTime.Now;
+                
+                logger.LogTrace("Registering translation hash before display: {hash}", messageHash);
+                
                 chatGui.Print(formattedMessage);
                 displayed = true;
             }
@@ -165,6 +226,7 @@ public class ChatHookManager(
             {
                 messageService.OnTranslationReady -= OnTranslationReady;
                 chatGui.ChatMessage -= OnChatMessage;
+                recentTranslations.Clear();
             }
             catch (Exception ex)
             {

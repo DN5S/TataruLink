@@ -223,9 +223,12 @@ public partial class TranslationService : ITranslationService
         };
     }
 
+    /// <summary>
+    /// Formats the final SeString message from the translation result.
+    /// </summary>
     private SeString FormatFinalMessage(TranslationResult finalResult, IReadOnlyList<Payload?> messageTemplate, int originalSegmentCount, ITranslationEngine engine)
     {
-        if (!engine.SupportsStructuredTranslation || originalSegmentCount <= 1)
+        if (!engine.SupportsStructuredTranslation || originalSegmentCount == 0)
         {
             return formatter.FormatMessage(finalResult, messageTemplate, [finalResult.TranslatedText]);
         }
@@ -234,17 +237,22 @@ public partial class TranslationService : ITranslationService
                                             .Select(m => m.Groups[1].Value.Trim())
                                             .ToArray();
 
+        // The ideal path: the segment counts match, structure is preserved.
         if (translatedSegments.Length == originalSegmentCount)
         {
             logger.LogDebug("XML structure preserved successfully. Segments: {count}", translatedSegments.Length);
             return formatter.FormatMessage(finalResult, messageTemplate, translatedSegments);
         }
 
-        logger.LogWarning("[{engine}] XML structure preservation failed. Expected {expected}, but got {actual}. Consolidating translation.",
-            finalResult.EngineUsed, originalSegmentCount, translatedSegments.Length);
+        // --- CORRECTED FALLBACK LOGIC ---
+        // The structure is broken. Do not pass the raw text with tags.
+        // Sanitize the text by stripping all tags before formatting.
+        logger.LogWarning("[{engine}] XML structure preservation failed. Expected {expected}, but got {actual}. Consolidating and sanitizing translation.",
+                          finalResult.EngineUsed, originalSegmentCount, translatedSegments.Length);
         
-        var consolidatedText = string.Join(" ", translatedSegments.Length > 0 ? translatedSegments : [finalResult.TranslatedText]);
-        return formatter.FormatMessage(finalResult, messageTemplate, [consolidatedText]);
+        var sanitizedText = finalResult.TranslatedText.Replace($"<{XmlTag}>", "").Replace($"</{XmlTag}>", "").Trim();
+        
+        return formatter.FormatMessage(finalResult, messageTemplate, [sanitizedText]);
     }
 
     [GeneratedRegex("<t>(.*?)</t>", RegexOptions.Compiled)]
