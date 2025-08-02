@@ -4,15 +4,22 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
+using ImGuiNET; // ImGui를 사용하기 위해 추가
+using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Services.Core;
+
+/// <summary>
+/// Handles translation of user-typed outgoing messages by parsing raw strings and copying the result to the clipboard.
+/// FINAL ARCHITECTURE: Based on the confirmed reality that command arguments are raw strings without payload data.
+/// </summary>
 public class OutgoingTranslationService(
     IConfigService configService,
     ITranslationEngineFactory engineFactory,
@@ -25,11 +32,17 @@ public class OutgoingTranslationService(
     private readonly IChatGui chatGui = chatGui ?? throw new ArgumentNullException(nameof(chatGui));
     private readonly IPluginLog log = log ?? throw new ArgumentNullException(nameof(log));
 
-    public async Task ProcessTranslationAsync(SeString originalMessage, CancellationToken cancellationToken = default)
+    // Regex to find and preserve any game-specific tags like <item>, <pos>, <flag> from the RAW STRING.
+    private static readonly Regex GameTagRegex = new(@"(<[^>]+>)", RegexOptions.Compiled);
+    private const string TranslationSeparator = " | "; // A unique separator.
+
+    public async Task ProcessTranslationAsync(SeString message, CancellationToken cancellationToken = default)
     {
-        if (originalMessage.Payloads.Count == 0)
+        // We only care about the raw string, as all payload data is lost when the command is executed.
+        var originalText = message.TextValue;
+        if (string.IsNullOrWhiteSpace(originalText))
         {
-            log.Debug("Empty message provided to outgoing translation service");
+            log.Debug("Empty message provided to outgoing translation service.");
             return;
         }
 
@@ -38,11 +51,29 @@ public class OutgoingTranslationService(
 
         try
         {
-            var (textSegments, payloadTemplate) = ExtractTextAndPayloadStructure(originalMessage);
-            
-            if (textSegments.Count == 0 || textSegments.All(string.IsNullOrWhiteSpace))
+            // STEP 1: Deconstruct the RAW STRING into tags and translatable text parts.
+            var parts = GameTagRegex.Split(originalText).Where(s => !string.IsNullOrEmpty(s)).ToList();
+            var textsToTranslate = new List<string>();
+            var template = new List<string>();
+
+            foreach (var part in parts)
             {
-                log.Debug("No translatable text found in outgoing message");
+                if (GameTagRegex.IsMatch(part))
+                {
+                    template.Add(part); // This is a tag string. Preserve it.
+                }
+                else
+                {
+                    textsToTranslate.Add(part);
+                    template.Add("{text}"); // This is text. Add a placeholder.
+                }
+            }
+
+            if (textsToTranslate.Count == 0)
+            {
+                log.Debug("No translatable text found in outgoing message, only tags.");
+                ImGui.SetClipboardText(originalText);
+                chatGui.Print("[TataruLink] No text to translate. Original message copied to clipboard.");
                 return;
             }
 
@@ -53,168 +84,73 @@ public class OutgoingTranslationService(
                 return;
             }
 
-            var fullText = string.Join(string.Empty, textSegments);
+            // STEP 2: Translate all text parts.
+            var combinedText = string.Join(TranslationSeparator, textsToTranslate);
             var sourceLang = translationConfig.OutgoingFromLanguage;
             var targetLang = translationConfig.OutgoingTranslateTo;
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
-
-            var result = await engine.TranslateAsync(fullText, sourceLang, targetLang, timeoutCts.Token);
+            var result = await engine.TranslateAsync(combinedText, sourceLang, targetLang, cancellationToken);
             stopwatch.Stop();
 
-            if (result?.TranslatedText != null)
-            {
-                await HandleSuccessfulTranslation(result.TranslatedText, payloadTemplate, stopwatch.ElapsedMilliseconds);
-            }
-            else
+            if (result?.TranslatedText == null)
             {
                 HandleTranslationFailure();
+                return;
             }
+
+            // STEP 3: Reconstruct the final string.
+            var translatedParts = result.TranslatedText.Split(new[] { TranslationSeparator }, StringSplitOptions.None);
+            var finalString = ReconstructFinalString(template, translatedParts, textsToTranslate.Count);
+
+            // STEP 4: Copy the final, translated string to the user's clipboard. This is the only reliable method.
+            ImGui.SetClipboardText(finalString);
+            chatGui.Print($"[TataruLink] Translation copied to clipboard! Paste it to use. ({stopwatch.ElapsedMilliseconds}ms)");
+            log.Info("Outgoing translation completed in {ElapsedMs}ms. Result copied to clipboard.", stopwatch.ElapsedMilliseconds);
         }
         catch (OperationCanceledException)
         {
             stopwatch.Stop();
-            log.Debug("Outgoing translation cancelled after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
-            chatGui.Print("[TataruLink] Translation was cancelled.");
+            log.Warning("Outgoing translation was cancelled or timed out after {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
+            chatGui.Print("[TataruLink] Translation timed out or was cancelled.");
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            log.Error(ex, "Error during outgoing translation after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
-            chatGui.Print($"[TataruLink] Translation error: {ex.Message}");
+            log.Error(ex, "Critical error during outgoing translation after {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
+            chatGui.Print($"[TataruLink] A critical error occurred: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// Extracts text segments while preserving the complete payload structure.
-    /// This maintains item links, map flags, and other formatting elements.
-    /// </summary>
-    private static (List<string> textSegments, List<Payload?> payloadTemplate) ExtractTextAndPayloadStructure(SeString message)
+    private string ReconstructFinalString(IReadOnlyList<string> template, IReadOnlyList<string> translatedParts, int expectedCount)
     {
-        var textSegments = new List<string>();
-        var payloadTemplate = new List<Payload?>();
-        
-        foreach (var payload in message.Payloads)
+        var finalBuilder = new StringBuilder();
+        var translatedIndex = 0;
+        var useFallback = translatedParts.Count != expectedCount;
+
+        if (useFallback)
         {
-            if (payload is TextPayload textPayload)
+            log.Warning("Translated part count mismatch. Expected {Expected}, got {Actual}. Using single-block fallback.", expectedCount, translatedParts.Count);
+        }
+
+        foreach (var item in template)
+        {
+            if (item == "{text}")
             {
-                textSegments.Add(textPayload.Text ?? string.Empty);
-                payloadTemplate.Add(null); // Placeholder for translated text
+                if (translatedIndex >= translatedParts.Count) continue;
+                finalBuilder.Append(translatedParts[translatedIndex]);
+                if (!useFallback) { translatedIndex++; }
             }
             else
             {
-                // Preserve ALL non-text payloads:
-                // - ItemPayload (item links)
-                // - MapLinkPayload (flag/location links) 
-                // - PlayerPayload (player mentions)
-                // - UIForegroundPayload (colors)
-                // - UIGlowPayload (glow effects)
-                // - etc.
-                payloadTemplate.Add(payload);
+                finalBuilder.Append(item);
             }
         }
-
-        return (textSegments, payloadTemplate);
-    }
-
-    /// <summary>
-    /// Handles successful translation by creating a properly formatted SeString
-    /// and using the game's native clipboard mechanism.
-    /// </summary>
-    private Task HandleSuccessfulTranslation(string translatedText, List<Payload?> payloadTemplate, long elapsedMs)
-    {
-        try
-        {
-            // Reconstruct the complete SeString with translated text and original payloads
-            var reconstructedSeString = ReconstructSeStringWithTranslation(translatedText, payloadTemplate);
-            
-            // CRITICAL INSIGHT: Use the game's native SeString clipboard mechanism
-            // The game already knows how to handle SeString data in clipboard
-            CopySeStringToClipboard(reconstructedSeString);
-            
-            chatGui.Print($"[TataruLink] Translation completed and copied to clipboard!");
-            chatGui.Print($"[TataruLink] Translated text with preserved formatting ready to paste.");
-            
-            log.Info("Outgoing translation completed in {ElapsedMs}ms with payload preservation", elapsedMs);
-        }
-        catch (Exception ex)
-        {
-            log.Error(ex, "Error handling successful translation result");
-            
-            // Fallback: Copy plain text if SeString processing fails
-            ImGui.SetClipboardText(translatedText);
-            chatGui.Print("[TataruLink] Translation completed (plain text fallback).");
-        }
-
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Reconstructs SeString by intelligently distributing translated text
-    /// across the original text payload positions while preserving all formatting.
-    /// </summary>
-    private static SeString ReconstructSeStringWithTranslation(string translatedText, List<Payload?> payloadTemplate)
-    {
-        var builder = new SeStringBuilder();
-        var translatedTextUsed = false;
-
-        foreach (var payload in payloadTemplate)
-        {
-            if (payload == null && !translatedTextUsed)
-            {
-                // Insert the complete translated text at the first text position
-                builder.AddText(translatedText);
-                translatedTextUsed = true;
-            }
-            else if (payload != null)
-            {
-                // Preserve all original payloads (items, flags, colors, etc.)
-                builder.Add(payload);
-            }
-            // Skip subsequent text placeholders since we use combined translation
-        }
-
-        return builder.BuiltString;
-    }
-
-    /// <summary>
-    /// Attempts to copy SeString data to clipboard using the game's native mechanism.
-    /// Falls back to plain text if SeString clipboard is not available.
-    /// </summary>
-    private void CopySeStringToClipboard(SeString seString)
-    {
-        try
-        {
-            // Method 1: Try to use the game's native SeString clipboard
-            // This would preserve all formatting when pasting back into the game
-            
-            // HYPOTHESIS: The game might have internal clipboard handling for SeString
-            // We need to investigate if Dalamud exposes this functionality
-            
-            // For now, encode SeString as a special format that the game might recognize
-            var encodedData = seString.Encode();
-            
-            // Method 2: Set both plain text and encoded data
-            var plainText = seString.TextValue; // Fallback plain text
-            ImGui.SetClipboardText(plainText);
-            
-            // Method 3: Log the encoded data for potential future use
-            log.Debug("SeString encoded data: {EncodedData}", Convert.ToBase64String(encodedData));
-            
-            // TODO: Research if Dalamud provides native SeString clipboard support
-            // This might require hooking into the game's internal clipboard handling
-        }
-        catch (Exception ex)
-        {
-            log.Warning(ex, "Failed to copy SeString to clipboard, using plain text fallback");
-            ImGui.SetClipboardText(seString.TextValue);
-        }
+        return finalBuilder.ToString();
     }
 
     private void HandleTranslationFailure()
     {
-        log.Warning("Outgoing translation failed - engine returned null result");
-        chatGui.Print("[TataruLink] Translation failed.");
+        log.Warning("Outgoing translation failed - engine returned null result.");
+        chatGui.Print("[TataruLink] Translation failed. The engine may be configured incorrectly or the service is down.");
     }
 }

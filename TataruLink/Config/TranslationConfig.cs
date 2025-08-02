@@ -134,6 +134,18 @@ public class TranslationConfig
                                                        3.  **Process:** Your process is strictly limited to three stages: `Input Text -> Direct Translation -> Output Text`. There are no intermediate steps for interpretation, elaboration, or restructuring.
                                                        4.  **Scope:** This rule applies without exception to all text types, including but not limited to: NPC dialogue, item descriptions, skill tooltips, system messages, and player chat.
                                                        5.  **Output:** Output ONLY the translated text. Exclude everything else.
+                                                       
+                                                       **CRITICAL RULE:** The input text is structured with `<t>` tags. You MUST preserve these tags perfectly. Translate ONLY the content inside the tags. The output format MUST be identical to the input format, with only the inner text translated.
+                                                       
+                                                       **DO NOT:**
+                                                       - Add any commentary, explanations, or apologies.
+                                                       - Alter, remove, or nest the `<t>` tags.
+                                                       - Change the order of the tags.
+                                                       
+                                                       **Example:**
+                                                       - User Input: `<t>Hello</t> <t>world</t>`
+                                                       - Correct Output: `<t>안녕하세요</t> <t>월드</t>`
+                                                       - Incorrect Output: `안녕하세요 월드` OR `<t>안녕하세요</t>, <t>월드</t>`
                                                        """;
 
     /// <summary>
@@ -148,10 +160,23 @@ public class TranslationConfig
                                                        4.  **Scope:** This rule applies without exception to all text types, including but not limited to: NPC dialogue, item descriptions, skill tooltips, system messages, and player chat.
                                                        5.  **Output:** Output ONLY the translated text. Exclude everything else.
                                                        
+                                                       **CRITICAL RULE:** The input text is structured with `<t>` tags. You MUST preserve these tags perfectly. Translate ONLY the content inside the tags. The output format MUST be identical to the input format, with only the inner text translated.
+                                                       
+                                                       **DO NOT:**
+                                                       - Add any commentary, explanations, or apologies.
+                                                       - Alter, remove, or nest the `<t>` tags.
+                                                       - Change the order of the tags.
+                                                       
+                                                       **Example:**
+                                                       - User Input: `<t>Hello</t> <t>world</t>`
+                                                       - Correct Output: `<t>안녕하세요</t> <t>월드</t>`
+                                                       - Incorrect Output: `안녕하세요 월드` OR `<t>안녕하세요</t>, <t>월드</t>`
+                                                       
                                                        - Source Language: {source_lang}
                                                        - Target Language: {target_lang}
-
-                                                       Translation:
+                                                       
+                                                       Translate the following text:
+                                                       {text}
                                                        """;
     
     #endregion

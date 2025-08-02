@@ -19,6 +19,9 @@ public class MainWindow : Window, IDisposable
 {
     private readonly ICacheService cacheService;
     private string searchText = string.Empty;
+    
+    private List<TranslationResult> sortedHistoryCache = [];
+    private int lastKnownHistoryCount = -1;
 
     public MainWindow(ICacheService cacheService) : base("TataruLink History##TataruLinkMain")
     {
@@ -37,7 +40,7 @@ public class MainWindow : Window, IDisposable
         DrawHeaderSection();
         
         ImGui.Separator();
-
+        
         // Main translation history table
         DrawHistoryTable();
     }
@@ -74,8 +77,7 @@ public class MainWindow : Window, IDisposable
     private void DrawHistoryTable()
     {
         const ImGuiTableFlags tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
-                                           ImGuiTableFlags.ScrollY | ImGuiTableFlags.Sortable |
-                                           ImGuiTableFlags.ScrollX;
+                                           ImGuiTableFlags.ScrollY | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX;
         
         if (ImGui.BeginTable("HistoryTable", 14, tableFlags))
         {
@@ -98,10 +100,15 @@ public class MainWindow : Window, IDisposable
             ImGui.TableHeadersRow();
 
             // Retrieve and sort the history by timestamp (newest first)
-            var history = cacheService.GetHistory().OrderByDescending(r => r.Timestamp);
+            var currentHistoryCount = cacheService.GetHistory().Count();
+            if (currentHistoryCount != lastKnownHistoryCount)
+            {
+                sortedHistoryCache = cacheService.GetHistory().OrderByDescending(r => r.Timestamp).ToList();
+                lastKnownHistoryCount = currentHistoryCount;
+            }
 
             // Render each translation result in the table
-            foreach (var result in history)
+            foreach (var result in sortedHistoryCache)
             {
                 // Enhanced filtering logic covering all searchable fields
                 if (!string.IsNullOrEmpty(searchText) && !MatchesSearchFilter(result, searchText))
@@ -146,10 +153,7 @@ public class MainWindow : Window, IDisposable
         ImGui.TableNextColumn(); 
         var idShort = result.Id.ToString()[..8] + "...";
         ImGui.Text(idShort);
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(result.Id.ToString());
-        }
+        if (ImGui.IsItemHovered()) { ImGui.SetTooltip(result.Id.ToString()); }
         
         // Timestamp
         ImGui.TableNextColumn(); 
@@ -226,14 +230,10 @@ public class MainWindow : Window, IDisposable
         
         // Original text with proper wrapping
         ImGui.TableNextColumn(); 
-        // ImGui.PushTextWrapPos(ImGui.GetColumnWidth());
-        ImGui.Text(result.OriginalText);
-        // ImGui.PopTextWrapPos();
+        ImGui.TextWrapped(result.OriginalText);
         
         // Translated text with proper wrapping
         ImGui.TableNextColumn(); 
-        // ImGui.PushTextWrapPos(ImGui.GetColumnWidth());
-        ImGui.Text(result.TranslatedText);
-        // ImGui.PopTextWrapPos();
+        ImGui.TextWrapped(result.TranslatedText);
     }
 }

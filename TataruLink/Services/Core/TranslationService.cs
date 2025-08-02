@@ -266,24 +266,33 @@ private async Task<TranslationResult?> ExecuteTranslationAsync(
     /// </summary>
     private SeString FormatFinalMessage(TranslationResult finalResult, IReadOnlyList<Payload?> messageTemplate, int originalSegmentCount)
     {
-        // Try to split the translated text back into segments if XML tags were used.
-        if (finalResult.EngineUsed == TranslationEngine.Google)
+        // For engines that don't support structure (like Google), or if there were no initial segments,
+        // we expect a single block of translated text. The formatter is now robust enough to handle this.
+        if (finalResult.EngineUsed == TranslationEngine.Google || originalSegmentCount == 0)
+        {
             return formatter.FormatMessage(finalResult, messageTemplate, [finalResult.TranslatedText]);
+        }
+
         var translatedSegments = XmlTagRegex.Matches(finalResult.TranslatedText)
                                             .Select(m => m.Groups[1].Value.Trim())
                                             .ToArray();
 
-        // If we successfully recovered the same number of segments, reconstruct the message.
+        // Ideal path: The engine respected our structure tags, and segment counts match.
         if (translatedSegments.Length == originalSegmentCount)
         {
             return formatter.FormatMessage(finalResult, messageTemplate, translatedSegments);
         }
 
-        log.Warning($"[{finalResult.EngineUsed}] XML structure preservation failed. Expected {originalSegmentCount} segments, but got {translatedSegments.Length}. Using simplified formatting.");
+        log.Warning($"[{finalResult.EngineUsed}] XML structure preservation failed. Expected {originalSegmentCount}, but got {translatedSegments.Length}. Consolidating translation and preserving original payloads.");
 
-        // Fallback for Google Translate or if XML structure preservation fails.
-        // We format using the entire translated text as a single segment.
-        return formatter.FormatMessage(finalResult, messageTemplate, [finalResult.TranslatedText]);
+        // ROBUST FALLBACK 2.0: Structure was lost, but we DO NOT discard the original template.
+        // Instead, we consolidate the entire translation into a single string.
+        var consolidatedText = string.Join(" ", translatedSegments.Length > 0 ? translatedSegments : [finalResult.TranslatedText]);
+        var fallbackSegments = new[] { consolidatedText };
+
+        // We pass the ORIGINAL messageTemplate and the new single-segment translation to the formatter.
+        // The formatter will now handle this mismatch gracefully.
+        return formatter.FormatMessage(finalResult, messageTemplate, fallbackSegments);
     }
 
     [GeneratedRegex("<t>(.*?)</t>", RegexOptions.Compiled)]

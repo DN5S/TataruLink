@@ -37,37 +37,17 @@ public class MessageFormatter(DisplayConfig displayConfig) : IMessageFormatter
     /// <inheritdoc />
     public SeString FormatMessage(TranslationResult translationResult, IReadOnlyList<Payload?> payloadTemplate, string[] translatedSegments)
     {
-        // DEFENSIVE PROGRAMMING: Validate inputs to prevent runtime errors
-        if (translationResult == null)
-            throw new ArgumentNullException(nameof(translationResult));
-        if (payloadTemplate == null)
-            throw new ArgumentNullException(nameof(payloadTemplate));
-        if (translatedSegments == null)
-            throw new ArgumentNullException(nameof(translatedSegments));
+        ArgumentNullException.ThrowIfNull(translationResult);
+        ArgumentNullException.ThrowIfNull(payloadTemplate);
+        ArgumentNullException.ThrowIfNull(translatedSegments);
 
-        // CRITICAL VALIDATION: Ensure array sizes match template expectations
-        var expectedSegmentCount = 0;
-        foreach (var payload in payloadTemplate)
-        {
-            if (payload == null) expectedSegmentCount++;
-        }
-
-        if (translatedSegments.Length != expectedSegmentCount)
-        {
-            // LOG WARNING: This indicates a serious bug in the translation pipeline
-            // For now, we'll handle it gracefully, but this should be investigated
-            return CreateErrorSeString($"Segment count mismatch: expected {expectedSegmentCount}, got {translatedSegments.Length}");
-        }
-
-        var format = displayConfig.TranslationFormat; // Provide safe default
+        var format = displayConfig.TranslationFormat;
         var builder = new SeStringBuilder();
-
         const string placeholder = "{translated}";
         var placeholderIndex = format.IndexOf(placeholder, StringComparison.Ordinal);
 
         if (placeholderIndex == -1)
         {
-            // IMPROVED ERROR HANDLING: More informative error message with recovery
             var errorMessage = $"ERROR: Missing {{translated}} placeholder in format: '{format}'";
             var fallbackFormat = $"[T] {{translated}} ({{engine}})";
             var fullText = FormatPlaceholders(fallbackFormat, translationResult, translatedSegments);
@@ -75,63 +55,45 @@ public class MessageFormatter(DisplayConfig displayConfig) : IMessageFormatter
         }
         else
         {
-            // 1. Add the prefix part of the format string (e.g., "[T] ")
+            // 1. Add prefix
             var prefix = format[..placeholderIndex];
             if (!string.IsNullOrEmpty(prefix))
             {
-                var formattedPrefix = FormatPlaceholders(prefix, translationResult, null);
-                builder.AddText(formattedPrefix);
+                builder.AddText(FormatPlaceholders(prefix, translationResult, null));
             }
 
-            // 2. IMPROVED: Reconstruct the core message with bounds' checking
+            // 2. Reconstruct the core message with ROBUST segment handling
             var segmentIndex = 0;
             foreach (var payload in payloadTemplate)
             {
-                if (payload == null)
+                if (payload == null) // This is a placeholder for a text segment.
                 {
-                    // BOUNDS CHECK: Prevent array index out of range
-                    if (segmentIndex < translatedSegments.Length)
+                    if (segmentIndex >= translatedSegments.Length) continue;
+                    var segment = translatedSegments[segmentIndex];
+                    if (!string.IsNullOrEmpty(segment))
                     {
-                        var segment = translatedSegments[segmentIndex++];
-                        // SAFETY: Handle null or empty segments gracefully
-                        if (!string.IsNullOrEmpty(segment))
-                        {
-                            builder.AddText(segment);
-                        }
+                        builder.AddText(segment);
                     }
-                    else
-                    {
-                        // This should never happen due to our validation above but just in case
-                        builder.AddText("[MISSING_SEGMENT]");
-                    }
+                    // In case of a segment mismatch (e.g., fallback), we only want to insert the first segment.
+                    // So we only increment the index if we expect more segments to match.
+                    segmentIndex++;
                 }
                 else
                 {
-                    // Preserve non-text payload as-is
+                    // Preserve non-text payload as-is (e.g., the ICON).
                     builder.Add(payload);
                 }
             }
 
-            // 3. Add the suffix part of the format string (e.g., " ({engine})")
+            // 3. Add suffix
             var suffix = format[(placeholderIndex + placeholder.Length)..];
             if (!string.IsNullOrEmpty(suffix))
             {
-                var formattedSuffix = FormatPlaceholders(suffix, translationResult, null);
-                builder.AddText(formattedSuffix);
+                builder.AddText(FormatPlaceholders(suffix, translationResult, null));
             }
         }
 
         return builder.Build();
-    }
-
-    /// <summary>
-    /// Creates a simple error SeString for display when formatting fails.
-    /// </summary>
-    private static SeString CreateErrorSeString(string errorMessage)
-    {
-        return new SeStringBuilder()
-            .AddText($"[TataruLink Error] {errorMessage}")
-            .Build();
     }
 
     /// <summary>

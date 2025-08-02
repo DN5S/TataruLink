@@ -27,10 +27,19 @@ public static partial class SeStringUtils
         {
             switch (payload)
             {
+                // MODIFIED: Added IsGameIcon check
                 case TextPayload textPayload when !string.IsNullOrWhiteSpace(textPayload.Text):
-                    var cleanText = CleanText(textPayload.Text);
-                    textSegments.Add(cleanText);
-                    payloadTemplate.Add(null); // Placeholder for translated text
+                    if (IsGameIcon(textPayload.Text))
+                    {
+                        // This is an icon, not text. Preserve it.
+                        payloadTemplate.Add(payload);
+                    }
+                    else
+                    {
+                        var cleanText = CleanText(textPayload.Text);
+                        textSegments.Add(cleanText);
+                        payloadTemplate.Add(null); // Placeholder for translated text
+                    }
                     break;
                     
                 case AutoTranslatePayload autoPayload when !string.IsNullOrWhiteSpace(autoPayload.Text):
@@ -40,13 +49,23 @@ public static partial class SeStringUtils
                     break;
                     
                 default:
-                    // Preserve all non-text payloads (items, colors, links, etc.)
+                    // Preserve all other non-text payloads (items, colors, links, etc.)
                     payloadTemplate.Add(payload);
                     break;
             }
         }
 
         return (textSegments, payloadTemplate);
+    }
+    
+    /// <summary>
+    /// Determines if a given string is likely a single game icon character.
+    /// </summary>
+    private static bool IsGameIcon(string text)
+    {
+        // Game icons in FFXIV are typically single characters in the Private Use Area of Unicode.
+        // The character '' (U+E0BB) from the log falls in this range.
+        return text.Length == 1 && text[0] >= 0xE000 && text[0] <= 0xF8FF;
     }
 
     /// <summary>
