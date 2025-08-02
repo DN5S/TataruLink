@@ -1,5 +1,4 @@
-﻿
-// File: TataruLink/Services/Translation/Engines/GeminiTranslationEngine.cs
+﻿// File: TataruLink/Services/Translation/Engines/GeminiTranslationEngine.cs
 
 using System;
 using System.Diagnostics;
@@ -10,16 +9,14 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
-using TataruLink.Interfaces.Services;
 using TataruLink.Models;
 
 namespace TataruLink.Services.Translation.Engines;
 
 /// <summary>
-/// An implementation of <see cref="ITranslationEngine"/> that uses the official Google Gemini API.
-/// This engine leverages Google's Gemini models to provide context-aware translations.
+/// An implementation of ITranslationEngine that uses the official Google Gemini API.
 /// </summary>
 public class GeminiTranslationEngine : TranslationEngineBase
 {
@@ -28,16 +25,10 @@ public class GeminiTranslationEngine : TranslationEngineBase
     
     private const string ApiUrlTemplate = "https://generativelanguage.googleapis.com/v1beta/models/{0}:generateContent?key={1}";
 
-    /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.Gemini;
-    
-    /// <inheritdoc />
     public override bool SupportsStructuredTranslation => true;
     
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GeminiTranslationEngine"/> class.
-    /// </summary>
-    public GeminiTranslationEngine(ApiConfig apiConfig, TranslationConfig translationConfig, IPluginLog log) : base(log)
+    public GeminiTranslationEngine(ApiConfig apiConfig, TranslationConfig translationConfig, ILogger log) : base(log)
     {
         this.apiConfig = apiConfig ?? throw new ArgumentNullException(nameof(apiConfig));
         this.translationConfig = translationConfig ?? throw new ArgumentNullException(nameof(translationConfig));
@@ -46,7 +37,6 @@ public class GeminiTranslationEngine : TranslationEngineBase
             throw new ArgumentException("Gemini API key cannot be null or whitespace.", nameof(apiConfig.GeminiApiKey));
     }
 
-    /// <inheritdoc />
     public override async Task<TranslationResult?> TranslateAsync(
         string text, 
         string sourceLanguage, 
@@ -77,11 +67,15 @@ public class GeminiTranslationEngine : TranslationEngineBase
             stopwatch.Stop();
 
             var translatedText = ExtractTranslatedText(jsonResponse);
-            if (string.IsNullOrEmpty(translatedText)) return null;
+            if (string.IsNullOrEmpty(translatedText))
+            {
+                Logger.LogWarning("Gemini API returned an empty or unparsable translation.");
+                return null;
+            }
 
             var tokenUsage = ExtractTokenUsage(jsonResponse);
-
-            Log.Debug("[GeminiTranslateEngine] Translation completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            Logger.LogDebug("Translation completed in {ElapsedMs}ms. Token usage: P:{pTokens} C:{cTokens} T:{tTokens}", 
+                stopwatch.ElapsedMilliseconds, tokenUsage.PromptTokens ?? 0, tokenUsage.CompletionTokens ?? 0, tokenUsage.TotalTokens ?? 0);
 
             return new TranslationResult(text, translatedText, string.Empty, default, EngineType,
                                          sourceLanguage, "N/A", targetLanguage)
@@ -94,26 +88,22 @@ public class GeminiTranslationEngine : TranslationEngineBase
         }
         catch (OperationCanceledException)
         {
-            stopwatch.Stop();
-            Log.Warning("[GeminiTranslateEngine] Translation cancelled after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            Logger.LogWarning("Translation cancelled after {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
             return null;
         }
         catch (HttpRequestException ex)
         {
-            stopwatch.Stop();
-            Log.Error(ex, "[GeminiTranslateEngine] Network error occurred. Check connectivity and API key validity");
+            Logger.LogError(ex, "A network error occurred. Check connectivity and API key validity.");
             return null;
         }
         catch (JsonException ex)
         {
-            stopwatch.Stop();
-            Log.Error(ex, "[GeminiTranslateEngine] Failed to parse API response. Response format may have changed");
+            Logger.LogError(ex, "Failed to parse API response. Response format may have changed.");
             return null;
         }
         catch (Exception ex)
         {
-            stopwatch.Stop();
-            Log.Error(ex, "[GeminiTranslateEngine] Unexpected error during translation");
+            Logger.LogError(ex, "An unexpected error occurred during translation.");
             return null;
         }
     }
@@ -127,12 +117,13 @@ public class GeminiTranslationEngine : TranslationEngineBase
 
     private static object CreateConversationalRequestBody(string systemPrompt, string textToTranslate)
     {
+        // This structure primes the model with its role before receiving the actual text.
         return new
         {
             contents = new[]
             {
                 new { role = "user", parts = new[] { new { text = systemPrompt } } },
-                new { role = "model", parts = new[] { new { text = "Understood. I will translate the given text according to the instructions provided." } } },
+                new { role = "model", parts = new[] { new { text = "Understood. I will perform the translation as instructed." } } },
                 new { role = "user", parts = new[] { new { text = textToTranslate } } }
             }
         };
@@ -141,18 +132,17 @@ public class GeminiTranslationEngine : TranslationEngineBase
     private async Task HandleHttpErrorAsync(HttpResponseMessage response)
     {
         var errorContent = await response.Content.ReadAsStringAsync();
-        
         var errorMessage = response.StatusCode switch
         {
-            HttpStatusCode.Unauthorized => "Invalid API key or insufficient permissions",
-            HttpStatusCode.TooManyRequests => "Rate limit exceeded. Please wait before making more requests",
-            HttpStatusCode.BadRequest => "Invalid request format or parameters",
-            HttpStatusCode.Forbidden => "API access forbidden. Check your account status",
-            HttpStatusCode.NotFound => "API endpoint not found. Model may not exist",
-            _ => $"HTTP error {(int)response.StatusCode}: {response.StatusCode}"
+            HttpStatusCode.Unauthorized => "Invalid API key or insufficient permissions.",
+            HttpStatusCode.TooManyRequests => "Rate limit exceeded. Please wait before making more requests.",
+            HttpStatusCode.BadRequest => "Invalid request format or parameters. Check your prompt and model name.",
+            HttpStatusCode.Forbidden => "API access forbidden. Check your Google Cloud project status.",
+            HttpStatusCode.NotFound => $"API endpoint not found. Model '{apiConfig.GeminiModel}' may not exist or is unavailable.",
+            _ => $"HTTP error {(int)response.StatusCode}: {response.ReasonPhrase}"
         };
 
-        Log.Error("[GeminiTranslateEngine] {ErrorMessage}. Response: {ErrorContent}", errorMessage, errorContent);
+        Logger.LogError("Gemini API error: {errorMessage} Response: {errorContent}", errorMessage, errorContent);
     }
 
     private string? ExtractTranslatedText(JsonElement jsonResponse)
@@ -161,60 +151,38 @@ public class GeminiTranslationEngine : TranslationEngineBase
         {
             if (!jsonResponse.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
             {
-                Log.Warning("[GeminiTranslateEngine] No candidates found in API response");
+                Logger.LogWarning("No 'candidates' found in Gemini API response. Response: {json}", jsonResponse.ToString());
                 return null;
             }
 
+            // Safely navigate the JSON structure.
             var firstCandidate = candidates[0];
-            if (!firstCandidate.TryGetProperty("content", out var content))
+            if (firstCandidate.TryGetProperty("content", out var content) &&
+                content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0 &&
+                parts[0].TryGetProperty("text", out var textElement))
             {
-                Log.Warning("[GeminiTranslateEngine] No content found in candidate");
-                return null;
+                return textElement.GetString()?.Trim();
             }
 
-            if (!content.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
-            {
-                Log.Warning("[GeminiTranslateEngine] No parts found in content");
-                return null;
-            }
-
-            var firstPart = parts[0];
-            if (!firstPart.TryGetProperty("text", out var textElement))
-            {
-                Log.Warning("[GeminiTranslateEngine] No text found in part");
-                return null;
-            }
-
-            return textElement.GetString()?.Trim();
+            Logger.LogWarning("Could not find translated text in the expected path within the candidate. Response: {json}", jsonResponse.ToString());
+            return null;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[GeminiTranslateEngine] Error extracting translated text from response");
+            Logger.LogError(ex, "Error extracting translated text from response JSON.");
             return null;
         }
     }
 
     private static (int? PromptTokens, int? CompletionTokens, int? TotalTokens) ExtractTokenUsage(JsonElement jsonResponse)
     {
-        try
-        {
-            if (!jsonResponse.TryGetProperty("usageMetadata", out var usageMetadata))
-                return (null, null, null);
-
-            int? promptTokens = usageMetadata.TryGetProperty("promptTokenCount", out var promptTokenCount) 
-                ? promptTokenCount.GetInt32() : null;
-                
-            int? completionTokens = usageMetadata.TryGetProperty("candidatesTokenCount", out var candidatesTokenCount) 
-                ? candidatesTokenCount.GetInt32() : null;
-                
-            int? totalTokens = usageMetadata.TryGetProperty("totalTokenCount", out var totalTokenCount) 
-                ? totalTokenCount.GetInt32() : null;
-
-            return (promptTokens, completionTokens, totalTokens);
-        }
-        catch
-        {
+        if (!jsonResponse.TryGetProperty("usageMetadata", out var usage))
             return (null, null, null);
-        }
+
+        return (
+            usage.TryGetProperty("promptTokenCount", out var p) ? p.GetInt32() : null,
+            usage.TryGetProperty("candidatesTokenCount", out var c) ? c.GetInt32() : null,
+            usage.TryGetProperty("totalTokenCount", out var t) ? t.GetInt32() : null
+        );
     }
 }

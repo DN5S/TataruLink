@@ -2,24 +2,21 @@
 
 using System;
 using ImGuiNET;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.UI;
-using TataruLink.Services.Filtering;
 using TataruLink.Utilities;
 
 namespace TataruLink.UI.Panels;
 
 /// <summary>
-/// A settings panel responsible for rendering the UI for enabling or disabling translations for specific chat types.
-/// This panel directly configures the <see cref="TranslationConfig.ChatTypeEngineMap"/> set,
-/// which is used by the <see cref="ChatTypeMessageFilter"/>.
+/// A settings panel for configuring translation settings for specific chat types.
 /// </summary>
-public class ChatTypesPanel(TranslationConfig translationConfig) : ISettingsPanel
+public class ChatTypesPanel(TranslationConfig translationConfig, ILogger<ChatTypesPanel> logger)
+    : ISettingsPanel
 {
     private readonly string[] engineNames = Enum.GetNames<TranslationEngine>();
 
-    
-    /// <inheritdoc />
     public bool Draw()
     {
         var configChanged = false;
@@ -27,63 +24,56 @@ public class ChatTypesPanel(TranslationConfig translationConfig) : ISettingsPane
 
         ImGui.TextWrapped("Enable translation for specific chat types and assign a translation engine to each.");
         ImGui.Separator();
+        ImGui.Spacing();
 
-        // Iterate over each category defined in our central utility class.
-        foreach (var category in ChatTypeUtilities.CategorizedChatTypesForDisplay)
+        foreach (var (categoryName, chatTypes) in ChatTypeUtilities.CategorizedChatTypesForDisplay)
         {
-            if (!ImGui.CollapsingHeader(category.Key)) continue;
+            if (!ImGui.CollapsingHeader(categoryName)) continue;
 
-            if (!ImGui.BeginTable($"Table_{category.Key}", 3,
-                                  ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.BordersInnerV)) continue;
+            // Use WidthStretch to allow columns to fill available space gracefully.
+            if (!ImGui.BeginTable($"Table_{categoryName}", 3, ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingStretchProp)) continue;
 
-            ImGui.TableSetupColumn("Enabled", ImGuiTableColumnFlags.WidthFixed);
-            ImGui.TableSetupColumn("Chat Type", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Translation Engine", ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn("Enabled", ImGuiTableColumnFlags.WidthFixed, 60);
+            ImGui.TableSetupColumn("Chat Type");
+            ImGui.TableSetupColumn("Translation Engine");
             ImGui.TableHeadersRow();
 
-            foreach (var chatType in category.Value)
+            foreach (var chatType in chatTypes)
             {
                 ImGui.TableNextRow();
-
-                // --- Column 1: Enable/Disable Checkbox ---
                 ImGui.TableNextColumn();
-                
-                var columnWidth = ImGui.GetColumnWidth();
-                var checkboxWidth = ImGui.GetFrameHeight();
-                var centerX = (columnWidth - checkboxWidth) * 0.5f;
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + centerX);
                 
                 var isEnabled = chatTypeEngineMap.ContainsKey(chatType);
                 if (ImGui.Checkbox($"##enable_{chatType}", ref isEnabled))
                 {
                     if (isEnabled)
                     {
-                        // When enabling, add with a default engine (e.g., Google).
-                        chatTypeEngineMap[chatType] = TranslationEngine.Google;
+                        chatTypeEngineMap[chatType] = TranslationEngine.Google; // Default engine
+                        logger.LogDebug("Enabled translation for chat type {chatType} with default engine.", chatType);
                     }
                     else
                     {
                         chatTypeEngineMap.Remove(chatType);
+                        logger.LogDebug("Disabled translation for chat type {chatType}.", chatType);
                     }
-
                     configChanged = true;
                 }
 
-                // --- Column 2: Chat Type Name ---
                 ImGui.TableNextColumn();
                 ImGui.Text(ChatTypeUtilities.GetDisplayName(chatType));
 
-                // --- Column 3: Engine Selector Dropdown ---
                 ImGui.TableNextColumn();
                 if (isEnabled)
                 {
                     var currentEngine = chatTypeEngineMap[chatType];
-                    var currentIndex = Array.IndexOf(engineNames, currentEngine.ToString());
+                    var currentIndex = (int)currentEngine -1; // Directly use an enum value if it starts from 1 and is contiguous
 
-                    ImGui.SetNextItemWidth(-1); // Make combo box fill the column
+                    ImGui.SetNextItemWidth(-1);
                     if (ImGui.Combo($"##engine_{chatType}", ref currentIndex, engineNames, engineNames.Length))
                     {
-                        chatTypeEngineMap[chatType] = Enum.Parse<TranslationEngine>(engineNames[currentIndex]);
+                        var newEngine = (TranslationEngine)(currentIndex + 1);
+                        chatTypeEngineMap[chatType] = newEngine;
+                        logger.LogDebug("Changed engine for chat type {chatType} to {newEngine}.", chatType, newEngine);
                         configChanged = true;
                     }
                 }
@@ -94,6 +84,7 @@ public class ChatTypesPanel(TranslationConfig translationConfig) : ISettingsPane
             }
 
             ImGui.EndTable();
+            ImGui.Spacing(); // Add some space after each category table.
         }
         return configChanged;
     }

@@ -8,6 +8,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
 
@@ -16,41 +18,25 @@ namespace TataruLink.Services.Core;
 /// <summary>
 /// Thread-safe, high-performance translation cache service with robust IMemoryCache abstraction.
 /// </summary>
-/// <remarks>
-/// This service maintains full compatibility with any IMemoryCache implementation without 
-/// making assumptions about concrete types. Uses a single, predictable strategy for all operations.
-/// </remarks>
 public class CacheService : ICacheService, IDisposable
 {
     private readonly IMemoryCache memoryCache;
+    private readonly ILogger<CacheService> logger;
+    private readonly CacheOptions options;
     private readonly ConcurrentDictionary<string, WeakReference<TranslationResult>> resultIndex;
-    private readonly bool ownsMemoryCache;
     private volatile bool disposed;
 
     public CacheStatistics Statistics { get; } = new();
 
-    public CacheService(CacheOptions? options = null, IMemoryCache? memoryCache = null)
+    public CacheService(IMemoryCache memoryCache, ILogger<CacheService> logger, IOptions<CacheOptions> options)
     {
-        var config = options ?? new CacheOptions();
-        
-        if (memoryCache != null)
-        {
-            this.memoryCache = memoryCache;
-            ownsMemoryCache = false;
-        }
-        else
-        {
-            this.memoryCache = new MemoryCache(new MemoryCacheOptions
-            {
-                SizeLimit = config.MaxCacheSize
-            });
-            ownsMemoryCache = true;
-        }
-
-        resultIndex = new ConcurrentDictionary<string, WeakReference<TranslationResult>>();
+        this.memoryCache = memoryCache;
+        this.logger = logger;
+        this.options = options.Value;
+        this.resultIndex = new ConcurrentDictionary<string, WeakReference<TranslationResult>>();
+        logger.LogInformation("CacheService initialized.");
     }
 
-    /// <inheritdoc />
     public bool TryGet(string originalText, string sourceLanguage, string targetLanguage, out TranslationResult? result)
     {
         ThrowIfDisposed();
@@ -58,33 +44,29 @@ public class CacheService : ICacheService, IDisposable
         if (string.IsNullOrEmpty(originalText))
         {
             result = null;
-            Statistics.IncrementMiss();
             return false;
         }
 
         var cacheKey = GenerateCacheKey(originalText, sourceLanguage, targetLanguage);
-        
         if (memoryCache.TryGetValue(cacheKey, out result) && result != null)
         {
             Statistics.IncrementHit();
             result.FromCache = true;
+            logger.LogDebug("Cache HIT for key: {key}", cacheKey);
             return true;
         }
 
         Statistics.IncrementMiss();
+        logger.LogDebug("Cache MISS for key: {key}", cacheKey);
         result = null;
         return false;
     }
 
-    /// <inheritdoc />
     public void Set(TranslationResult translationResult)
     {
         ThrowIfDisposed();
         
-        if (translationResult.OriginalText == null)
-        {
-            throw new ArgumentNullException(nameof(translationResult), "TranslationResult and OriginalText cannot be null");
-        }
+        ArgumentNullException.ThrowIfNull(translationResult.OriginalText, nameof(translationResult.OriginalText));
 
         var cacheKey = GenerateCacheKey(
             translationResult.OriginalText, 
@@ -93,115 +75,95 @@ public class CacheService : ICacheService, IDisposable
 
         var entryOptions = new MemoryCacheEntryOptions
         {
-            SlidingExpiration = TimeSpan.FromMinutes(30),
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(2),
-            Size = 1,
+            SlidingExpiration = options.DefaultSlidingExpiration,
+            AbsoluteExpirationRelativeToNow = options.DefaultAbsoluteExpiration,
+            Size = 1, // Each entry has a size of 1 for size-limited caches.
             Priority = CacheItemPriority.Normal
         };
 
-        // Safe eviction callback - no concrete type assumptions
         entryOptions.RegisterPostEvictionCallback((key, value, reason, state) =>
         {
             if (key is string evictedKey && state is ConcurrentDictionary<string, WeakReference<TranslationResult>> index)
             {
                 index.TryRemove(evictedKey, out _);
+                logger.LogInformation("Cache entry evicted. Key: {key}, Reason: {reason}", evictedKey, reason);
             }
-        }, resultIndex);
+        });
 
         memoryCache.Set(cacheKey, translationResult, entryOptions);
         resultIndex.TryAdd(cacheKey, new WeakReference<TranslationResult>(translationResult));
+        logger.LogDebug("Cache SET for key: {key}", cacheKey);
     }
 
-    /// <inheritdoc />
     public IEnumerable<TranslationResult> GetHistory()
     {
         ThrowIfDisposed();
         
-        var results = new List<TranslationResult>();
+        var results = new List<TranslationResult>(resultIndex.Count);
         var staleKeys = new List<string>();
 
-        foreach (var kvp in resultIndex)
+        foreach (var (key, weakRef) in resultIndex)
         {
-            if (kvp.Value.TryGetTarget(out var result))
+            if (weakRef.TryGetTarget(out var result))
             {
                 results.Add(result);
             }
             else
             {
-                // WeakReference target was garbage collected
-                staleKeys.Add(kvp.Key);
+                staleKeys.Add(key);
             }
         }
 
-        // Clean up stale weak references
-        foreach (var staleKey in staleKeys)
+        // Clean up stale weak references from the index if any were found.
+        if (staleKeys.Any())
         {
-            resultIndex.TryRemove(staleKey, out _);
+            logger.LogDebug("Cleaning up {count} stale references from history index.", staleKeys.Count);
+            foreach (var staleKey in staleKeys)
+            {
+                resultIndex.TryRemove(staleKey, out _);
+            }
         }
 
-        // FIXED: Sort by timestamp (newest first) instead of translation time
         return results.OrderByDescending(r => r.Timestamp);
     }
 
-    /// <inheritdoc />
     public void Clear()
     {
         ThrowIfDisposed();
         
-        // SIMPLIFIED STRATEGY: Single, predictable approach
-        // Step 1: Clear the index first to prevent race conditions
         var keysToRemove = resultIndex.Keys.ToArray();
         resultIndex.Clear();
         
-        // Step 2: Remove all known keys from the memory cache
-        // This works with ANY IMemoryCache implementation - no assumptions
+        // Remove all known keys from the memory cache.
         foreach (var key in keysToRemove)
         {
             memoryCache.Remove(key);
         }
         
-        // Step 3: Reset statistics
         Statistics.Reset();
-        
-        // That's it! Simple, predictable, and bulletproof.
+        logger.LogInformation("Cache cleared successfully. {count} items removed.", keysToRemove.Length);
     }
 
-    /// <summary>
-    /// Generates a consistent, collision-resistant cache key for translation requests.
-    /// </summary>
     private static string GenerateCacheKey(string originalText, string sourceLanguage, string targetLanguage)
     {
-        var normalizedSource = sourceLanguage.ToLowerInvariant();
-        var normalizedTarget = targetLanguage.ToLowerInvariant();
-        var keyComponents = $"{originalText}|{normalizedSource}|{normalizedTarget}";
+        var keyComponents = $"{originalText.Trim()}|{sourceLanguage.ToLowerInvariant()}|{targetLanguage.ToLowerInvariant()}";
         var keyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyComponents));
         return Convert.ToBase64String(keyBytes);
     }
 
     private void ThrowIfDisposed()
     {
-        if (disposed)
-        {
-            throw new ObjectDisposedException(nameof(CacheService));
-        }
+        ObjectDisposedException.ThrowIf(disposed, this);
     }
 
-    /// <inheritdoc />
     public void Dispose()
     {
         if (disposed) return;
-        
         disposed = true;
         
-        // Clear all entries first
         resultIndex.Clear();
-        
-        // Only dispose the memory cache if we own it
-        if (ownsMemoryCache)
-        {
-            memoryCache.Dispose();
-        }
-        
+        memoryCache.Dispose(); // The DI container owns the cache, but disposing is safe.
+        logger.LogInformation("CacheService disposed.");
         GC.SuppressFinalize(this);
     }
 }
@@ -246,7 +208,7 @@ public class CacheStatistics
     public long MissCount => Interlocked.Read(ref missCount);
     
     /// <summary>
-    /// Gets the total number of cache requests (hits + misses).
+    /// Gets the total number of cache requests (hits plus misses).
     /// </summary>
     public long TotalRequests => HitCount + MissCount;
     

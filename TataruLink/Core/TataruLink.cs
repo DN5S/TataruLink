@@ -1,11 +1,11 @@
-﻿
-// File: TataruLink/Core/TataruLink.cs
+﻿// File: TataruLink/Core/TataruLink.cs
 
 using System;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using TataruLink.Attributes;
 using TataruLink.Interfaces.Core;
 using TataruLink.Interfaces.Services;
@@ -15,154 +15,128 @@ using TataruLink.UI.Windows;
 namespace TataruLink.Core;
 
 /// <summary>
-/// The main entry point for the TataruLink plugin.
-/// This class is responsible for initializing the dependency injection container,
-/// setting up all services and managers, and handling the plugin's lifecycle.
+/// Main entry point for the TataruLink plugin.
+/// Responsible for initializing the DI container, services, and handling the plugin lifecycle.
 /// </summary>
 public sealed class TataruLink : IDalamudPlugin
 {
     private readonly ServiceProvider? services;
-    private readonly IPluginLog log;
+    private readonly IPluginLog logger;
     private readonly CommandManager commandManager;
     
-    // Event handler references for proper unsubscription
+    // Storing event handler delegates in fields is critical to ensure proper unsubscription.
     private readonly Action<bool>? dtrBarClickHandler;
     private readonly Action? openConfigUiHandler;
     private readonly Action? openMainUiHandler;
     private readonly Action? configChangedHandler;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TataruLink"/> class.
-    /// This constructor is called by Dalamud when the plugin is loaded.
-    /// </summary>
     public TataruLink(
-        IDalamudPluginInterface pluginInterface,
-        ICommandManager dalamudCommandManager,
-        IPluginLog log,
-        IChatGui chatGui,
-        IClientState clientState,
-        IFramework framework,
-        IDtrBar dtrBar)
+        IDalamudPluginInterface pluginInterface, ICommandManager dalamudCommandManager, IPluginLog logger,
+        IChatGui chatGui, IClientState clientState, IFramework framework, IDtrBar dtrBar)
     {
-        this.log = log;
-        log.Info("TataruLink is starting up.");
+        this.logger = logger;
+        logger.Info("TataruLink is starting up...");
 
         try
         {
-            // Configure the dependency injection container with all required services.
+            // Set up the entire application's dependency injection container.
+            logger.Debug("Configuring services...");
             services = ServiceHandler.ConfigureServices(
-                pluginInterface, dalamudCommandManager, log, chatGui, clientState, framework, dtrBar);
+                pluginInterface, dalamudCommandManager, logger, chatGui, clientState, framework, dtrBar);
+            logger.Info("Service container configured successfully.");
 
-            // Retrieve essential services from the container.
+            // Initialize core managers and systems from the container.
             var windowSystem = services.GetRequiredService<WindowSystem>();
             var hookManager = services.GetRequiredService<IChatHookManager>();
             var dtrBarManager = services.GetRequiredService<IDtrBarManager>();
-            var mainWindow = services.GetRequiredService<MainWindow>();
-            var settingsWindow = services.GetRequiredService<SettingsWindow>();
             
-            // Create an event handler with proper reference for unsubscription
-            dtrBarClickHandler = (isCtrlPressed) =>
-            {
-                if (isCtrlPressed)
-                {
-                    settingsWindow.IsOpen = !settingsWindow.IsOpen;
-                    log.Debug("Settings window toggled (Ctrl + Click)");
-                }
-                else
-                {
-                    mainWindow.IsOpen = !mainWindow.IsOpen;
-                    log.Debug("Main window toggled (Click)");
-                }
-            };
-            
-            // Set up the DTR bar click event handling
-            dtrBarManager.OnDtrBarClicked += dtrBarClickHandler;
-            
-            // Create and initialize the command manager with this instance as the command host
-            this.commandManager = new CommandManager(dalamudCommandManager, this);
+            // Initialize CommandManager with this class as the host for command methods.
+            logger.Debug("Initializing CommandManager...");
+            this.commandManager = new CommandManager(dalamudCommandManager, this, services.GetRequiredService<ILogger<CommandManager>>());
             this.commandManager.Initialize();
-            
-            // Services required for dynamic reconfiguration
-            var configService = services.GetRequiredService<IConfigService>();
-            var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
-            
-            // Create a config changed handler that updates both engine factory and DTR bar
+
+            // Subscribe to critical events for dynamic reconfiguration and UI interaction.
+            logger.Debug("Subscribing to application events...");
             configChangedHandler = () =>
             {
-                engineFactory.ClearCache();
-                dtrBarManager.RefreshTranslationDisplay();
-                log.Debug("Configuration changed - updated engine cache and DTR bar display");
+                logger.Debug("Configuration change detected. Clearing engine cache and refreshing DTR bar.");
+                services.GetRequiredService<ITranslationEngineFactory>().ClearCache();
+                dtrBarManager.Refresh();
             };
+            services.GetRequiredService<IConfigService>().OnConfigChanged += configChangedHandler;
+
+            dtrBarClickHandler = (isCtrlPressed) =>
+            {
+                var targetWindow = isCtrlPressed ? "SettingsWindow" : "MainWindow";
+                logger.Debug("DTR bar clicked (Ctrl: {isCtrlPressed}). Toggling {window}.", isCtrlPressed, targetWindow);
+                if (isCtrlPressed)
+                    services.GetRequiredService<SettingsWindow>().Toggle();
+                else
+                    services.GetRequiredService<MainWindow>().Toggle();
+            };
+            dtrBarManager.OnDtrBarClicked += dtrBarClickHandler;
+
+            // Subscribe to Dalamud's UI builder events for our windows.
+            logger.Debug("Subscribing to Dalamud UI events...");
+            openConfigUiHandler = () => services.GetRequiredService<SettingsWindow>().Toggle();
+            openMainUiHandler = () => services.GetRequiredService<MainWindow>().Toggle();
             
-            configService.OnConfigChanged += configChangedHandler;
-            
-            // Initialize core components.
-            hookManager.Initialize();
-            
-            // Create UI event handlers with proper references for unsubscription
-            openConfigUiHandler = () => settingsWindow.Toggle();
-            openMainUiHandler = () => mainWindow.Toggle();
-            
-            // Subscribe to the UI Builder events for drawing windows and handling config commands.
             pluginInterface.UiBuilder.Draw += windowSystem.Draw;
             pluginInterface.UiBuilder.OpenConfigUi += openConfigUiHandler;
             pluginInterface.UiBuilder.OpenMainUi += openMainUiHandler;
+
+            // Final initialization of systems that depend on event subscriptions.
+            hookManager.Initialize();
             
-            log.Info("TataruLink started successfully.");
+            logger.Info("TataruLink started successfully.");
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to initialize TataruLink. The plugin will be disabled.");
-            Dispose(); // Attempt a cleanup even on failed initialization.
+            logger.Error(ex, "A critical error occurred during TataruLink initialization. The plugin will be disabled.");
+            Dispose(); // Attempt a full cleanup even on failed startup.
             throw;
         }
     }
 
-    /// <summary>
-    /// Disposes of all managed resources and unhooks events.
-    /// This method is called by Dalamud when the plugin is unloaded.
-    /// </summary>
     public void Dispose()
     {
+        logger.Info("TataruLink is shutting down...");
         try
         {
-            // The service provider might be null if the constructor failed early.
-            if (services == null) return;
+            if (services == null)
+            {
+                logger.Warning("Service provider is null, cannot perform cleanup. This may happen on a failed startup.");
+                return;
+            }
             
-            // Dispose command manager first
-            commandManager.Dispose();
-
             var pi = services.GetRequiredService<IDalamudPluginInterface>();
             var windowSystem = services.GetRequiredService<WindowSystem>();
-            var configService = services.GetRequiredService<IConfigService>();
-            var dtrBarManager = services.GetRequiredService<IDtrBarManager>();
 
-            // --- 1. Unsubscribe from external and static events using stored references ---
+            // Unsubscribe from all external and internal events to prevent memory leaks.
+            // This is the most critical part of the disposal process.
+            logger.Debug("Unsubscribing from all events...");
             pi.UiBuilder.Draw -= windowSystem.Draw;
-            
-            if (openConfigUiHandler != null)
-                pi.UiBuilder.OpenConfigUi -= openConfigUiHandler;
-                
-            if (openMainUiHandler != null)
-                pi.UiBuilder.OpenMainUi -= openMainUiHandler;
-                
-            if (dtrBarClickHandler != null)
-                dtrBarManager.OnDtrBarClicked -= dtrBarClickHandler;
-                
-            if (configChangedHandler != null)
-                configService.OnConfigChanged -= configChangedHandler;
+            if (openConfigUiHandler != null) pi.UiBuilder.OpenConfigUi -= openConfigUiHandler;
+            if (openMainUiHandler != null) pi.UiBuilder.OpenMainUi -= openMainUiHandler;
+            if (dtrBarClickHandler != null) services.GetRequiredService<IDtrBarManager>().OnDtrBarClicked -= dtrBarClickHandler;
+            if (configChangedHandler != null) services.GetRequiredService<IConfigService>().OnConfigChanged -= configChangedHandler;
 
-            // --- 2. Clean up UI ---
+            // Dispose of managed resources in the correct order.
+            logger.Debug("Disposing CommandManager...");
+            commandManager.Dispose();
+            
+            logger.Debug("Removing all windows from WindowSystem...");
             windowSystem.RemoveAllWindows();
         
-            // --- 3. Dispose the entire DI container ---
+            // Dispose the entire DI container, which handles all singleton service instances.
+            logger.Debug("Disposing service container...");
             services.Dispose();
         
-            log.Info("TataruLink shut down successfully.");
+            logger.Info("TataruLink shut down successfully.");
         }
         catch (Exception ex)
         {
-            log.Error(ex, "An error occurred during TataruLink shutdown.");
+            logger.Error(ex, "An error occurred during TataruLink shutdown. Some resources may not have been released correctly.");
         }
     }
     
@@ -172,6 +146,7 @@ public sealed class TataruLink : IDalamudPlugin
     [HelpMessage("Opens the main window, showing translation history and statistics.")]
     private void OpenMainWindow(string command, string args)
     {
+        logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
         services?.GetRequiredService<MainWindow>().Toggle();
     }
 
@@ -179,6 +154,7 @@ public sealed class TataruLink : IDalamudPlugin
     [HelpMessage("Toggles the real-time translation overlay window.")]
     private void ToggleOverlayWindow(string command, string args)
     {
+        logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
         services?.GetRequiredService<TranslationOverlayWindow>().Toggle();
     }
 
@@ -186,6 +162,7 @@ public sealed class TataruLink : IDalamudPlugin
     [HelpMessage("Opens the settings window to configure TataruLink.")]
     private void OpenConfigWindow(string command, string args)
     {
+        logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
         services?.GetRequiredService<SettingsWindow>().Toggle();
     }
 
@@ -193,6 +170,7 @@ public sealed class TataruLink : IDalamudPlugin
     [HelpMessage("Sends a test message for translation. Usage: /tatarutest <text>")]
     private void OnTestCommand(string command, string args)
     {
+        logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
         var chatGui = services!.GetRequiredService<IChatGui>();
         if (string.IsNullOrWhiteSpace(args))
         {
@@ -211,6 +189,7 @@ public sealed class TataruLink : IDalamudPlugin
     [HelpMessage("Translates text and copies to clipboard. Usage: /tr <text to translate>")]
     private void OnOutgoingTranslateCommand(string command, string args)
     {
+        logger.Debug("Command '{command}' executed with args: '{args}'", command, args);
         var chatGui = services!.GetRequiredService<IChatGui>();
         
         if (string.IsNullOrWhiteSpace(args))
@@ -220,10 +199,9 @@ public sealed class TataruLink : IDalamudPlugin
         }
 
         var outgoingService = services!.GetRequiredService<IOutgoingTranslationService>();
-        var messageBuilder = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder()
-                             .AddText(args)
-                             .Build();
+        var messageBuilder = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder().AddText(args).Build();
         
+        // Execute the translation on a background thread to avoid blocking the game's main thread.
         _ = System.Threading.Tasks.Task.Run(async () =>
         {
             try
@@ -232,7 +210,7 @@ public sealed class TataruLink : IDalamudPlugin
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Error in outgoing translation command");
+                logger.Error(ex, "Error during outgoing translation for command '{command}'", command);
                 chatGui.Print($"[TataruLink] Translation error: {ex.Message}");
             }
         });

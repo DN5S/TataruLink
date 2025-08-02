@@ -1,311 +1,140 @@
-﻿using System;
+﻿// File: TataruLink/Services/Core/DtrBarManager.cs
+
+using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Plugin.Services;
+using ImGuiNET;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Manages the DTR (Data Transfer Rate) bar entry to display translation status in the server status bar
-/// and handles click events for window navigation.
+/// Manages the DTR bar entry for translation status and shortcuts.
 /// </summary>
 public class DtrBarManager : IDtrBarManager
 {
     private readonly IDtrBar dtrBar;
     private readonly DisplayConfig displayConfig;
     private readonly TranslationConfig translationConfig;
-    private readonly IPluginLog pluginLog;
+    private readonly ILogger<DtrBarManager> logger;
     
-    private Thread? dtrEntryLoadThread;
     private IDtrBarEntry? dtrEntry;
-    private volatile bool isDisposed;
-    private readonly object lockObject = new();
+    private readonly CancellationTokenSource cancellationTokenSource = new();
 
-    /// <summary>
-    /// Event raised when the DTR bar is clicked.
-    /// </summary>
     public event Action<bool>? OnDtrBarClicked;
 
     public DtrBarManager(
         IDtrBar dtrBar,
         DisplayConfig displayConfig,
         TranslationConfig translationConfig,
-        IPluginLog pluginLog)
+        ILogger<DtrBarManager> logger)
     {
-        this.dtrBar = dtrBar ?? throw new ArgumentNullException(nameof(dtrBar));
-        this.displayConfig = displayConfig ?? throw new ArgumentNullException(nameof(displayConfig));
-        this.translationConfig = translationConfig ?? throw new ArgumentNullException(nameof(translationConfig));
-        this.pluginLog = pluginLog ?? throw new ArgumentNullException(nameof(pluginLog));
+        this.dtrBar = dtrBar;
+        this.displayConfig = displayConfig;
+        this.translationConfig = translationConfig;
+        this.logger = logger;
 
-        InitializeDtrBar();
+        // Use a modern, safer background task for initialization.
+        Task.Run(InitializeDtrBarAsync, cancellationTokenSource.Token);
     }
 
-    /// <summary>
-    /// Initializes the DTR bar entry in a separate thread to handle potential startup delays.
-    /// </summary>
-    private void InitializeDtrBar()
+    private async Task InitializeDtrBarAsync()
     {
-        lock (lockObject)
-        {
-            if (isDisposed) return;
-            
-            dtrEntryLoadThread = new Thread(() =>
-            {
-                const string dtrBarTitle = "TataruLink";
+        const string dtrBarTitle = "TataruLink";
+        var cancellationToken = cancellationTokenSource.Token;
 
-                // This usually only runs once after any given plugin reload
-                for (var i = 0; !isDisposed; i++)
-                {
-                    try
-                    {
-                        var entryName = dtrBarTitle + (i > 0 ? i.ToString() : "");
-                        var entry = dtrBar.Get(entryName);
-                        
-                        lock (lockObject)
-                        { 
-                            if (isDisposed) break;
-                            
-                            dtrEntry = entry;
-                            
-                            // Set initial text based on translation configuration
-                            UpdateTranslationStatusTextInternal();
-                            
-                            // Set visibility based on configuration
-                            dtrEntry.Shown = displayConfig.ShowInServerStatusBar;
-                            
-                            // Register click event with the correct signature
-                            dtrEntry.OnClick += OnDtrEntryClick;
-                        }
-                        
-                        pluginLog.Information($"DTR bar entry '{entryName}' created successfully");
-                        break;
-                    }
-                    catch (Exception e)
-                    {
-                        pluginLog.Error(e, $"Failed to acquire DTR bar entry '{dtrBarTitle}', trying '{dtrBarTitle}{i + 1}'");
-                        
-                        if (isDisposed) break;
-                        Thread.Sleep(100);
-                    }
-                }
-            })
+        for (var i = 0; !cancellationToken.IsCancellationRequested; i++)
+        {
+            try
             {
-                IsBackground = true,
-                Name = "TataruLink-DtrInit"
-            };
-            
-            dtrEntryLoadThread.Start();
+                var entryName = dtrBarTitle + (i > 0 ? i.ToString() : "");
+                dtrEntry = dtrBar.Get(entryName);
+                
+                dtrEntry.OnClick += OnDtrEntryClick;
+                
+                logger.LogInformation("DTR bar entry '{entryName}' acquired successfully.", entryName);
+                Refresh(); // Set the initial state
+                return; // Initialization successful, exit task.
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Failed to acquire DTR bar entry, retrying in 1s...");
+                await Task.Delay(1000, cancellationToken);
+            }
         }
     }
 
-    /// <summary>
-    /// Updates the DTR bar text to show the current translation configuration.
-    /// This method is NOT thread-safe and should only be called within a lock.
-    /// </summary>
-    private void UpdateTranslationStatusTextInternal()
+    public void Refresh()
     {
-        if (dtrEntry == null) return;
+        if (dtrEntry == null || cancellationTokenSource.IsCancellationRequested) return;
 
         try
         {
-            // Format: [JP→KO | KO→JP]
-            var incomingDirection = $"{GetLanguageDisplayCode(translationConfig.IncomingFromLanguage)}→{GetLanguageDisplayCode(translationConfig.IncomingTranslateTo)}";
-            var outgoingDirection = $"{GetLanguageDisplayCode(translationConfig.OutgoingFromLanguage)}→{GetLanguageDisplayCode(translationConfig.OutgoingTranslateTo)}";
+            // Refresh visibility
+            dtrEntry.Shown = displayConfig.ShowInServerStatusBar;
+
+            // Refresh text
+            var incoming = $"{GetLanguageDisplayCode(translationConfig.IncomingFromLanguage)}→{GetLanguageDisplayCode(translationConfig.IncomingTranslateTo)}";
+            var outgoing = $"{GetLanguageDisplayCode(translationConfig.OutgoingFromLanguage)}→{GetLanguageDisplayCode(translationConfig.OutgoingTranslateTo)}";
+            var statusText = $"[{incoming} | {outgoing}]";
             
-            var statusText = $"[{incomingDirection} | {outgoingDirection}]";
-            
-            // Show if translations are disabled
             if (!translationConfig.EnableTranslations || !translationConfig.EnableAutomaticChatTranslation)
             {
                 statusText += " (Disabled)";
             }
             
             dtrEntry.Text = statusText;
+            logger.LogDebug("DTR bar refreshed. Visibility: {shown}, Text: '{text}'", dtrEntry.Shown, statusText);
         }
         catch (Exception ex)
         {
-            pluginLog.Warning(ex, "Failed to update DTR bar translation status text");
-            if (dtrEntry != null)
-            {
-                dtrEntry.Text = "[Translation Ready]";
-            }
+            logger.LogError(ex, "Failed to refresh DTR bar.");
         }
     }
 
-    /// <summary>
-    /// Converts language codes to uppercase display format.
-    /// </summary>
-    /// <param name="languageCode">The language code (e.g., "ja", "ko", "en")</param>
-    /// <returns>Uppercase language code for display</returns>
     private static string GetLanguageDisplayCode(string languageCode)
     {
-        if (string.IsNullOrEmpty(languageCode))
-            return "??";
-
-        // Handle special cases
         return languageCode.ToLower() switch
         {
-            "ja" => "JP",
-            "ko" => "KO", 
-            "en" => "EN",
-            "zh" => "CN",
-            "de" => "DE",
-            "fr" => "FR",
-            "es" => "ES",
-            "it" => "IT",
-            "pt" => "PT",
-            "ru" => "RU",
-            "auto" => "AUTO",
+            "ja" => "JP", "ko" => "KO", "en" => "EN", "zh" => "CN",
+            "de" => "DE", "fr" => "FR", "es" => "ES", "it" => "IT",
+            "pt" => "PT", "ru" => "RU", "auto" => "AUTO",
+            "" => "??",
             _ => languageCode.ToUpper()
         };
     }
 
-    /// <summary>
-    /// Handles DTR bar entry click events.
-    /// Since DTR bar only supports left-click, we use keyboard modifiers to differentiate actions.
-    /// </summary>
     private void OnDtrEntryClick()
     {
         try
         {
-            // Use keyboard modifiers to determine which window to open
-            // Left click: Main window
-            // Ctrl + Left-click: Settings window
-            var io = ImGuiNET.ImGui.GetIO();
-            var isCtrlPressed = io.KeyCtrl;
-            
-            // Raise event for interested subscribers
+            var isCtrlPressed = ImGui.GetIO().KeyCtrl;
             OnDtrBarClicked?.Invoke(isCtrlPressed);
-            
-            pluginLog.Debug($"DTR bar clicked (Ctrl: {isCtrlPressed})");
         }
         catch (Exception ex)
         {
-            pluginLog.Error(ex, "Error handling DTR bar click event");
-        }
-    }
-
-    /// <summary>
-    /// Updates the translation status text displayed in the DTR bar.
-    /// This method refreshes the display to reflect current translation settings.
-    /// </summary>
-    /// <param name="status">This parameter is ignored - the method uses the current translation configuration</param>
-    public void UpdateStatus(string status)
-    {
-        if (isDisposed) return;
-
-        try
-        {
-            lock (lockObject)
-            {
-                if (!isDisposed && dtrEntry != null)
-                {
-                    UpdateTranslationStatusTextInternal();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            pluginLog.Warning(ex, "Failed to update DTR bar status");
-        }
-    }
-
-    /// <summary>
-    /// Refreshes the DTR bar display to reflect the current translation configuration.
-    /// Call this method when translation settings change.
-    /// </summary>
-    public void RefreshTranslationDisplay()
-    {
-        UpdateStatus(string.Empty);
-    }
-
-    /// <summary>
-    /// Sets the visibility of the DTR bar entry.
-    /// </summary>
-    /// <param name="show">Whether to show the DTR bar entry</param>
-    public void SetVisibility(bool show)
-    {
-        if (isDisposed) return;
-
-        try
-        {
-            lock (lockObject)
-            {
-                if (!isDisposed && dtrEntry != null)
-                {
-                    dtrEntry.Shown = show;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            pluginLog.Warning(ex, "Failed to set DTR bar visibility");
-        }
-    }
-
-    /// <summary>
-    /// Updates the DTR bar visibility based on the current display configuration.
-    /// Call this method when the ShowInServerStatusBar setting changes.
-    /// </summary>
-    public void RefreshVisibility()
-    {
-        if (isDisposed) return;
-
-        try
-        {
-            lock (lockObject)
-            {
-                if (!isDisposed && dtrEntry != null)
-                {
-                    dtrEntry.Shown = displayConfig.ShowInServerStatusBar;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            pluginLog.Warning(ex, "Failed to refresh DTR bar visibility");
+            logger.LogError(ex, "Error handling DTR bar click event.");
         }
     }
 
     public void Dispose()
     {
-        lock (lockObject)
-        {
-            if (isDisposed) return;
-            
-            isDisposed = true;
+        if (cancellationTokenSource.IsCancellationRequested) return;
+        
+        logger.LogInformation("Disposing DtrBarManager...");
+        cancellationTokenSource.Cancel(); // Signal initialization task to stop.
 
-            try
-            {
-                // Wait for the initialization thread to complete
-                if (dtrEntryLoadThread != null)
-                {
-                    // Release the lock temporarily to allow the thread to finish
-                    Monitor.Exit(lockObject);
-                    try
-                    {
-                        dtrEntryLoadThread.Join(TimeSpan.FromSeconds(5));
-                    }
-                    finally
-                    {
-                        Monitor.Enter(lockObject);
-                    }
-                    dtrEntryLoadThread = null;
-                }
-                
-                if (dtrEntry != null)
-                {
-                    dtrEntry.OnClick -= OnDtrEntryClick;
-                    dtrEntry.Remove();
-                    dtrEntry = null;
-                }
-            }
-            catch (Exception ex)
-            {
-                pluginLog.Warning(ex, "Error during DtrBarManager disposal");
-            }
+        if (dtrEntry != null)
+        {
+            dtrEntry.OnClick -= OnDtrEntryClick;
+            dtrEntry.Remove();
+            dtrEntry = null;
         }
+        
+        cancellationTokenSource.Dispose();
     }
 }

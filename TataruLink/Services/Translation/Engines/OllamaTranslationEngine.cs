@@ -9,16 +9,15 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
-using TataruLink.Interfaces.Services;
 using TataruLink.Models;
 
 namespace TataruLink.Services.Translation.Engines;
 
 /// <summary>
-/// An implementation of <see cref="ITranslationEngine"/> that uses a self-hosted Ollama service.
-/// This engine provides local, privacy-focused translation using open-source language models.
+/// An implementation of ITranslationEngine that uses a self-hosted Ollama service
+/// for local, privacy-focused translation.
 /// </summary>
 public class OllamaTranslationEngine : TranslationEngineBase
 {
@@ -26,34 +25,23 @@ public class OllamaTranslationEngine : TranslationEngineBase
     private readonly TranslationConfig translationConfig;
     private readonly string apiGenerateUrl;
 
-    /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.Ollama;
-    
-    /// <inheritdoc />
     public override bool SupportsStructuredTranslation => true;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="OllamaTranslationEngine"/> class.
-    /// </summary>
-    public OllamaTranslationEngine(ApiConfig apiConfig, TranslationConfig translationConfig, IPluginLog log) : base(log)
+    public OllamaTranslationEngine(ApiConfig apiConfig, TranslationConfig translationConfig, ILogger log) : base(log)
     {
         this.apiConfig = apiConfig ?? throw new ArgumentNullException(nameof(apiConfig));
         this.translationConfig = translationConfig ?? throw new ArgumentNullException(nameof(translationConfig));
 
-        // Validate the Ollama endpoint URL format and scheme
-        if (!Uri.TryCreate(apiConfig.OllamaEndpoint, UriKind.Absolute, out var uri) || 
-            (uri.Scheme != "http" && uri.Scheme != "https"))
+        if (!Uri.TryCreate(apiConfig.OllamaEndpoint, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
         {
-            throw new ArgumentException("Invalid Ollama endpoint URL format. Must be a valid HTTP or HTTPS URL.", nameof(apiConfig.OllamaEndpoint));
+            throw new ArgumentException("Invalid Ollama endpoint URL. Must be a valid HTTP or HTTPS URL.", nameof(apiConfig.OllamaEndpoint));
         }
 
         this.apiGenerateUrl = apiConfig.OllamaEndpoint.TrimEnd('/') + "/api/generate";
-        
-        Log.Debug("[OllamaTranslateEngine] Initialized with endpoint: {Endpoint}, model: {Model}", 
-                  apiConfig.OllamaEndpoint, apiConfig.OllamaModel);
+        Logger.LogInformation("Ollama engine initialized. Endpoint: {endpoint}, Model: {model}", apiConfig.OllamaEndpoint, apiConfig.OllamaModel);
     }
 
-    /// <inheritdoc />
     public override async Task<TranslationResult?> TranslateAsync(
         string text, 
         string sourceLanguage, 
@@ -83,9 +71,13 @@ public class OllamaTranslationEngine : TranslationEngineBase
             stopwatch.Stop();
 
             var translatedText = ExtractTranslatedText(jsonResponse);
-            if (string.IsNullOrEmpty(translatedText)) return null;
+            if (string.IsNullOrEmpty(translatedText))
+            {
+                 Logger.LogWarning("Ollama API returned an empty or unparsable translation.");
+                 return null;
+            }
 
-            Log.Debug("[OllamaTranslateEngine] Translation completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            Logger.LogDebug("Translation completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
 
             return new TranslationResult(text, translatedText, string.Empty, default, EngineType,
                                          sourceLanguage, "N/A", targetLanguage)
@@ -93,28 +85,22 @@ public class OllamaTranslationEngine : TranslationEngineBase
         }
         catch (OperationCanceledException)
         {
-            stopwatch.Stop();
-            Log.Warning("[OllamaTranslateEngine] Translation cancelled after {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            Logger.LogWarning("Translation cancelled after {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
             return null;
         }
         catch (HttpRequestException ex)
         {
-            stopwatch.Stop();
-            Log.Error(ex, "[OllamaTranslateEngine] Network error. Check if Ollama server is running at {Endpoint}", 
-                      apiConfig.OllamaEndpoint);
+            Logger.LogError(ex, "Network error. Check if Ollama server is running at {endpoint}", apiConfig.OllamaEndpoint);
             return null;
         }
         catch (JsonException ex)
         {
-            stopwatch.Stop();
-            Log.Error(ex, "[OllamaTranslateEngine] Failed to parse API response. Model '{Model}' may not be available", 
-                      apiConfig.OllamaModel);
+            Logger.LogError(ex, "Failed to parse API response. Model '{model}' may not be available or returned invalid JSON.", apiConfig.OllamaModel);
             return null;
         }
         catch (Exception ex)
         {
-            stopwatch.Stop();
-            Log.Error(ex, "[OllamaTranslateEngine] Unexpected error during translation");
+            Logger.LogError(ex, "An unexpected error occurred during translation.");
             return null;
         }
     }
@@ -140,18 +126,16 @@ public class OllamaTranslationEngine : TranslationEngineBase
     private async Task HandleHttpErrorAsync(HttpResponseMessage response)
     {
         var errorContent = await response.Content.ReadAsStringAsync();
-        
         var errorMessage = response.StatusCode switch
         {
             HttpStatusCode.NotFound => $"Model '{apiConfig.OllamaModel}' not found. Pull the model using: ollama pull {apiConfig.OllamaModel}",
-            HttpStatusCode.BadRequest => "Invalid request format or unsupported model parameters",
-            HttpStatusCode.InternalServerError => "Ollama server internal error. Check server logs and model compatibility",
-            HttpStatusCode.ServiceUnavailable => "Ollama server is starting up or overloaded. Please wait and retry",
-            HttpStatusCode.RequestTimeout => "Request timeout. The model may be too large or server is under heavy load",
-            _ => $"HTTP error {(int)response.StatusCode}: {response.StatusCode}"
+            HttpStatusCode.BadRequest => "Invalid request format or unsupported model parameters.",
+            HttpStatusCode.InternalServerError => "Ollama server internal error. Check server logs and model compatibility.",
+            HttpStatusCode.ServiceUnavailable => "Ollama server is starting up or overloaded. Please wait and retry.",
+            _ => $"HTTP error {(int)response.StatusCode}: {response.ReasonPhrase}"
         };
 
-        Log.Error("[OllamaTranslateEngine] {ErrorMessage}. Response: {ErrorContent}", errorMessage, errorContent);
+        Logger.LogError("Ollama API error: {errorMessage} Response: {errorContent}", errorMessage, errorContent);
     }
 
     private string? ExtractTranslatedText(JsonElement jsonResponse)
@@ -160,7 +144,7 @@ public class OllamaTranslationEngine : TranslationEngineBase
         {
             if (!jsonResponse.TryGetProperty("response", out var responseElement))
             {
-                Log.Warning("[OllamaTranslateEngine] No 'response' field found in API response");
+                Logger.LogWarning("No 'response' field found in Ollama API response. Response: {json}", jsonResponse.ToString());
                 return null;
             }
 
@@ -168,14 +152,15 @@ public class OllamaTranslationEngine : TranslationEngineBase
             
             if (string.IsNullOrEmpty(responseText))
             {
-                Log.Warning("[OllamaTranslateEngine] Empty response from Ollama API");
+                Logger.LogWarning("Empty 'response' text from Ollama API.");
                 return null;
             }
 
             if (responseText.StartsWith("Error:", StringComparison.OrdinalIgnoreCase) ||
-                responseText.StartsWith("Sorry,", StringComparison.OrdinalIgnoreCase))
+                responseText.StartsWith("Sorry,", StringComparison.OrdinalIgnoreCase) ||
+                responseText.Contains("I cannot fulfill this request", StringComparison.OrdinalIgnoreCase))
             {
-                Log.Warning("[OllamaTranslateEngine] Model returned error or refusal: {Response}", responseText);
+                Logger.LogWarning("Model returned an error or refusal to translate: {response}", responseText);
                 return null;
             }
 
@@ -183,7 +168,7 @@ public class OllamaTranslationEngine : TranslationEngineBase
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[OllamaTranslateEngine] Error extracting response text from JSON");
+            Logger.LogError(ex, "Error extracting response text from Ollama JSON.");
             return null;
         }
     }

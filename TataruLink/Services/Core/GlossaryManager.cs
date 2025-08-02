@@ -7,29 +7,28 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Dalamud.Plugin;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// This service is the single source of truth for glossary data. It handles loading from/saving to
-/// a dedicated glossary.json and provides high-performance text replacement using a pre-compiled
-/// Aho-Corasick automaton.
+/// Manages glossary data, handling persistence and high-performance text replacement
+/// using a pre-compiled Aho-Corasick automaton.
 /// </summary>
 public class GlossaryManager : IGlossaryManager, IDisposable
 {
-    private readonly IPluginLog log;
+    private readonly ILogger<GlossaryManager> logger;
     private readonly string glossaryFilePath;
     private List<GlossaryEntry> glossary = [];
     
     private readonly TrieNode root = new();
     private IReadOnlyDictionary<string, string> replacementMap = new Dictionary<string, string>();
 
-    public GlossaryManager(IDalamudPluginInterface pluginInterface, IPluginLog log)
+    public GlossaryManager(IDalamudPluginInterface pluginInterface, ILogger<GlossaryManager> logger)
     {
-        this.log = log;
+        this.logger = logger;
         var configDirectory = pluginInterface.GetPluginConfigDirectory();
         this.glossaryFilePath = Path.Combine(configDirectory, "glossary.json");
         
@@ -37,19 +36,19 @@ public class GlossaryManager : IGlossaryManager, IDisposable
         RebuildAutomaton();
     }
 
-    public List<GlossaryEntry> GetGlossary() => [..glossary]; // Return a copy to prevent outside modification.
+    public List<GlossaryEntry> GetGlossary() => [..glossary]; // Return a copy.
 
     public void UpdateGlossary(List<GlossaryEntry> newGlossary)
     {
         glossary = newGlossary;
         SaveGlossary();
         RebuildAutomaton();
-        log.Information("Glossary updated with {Count} entries and saved to file.", glossary.Count);
+        logger.LogInformation("Glossary updated with {count} total entries and saved to file.", glossary.Count);
     }
 
     public string Apply(string text)
     {
-        if (root.Children.Count == 0) return text;
+        if (replacementMap.Count == 0) return text;
         
         var resultBuilder = new StringBuilder();
         var lastIndex = 0;
@@ -69,6 +68,7 @@ public class GlossaryManager : IGlossaryManager, IDisposable
 
             if (currentNode.Output.Any())
             {
+                // To handle overlapping matches (e.g., "he" and "she"), prioritize the longest match.
                 var longestMatch = currentNode.Output.OrderByDescending(o => o.Length).First();
                 var matchStartIndex = i - longestMatch.Length + 1;
                 
@@ -93,14 +93,18 @@ public class GlossaryManager : IGlossaryManager, IDisposable
     {
         try
         {
-            if (!File.Exists(glossaryFilePath)) return;
+            if (!File.Exists(glossaryFilePath))
+            {
+                logger.LogInformation("Glossary file not found, starting with an empty glossary.");
+                return;
+            }
             var json = File.ReadAllText(glossaryFilePath);
             glossary = JsonSerializer.Deserialize<List<GlossaryEntry>>(json) ?? [];
-            log.Information("Successfully loaded {Count} entries from glossary.json.", glossary.Count);
+            logger.LogInformation("Successfully loaded {count} entries from glossary.json.", glossary.Count);
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to load or parse glossary.json. Starting with an empty glossary.");
+            logger.LogError(ex, "Failed to load or parse glossary.json. Starting with an empty glossary.");
             glossary = [];
         }
     }
@@ -114,7 +118,7 @@ public class GlossaryManager : IGlossaryManager, IDisposable
         }
         catch (Exception ex)
         {
-            log.Error(ex, "Failed to save glossary.json.");
+            logger.LogError(ex, "Failed to save glossary.json.");
         }
     }
 
@@ -122,10 +126,18 @@ public class GlossaryManager : IGlossaryManager, IDisposable
     {
         root.Children.Clear();
         var activeGlossary = glossary.Where(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.OriginalText)).ToList();
+        
+        if (!activeGlossary.Any())
+        {
+            replacementMap = new Dictionary<string, string>();
+            logger.LogInformation("Aho-Corasick automaton cleared: no active glossary entries.");
+            return;
+        }
+
         replacementMap = activeGlossary.ToDictionary(e => e.OriginalText, e => e.ReplacementText);
-        if (!activeGlossary.Any()) return;
         BuildTrie(activeGlossary);
         BuildFailureLinks();
+        logger.LogInformation("Aho-Corasick automaton rebuilt with {count} active entries.", activeGlossary.Count);
     }
     
     private void BuildTrie(IEnumerable<GlossaryEntry> entries)

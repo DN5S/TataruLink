@@ -3,6 +3,7 @@
 using System;
 using System.Numerics;
 using ImGuiNET;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 using TataruLink.Interfaces.UI;
@@ -13,25 +14,25 @@ namespace TataruLink.UI.Panels;
 /// A settings panel for managing the core configuration of the plugin.
 /// This includes translation engine settings, language preferences, and API keys.
 /// </summary>
-public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig displaySettings, ApiConfig apiConfig)
+/// <summary>
+/// A settings panel for managing the core configuration of the plugin.
+/// </summary>
+public class GeneralPanel(
+    TranslationConfig translationSettings,
+    DisplayConfig displaySettings,
+    ApiConfig apiConfig,
+    IDtrBarManager dtrBarManager,
+    ILogger<GeneralPanel> logger)
     : ISettingsPanel
 {
-
-    private IDtrBarManager? dtrBarManager;
-
-    /// <summary>
-    /// Sets the DTR bar manager reference. This is called after DI container initialization.
-    /// </summary>
-    public void SetDtrBarManager(IDtrBarManager dtrBarManager)
-    {
-        this.dtrBarManager = dtrBarManager;
-    }
+    // All dependencies are now cleanly injected via the constructor by the DI container.
 
     /// <inheritdoc />
     public bool Draw()
     {
         var configChanged = false;
-        // For clarity, get direct references to the specific config sections.
+        // ImGui requires local variables for ref parameters.
+        // We copy the config value, let ImGui modify the copy, then write it back if changed.
 
         #region Core Controls
 
@@ -41,6 +42,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.Checkbox("Enable Translations", ref enableTranslations))
         {
             translationSettings.EnableTranslations = enableTranslations;
+            logger.LogDebug("'Enable Translations' set to {value}", enableTranslations);
             configChanged = true;
         }
 
@@ -48,6 +50,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.Checkbox("Enable Automatic Chat Translation", ref enableAutomaticChatTranslation))
         {
             translationSettings.EnableAutomaticChatTranslation = enableAutomaticChatTranslation;
+            logger.LogDebug("'Enable Automatic Chat Translation' set to {value}", enableAutomaticChatTranslation);
             configChanged = true;
         }
 
@@ -55,6 +58,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.Checkbox("Translate My Own Messages", ref translateMyOwnMessages))
         {
             translationSettings.TranslateMyOwnMessages = translateMyOwnMessages;
+            logger.LogDebug("'Translate My Own Messages' set to {value}", translateMyOwnMessages);
             configChanged = true;
         }
 
@@ -69,6 +73,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.InputText("From Language", ref fromLanguage, 5))
         {
             translationSettings.IncomingFromLanguage = fromLanguage;
+            logger.LogDebug("'From Language' set to {value}", fromLanguage);
             configChanged = true;
         }
         ImGui.SameLine();
@@ -78,6 +83,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.InputText("Translate To", ref translateTo, 5))
         {
             translationSettings.IncomingTranslateTo = translateTo;
+            logger.LogDebug("'Translate To' set to {value}", translateTo);
             configChanged = true;
         }
         ImGui.SameLine();
@@ -87,6 +93,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.Checkbox("Enable Language Detection", ref enableLanguageDetection))
         {
             translationSettings.EnableLanguageDetection = enableLanguageDetection;
+            logger.LogDebug("'Enable Language Detection' set to {value}", enableLanguageDetection);
             configChanged = true;
         }
         ImGui.TextDisabled("Note: Auto-detection is primarily supported by Google and DeepL.");
@@ -118,6 +125,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.InputText("Gemini Model Name", ref geminiModel, 100))
         {
             apiConfig.GeminiModel = geminiModel;
+            logger.LogDebug("'Gemini Model Name' set to {value}", geminiModel);
             configChanged = true;
         }
         
@@ -132,6 +140,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.InputText("Ollama Model Name", ref ollamaModel, 100))
         {
             apiConfig.OllamaModel = ollamaModel;
+            logger.LogDebug("'Ollama Model Name' set to {value}", ollamaModel);
             configChanged = true;
         }
 
@@ -179,6 +188,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
             if (ImGui.InputText("Source Language", ref outgoingFrom, 5))
             {
                 translationSettings.OutgoingFromLanguage = outgoingFrom;
+                logger.LogDebug("'Source Language' set to {value}", outgoingFrom);
                 configChanged = true;
             }
             ImGui.SameLine();
@@ -188,6 +198,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
             if (ImGui.InputText("Target Language", ref outgoingTo, 5))
             {
                 translationSettings.OutgoingTranslateTo = outgoingTo;
+                logger.LogDebug("'Target Language' set to {value}", outgoingTo);
                 configChanged = true;
             }
             ImGui.SameLine();
@@ -200,6 +211,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
             if (ImGui.Combo("Translation Engine", ref currentIndex, engineNames, engineNames.Length))
             {
                 translationSettings.OutgoingTranslationEngine = Enum.Parse<TranslationEngine>(engineNames[currentIndex]);
+                logger.LogDebug("'Translation Engine' set to {value}", currentEngine);
                 configChanged = true;
             }
         }
@@ -217,18 +229,21 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.RadioButton("In-Game Chat", displaySettings.DisplayMode == TranslationDisplayMode.InGameChat))
         {
             displaySettings.DisplayMode = TranslationDisplayMode.InGameChat;
+            logger.LogDebug("'Display Mode' set to {value}", displaySettings.DisplayMode);
             configChanged = true;
         }
         ImGui.SameLine();
         if (ImGui.RadioButton("Overlay Window", displaySettings.DisplayMode == TranslationDisplayMode.SeparateWindow))
         {
             displaySettings.DisplayMode = TranslationDisplayMode.SeparateWindow;
+            logger.LogDebug("'Display Mode' set to {value}", displaySettings.DisplayMode);
             configChanged = true;
         }
         ImGui.SameLine();
         if (ImGui.RadioButton("Both", displaySettings.DisplayMode == TranslationDisplayMode.Both))
         {
             displaySettings.DisplayMode = TranslationDisplayMode.Both;
+            logger.LogDebug("'Display Mode' set to {value}", displaySettings.DisplayMode);
             configChanged = true;
         }
 
@@ -239,11 +254,11 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         {
             displaySettings.ShowInServerStatusBar = showInServerStatusBar;
             configChanged = true;
-    
-            // Update DTR bar visibility immediately
-            dtrBarManager?.RefreshVisibility();
+            
+            logger.LogDebug("'Show in server status bar' set to {value}. Refreshing visibility.", showInServerStatusBar);
+            dtrBarManager.Refresh();
         }
-        ImGui.TextDisabled("Displays translation direction (e.g., [JP→KO | KO→JP]) in the server status bar. Click to open main window, Ctrl+Click for settings.");
+        ImGui.TextDisabled("Click the status bar entry to open the main window, Ctrl+Click for settings.");
 
         ImGui.Separator();
         
@@ -251,6 +266,7 @@ public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig d
         if (ImGui.InputText("Translation Format", ref translationFormat, 256))
         {
             displaySettings.TranslationFormat = translationFormat;
+            logger.LogDebug("'Translation Format' set to {value}", translationFormat);
             configChanged = true;
         }
         ImGui.TextDisabled(

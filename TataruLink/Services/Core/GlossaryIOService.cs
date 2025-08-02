@@ -3,18 +3,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Implements import/export functionality for the glossary.
+/// Implements import/export functionality for the glossary in JSON and CSV formats.
 /// </summary>
-public class GlossaryIOService : IGlossaryIOService
+public class GlossaryIOService(ILogger<GlossaryIOService> logger) : IGlossaryIOService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -24,26 +24,43 @@ public class GlossaryIOService : IGlossaryIOService
         {
             GlossaryFormat.Json => JsonSerializer.Serialize(glossary, JsonOptions),
             GlossaryFormat.Csv => ExportToCsv(glossary),
-            _ => throw new ArgumentOutOfRangeException(nameof(format), "Unsupported format")
+            _ => throw new ArgumentOutOfRangeException(nameof(format), "Unsupported export format")
         };
     }
 
     public List<GlossaryEntry>? Import(string data)
     {
+        // First, attempt to parse as JSON, as it's more structured.
         try
         {
             var entries = JsonSerializer.Deserialize<List<GlossaryEntry>>(data);
-            // Basic validation: ensure it's a list and key fields are not null.
-            if (entries != null && entries.All(_ => true))
+            if (entries != null)
             {
+                logger.LogInformation("Successfully imported {count} entries from JSON.", entries.Count);
                 return entries;
             }
         }
-        catch (JsonException) { /* Fall through to CSV */ }
+        catch (JsonException) 
+        {
+            logger.LogDebug("Could not parse data as JSON, falling back to CSV import.");
+        }
 
-        try { return ImportFromCsv(data); }
-        catch { /* Both failed */ }
+        // If JSON fails, attempt to parse as CSV.
+        try
+        {
+            var entries = ImportFromCsv(data);
+            if (entries.Count != 0)
+            {
+                logger.LogInformation("Successfully imported {count} entries from CSV.", entries.Count);
+                return entries;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "CSV import failed unexpectedly.");
+        }
 
+        logger.LogWarning("Failed to import glossary: data was not valid JSON or CSV.");
         return null;
     }
 
@@ -67,11 +84,12 @@ public class GlossaryIOService : IGlossaryIOService
         var entries = new List<GlossaryEntry>();
         using var reader = new StringReader(data);
 
-        reader.ReadLine(); // Skip header
+        // Skip header
+        var header = reader.ReadLine();
+        if (header == null) return entries;
 
         while (reader.ReadLine() is { } line)
         {
-            // Use a more robust split method that handles quoted fields.
             var fields = ParseCsvLine(line);
             if (fields.Count != 3) continue;
 
@@ -85,6 +103,7 @@ public class GlossaryIOService : IGlossaryIOService
         return entries;
     }
     
+    // This robust parser handles quotes correctly.
     private static List<string> ParseCsvLine(string line)
     {
         var fields = new List<string>();
@@ -93,21 +112,21 @@ public class GlossaryIOService : IGlossaryIOService
 
         foreach (var c in line)
         {
-            if (c == '"')
+            switch (c)
             {
-                inQuotes = !inQuotes;
-            }
-            else if (c == ',' && !inQuotes)
-            {
-                fields.Add(sb.ToString());
-                sb.Clear();
-            }
-            else
-            {
-                sb.Append(c);
+                case '"':
+                    inQuotes = !inQuotes;
+                    break;
+                case ',' when !inQuotes:
+                    fields.Add(sb.ToString().Trim());
+                    sb.Clear();
+                    break;
+                default:
+                    sb.Append(c);
+                    break;
             }
         }
-        fields.Add(sb.ToString());
+        fields.Add(sb.ToString().Trim());
         return fields;
     }
 
@@ -115,6 +134,7 @@ public class GlossaryIOService : IGlossaryIOService
     {
         if (field.Contains(',') || field.Contains('"') || field.Contains('\n'))
         {
+            // Escape quotes by doubling them and wrap the whole field in quotes.
             return $"\"{field.Replace("\"", "\"\"")}\"";
         }
         return field;

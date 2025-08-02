@@ -10,39 +10,33 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
-using ImGuiNET; // ImGui를 사용하기 위해 추가
-using TataruLink.Config;
+using ImGuiNET;
+using Microsoft.Extensions.Logging;
 using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Handles translation of user-typed outgoing messages by parsing raw strings and copying the result to the clipboard.
-/// FINAL ARCHITECTURE: Based on the confirmed reality that command arguments are raw strings without payload data.
+/// Handles translation of user-typed outgoing messages (/tr command).
+/// Parses raw strings, preserves game tags, and copies the result to the clipboard.
 /// </summary>
-public class OutgoingTranslationService(
+public partial class OutgoingTranslationService(
     IConfigService configService,
     ITranslationEngineFactory engineFactory,
     IChatGui chatGui,
-    IPluginLog log)
+    ILogger<OutgoingTranslationService> logger)
     : IOutgoingTranslationService
 {
-    private readonly IConfigService configService = configService ?? throw new ArgumentNullException(nameof(configService));
-    private readonly ITranslationEngineFactory engineFactory = engineFactory ?? throw new ArgumentNullException(nameof(engineFactory));
-    private readonly IChatGui chatGui = chatGui ?? throw new ArgumentNullException(nameof(chatGui));
-    private readonly IPluginLog log = log ?? throw new ArgumentNullException(nameof(log));
-
-    // Regex to find and preserve any game-specific tags like <item>, <pos>, <flag> from the RAW STRING.
-    private static readonly Regex GameTagRegex = new(@"(<[^>]+>)", RegexOptions.Compiled);
-    private const string TranslationSeparator = " | "; // A unique separator.
+    // Regex to find and preserve any game-specific tags like <item>, <pos>, <flag> from the raw string.
+    private static readonly Regex GameTagRegex = GameTag();
+    private const string TranslationSeparator = " | "; // A unique separator unlikely to be in the user text.
 
     public async Task ProcessTranslationAsync(SeString message, CancellationToken cancellationToken = default)
     {
-        // We only care about the raw string, as all payload data is lost when the command is executed.
         var originalText = message.TextValue;
         if (string.IsNullOrWhiteSpace(originalText))
         {
-            log.Debug("Empty message provided to outgoing translation service.");
+            logger.LogDebug("Empty message provided to outgoing translation service. Skipping.");
             return;
         }
 
@@ -51,7 +45,7 @@ public class OutgoingTranslationService(
 
         try
         {
-            // STEP 1: Deconstruct the RAW STRING into tags and translatable text parts.
+            // Step 1: Deconstruct the raw string into tags and translatable text parts.
             var parts = GameTagRegex.Split(originalText).Where(s => !string.IsNullOrEmpty(s)).ToList();
             var textsToTranslate = new List<string>();
             var template = new List<string>();
@@ -64,14 +58,15 @@ public class OutgoingTranslationService(
                 }
                 else
                 {
-                    textsToTranslate.Add(part);
+                    textsToTranslate.Add(part.Trim());
                     template.Add("{text}"); // This is text. Add a placeholder.
                 }
             }
+            logger.LogDebug("Deconstructed outgoing message into {count} parts to translate.", textsToTranslate.Count);
 
             if (textsToTranslate.Count == 0)
             {
-                log.Debug("No translatable text found in outgoing message, only tags.");
+                logger.LogInformation("No translatable text found in outgoing message, only tags. Copying original text.");
                 ImGui.SetClipboardText(originalText);
                 chatGui.Print("[TataruLink] No text to translate. Original message copied to clipboard.");
                 return;
@@ -80,43 +75,47 @@ public class OutgoingTranslationService(
             var engine = engineFactory.GetEngine(translationConfig.OutgoingTranslationEngine);
             if (engine == null)
             {
-                chatGui.Print($"[TataruLink] Error: Engine '{translationConfig.OutgoingTranslationEngine}' is not available.");
+                var engineName = translationConfig.OutgoingTranslationEngine;
+                logger.LogError("Failed to get outgoing translation engine '{engine}'. It may not be configured correctly.", engineName);
+                chatGui.Print($"[TataruLink] Error: Engine '{engineName}' is not available.");
                 return;
             }
 
-            // STEP 2: Translate all text parts.
+            // Step 2: Translate all text parts in a single API call.
             var combinedText = string.Join(TranslationSeparator, textsToTranslate);
             var sourceLang = translationConfig.OutgoingFromLanguage;
             var targetLang = translationConfig.OutgoingTranslateTo;
-
+            
+            logger.LogInformation("Requesting outgoing translation from {engine} ({source} -> {target}).", engine.EngineType, sourceLang, targetLang);
             var result = await engine.TranslateAsync(combinedText, sourceLang, targetLang, cancellationToken);
             stopwatch.Stop();
 
             if (result?.TranslatedText == null)
             {
-                HandleTranslationFailure();
+                logger.LogError("Outgoing translation failed - engine returned null result.");
+                chatGui.Print("[TataruLink] Translation failed. The engine may be configured incorrectly or the service is down.");
                 return;
             }
 
-            // STEP 3: Reconstruct the final string.
-            var translatedParts = result.TranslatedText.Split(new[] { TranslationSeparator }, StringSplitOptions.None);
+            // Step 3: Reconstruct the final string.
+            var translatedParts = result.TranslatedText.Split([TranslationSeparator], StringSplitOptions.None);
             var finalString = ReconstructFinalString(template, translatedParts, textsToTranslate.Count);
 
-            // STEP 4: Copy the final, translated string to the user's clipboard. This is the only reliable method.
+            // Step 4: Copy the result to the user's clipboard.
             ImGui.SetClipboardText(finalString);
             chatGui.Print($"[TataruLink] Translation copied to clipboard! Paste it to use. ({stopwatch.ElapsedMilliseconds}ms)");
-            log.Info("Outgoing translation completed in {ElapsedMs}ms. Result copied to clipboard.", stopwatch.ElapsedMilliseconds);
+            logger.LogInformation("Outgoing translation completed in {elapsed}ms. Result copied to clipboard.", stopwatch.ElapsedMilliseconds);
         }
         catch (OperationCanceledException)
         {
             stopwatch.Stop();
-            log.Warning("Outgoing translation was cancelled or timed out after {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
+            logger.LogWarning("Outgoing translation was cancelled or timed out after {elapsed}ms.", stopwatch.ElapsedMilliseconds);
             chatGui.Print("[TataruLink] Translation timed out or was cancelled.");
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
-            log.Error(ex, "Critical error during outgoing translation after {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
+            logger.LogCritical(ex, "A critical error occurred during outgoing translation after {elapsed}ms.", stopwatch.ElapsedMilliseconds);
             chatGui.Print($"[TataruLink] A critical error occurred: {ex.Message}");
         }
     }
@@ -129,16 +128,18 @@ public class OutgoingTranslationService(
 
         if (useFallback)
         {
-            log.Warning("Translated part count mismatch. Expected {Expected}, got {Actual}. Using single-block fallback.", expectedCount, translatedParts.Count);
+            logger.LogWarning("Translated part count mismatch. Expected {expected}, got {actual}. Consolidating translated parts.", expectedCount, translatedParts.Count);
         }
 
         foreach (var item in template)
         {
             if (item == "{text}")
             {
-                if (translatedIndex >= translatedParts.Count) continue;
-                finalBuilder.Append(translatedParts[translatedIndex]);
-                if (!useFallback) { translatedIndex++; }
+                if (translatedIndex < translatedParts.Count)
+                {
+                    finalBuilder.Append(translatedParts[translatedIndex]);
+                    if (!useFallback) { translatedIndex++; }
+                }
             }
             else
             {
@@ -148,9 +149,6 @@ public class OutgoingTranslationService(
         return finalBuilder.ToString();
     }
 
-    private void HandleTranslationFailure()
-    {
-        log.Warning("Outgoing translation failed - engine returned null result.");
-        chatGui.Print("[TataruLink] Translation failed. The engine may be configured incorrectly or the service is down.");
-    }
+    [GeneratedRegex(@"(<[^>]+>)", RegexOptions.Compiled)]
+    private static partial Regex GameTag();
 }

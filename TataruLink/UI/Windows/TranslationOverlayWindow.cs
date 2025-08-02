@@ -2,129 +2,154 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using System.Threading;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
+using Microsoft.Extensions.Logging;
 
 namespace TataruLink.UI.Windows;
 
 /// <summary>
-/// A dedicated, movable window for displaying a real-time feed of translated chat messages.
-/// IMPROVED: Memory leak prevention and performance optimizations.
+/// A dedicated, movable window for displaying a real-time feed of the final, formatted SeString messages.
 /// </summary>
 public class TranslationOverlayWindow : Window, IDisposable
 {
-    private readonly List<SeString> logHistory = [];
-    private bool scrollToBottom;
-    
-    // PERFORMANCE: Configurable history limits
-    private const int MaxHistoryEntries = 100;
-    private const int TrimToEntries = 80; // Trim to 80% when limit is reached
+    // A private record to pair the final SeString with a timestamp for display.
+    private record OverlayLogEntry(DateTime Timestamp, SeString Content);
 
-    // THREAD SAFETY: Simple lock for log operations
+    private readonly ILogger<TranslationOverlayWindow> logger;
+    private readonly List<OverlayLogEntry> logHistory = [];
     private readonly Lock logLock = new();
 
-    public TranslationOverlayWindow() : base("Translation Overlay##TataruLinkOverlay")
-    {
-        Size = new Vector2(400, 200);
-        SizeCondition = ImGuiCond.FirstUseEver;
-        
-        // ACCESSIBILITY: Improve window defaults
-        Flags = ImGuiWindowFlags.None;
-        RespectCloseHotkey = true;
-    }
+    // UI State
+    private bool autoScroll = true;
+    private bool scrollToBottom;
+    private float fontSize = 1.0f;
 
-    public void Dispose()
+    private const int MaxHistoryEntries = 100;
+    private const int TrimToEntries = 80;
+
+    public TranslationOverlayWindow(ILogger<TranslationOverlayWindow> logger) : base("Translation Overlay##TataruLinkOverlay")
     {
-        lock (logLock)
-        {
-            logHistory.Clear();
-        }
+        this.logger = logger;
+        Size = new Vector2(500, 300);
+        SizeCondition = ImGuiCond.FirstUseEver;
+        Flags = ImGuiWindowFlags.None;
     }
 
     /// <summary>
-    /// Adds a new formatted message to the overlay's log history with memory management.
-    /// IMPROVED: Thread-safe with optimized memory management.
+    /// Adds the final formatted SeString to the log.
     /// </summary>
-    /// <param name="formattedMessage">The formatted <see cref="SeString"/> to add.</param>
     public void AddLog(SeString formattedMessage)
     {
         lock (logLock)
         {
-            logHistory.Add(formattedMessage);
+            // The timestamp is generated here, as this window only receives the final SeString.
+            logHistory.Add(new OverlayLogEntry(DateTime.Now, formattedMessage));
 
-            // MEMORY MANAGEMENT: Batch trim for better performance
             if (logHistory.Count > MaxHistoryEntries)
             {
                 var itemsToRemove = logHistory.Count - TrimToEntries;
                 logHistory.RemoveRange(0, itemsToRemove);
+                logger.LogDebug("Trimmed overlay history from {old} to {new} entries.", MaxHistoryEntries, TrimToEntries);
             }
 
-            // Set flag for auto-scroll on next frame
-            scrollToBottom = true;
+            if (autoScroll)
+            {
+                scrollToBottom = true;
+            }
         }
     }
 
-    /// <summary>
-    /// Clears all log history.
-    /// IMPROVED: Thread-safe clearing operation.
-    /// </summary>
-    public void ClearLog()
+    private void ClearLog()
     {
         lock (logLock)
         {
             logHistory.Clear();
             scrollToBottom = false;
+            logger.LogInformation("User cleared overlay log.");
         }
     }
 
-    /// <inheritdoc/>
     public override void Draw()
     {
-        // IMPROVEMENT: More intuitive button layout
-        if (ImGui.Button("Clear##ClearLog"))
-        {
-            ClearLog();
-        }
+        DrawHeaderControls();
+        ImGui.Separator();
+        DrawLogHistory();
+    }
+
+    private void DrawHeaderControls()
+    {
+        if (ImGui.Button("Clear")) ClearLog();
         
         ImGui.SameLine();
-        ImGui.Text($"Messages: {logHistory.Count}/{MaxHistoryEntries}");
+        if (ImGui.Checkbox("Auto-scroll", ref autoScroll))
+        {
+            logger.LogDebug("Auto-scroll set to {value}", autoScroll);
+        }
 
-        ImGui.Separator();
-
-        // PERFORMANCE: Use thread-local copy to minimize lock time
-        List<SeString> logCopy;
-        bool shouldScroll;
+        ImGui.SameLine();
+        ImGui.Text("|");
+        ImGui.SameLine();
         
+        ImGui.Text("Font Size:");
+        ImGui.SameLine();
+        ImGui.PushItemWidth(120);
+        ImGui.SliderFloat("##FontSize", ref fontSize, 0.5f, 2.5f, "%.2f");
+        ImGui.PopItemWidth();
+    }
+
+    private void DrawLogHistory()
+    {
+        List<OverlayLogEntry> logCopy;
         lock (logLock)
         {
-            logCopy = new List<SeString>(logHistory);
-            shouldScroll = scrollToBottom;
-            scrollToBottom = false; // Reset the flag immediately
+            logCopy = new List<OverlayLogEntry>(logHistory);
         }
 
-        // Render scrolling region with copied data
         ImGui.BeginChild("scrolling", Vector2.Zero, false, ImGuiWindowFlags.HorizontalScrollbar);
         
-        try
+        foreach (var entry in logCopy)
         {
-            foreach (var textValue in logCopy.Select(seString => seString?.TextValue ?? "[CORRUPTED MESSAGE]"))
-            {
-                ImGui.TextUnformatted(textValue);
-            }
+            var textValue = entry.Content.TextValue;
 
-            // PERFORMANCE: Only scroll when actually needed
-            if (shouldScroll && logCopy.Count > 0)
+            ImGui.SetWindowFontScale(fontSize);
+
+            // Draw Timestamp and Copy button on the same line for a compact view.
+            ImGui.TextDisabled($"[{entry.Timestamp:HH:mm:ss}]");
+            ImGui.SameLine();
+
+            // Use PushID to ensure each button has a unique ID.
+            ImGui.PushID(entry.Timestamp.Ticks.ToString());
+            if (ImGui.Button("Copy"))
             {
-                ImGui.SetScrollHereY(1.0f);
+                ImGui.SetClipboardText(textValue);
+                logger.LogDebug("Copied message to clipboard: '{text}'", textValue);
             }
+            ImGui.PopID();
+
+            ImGui.SameLine();
+            ImGui.TextWrapped(textValue);
+            
+            ImGui.SetWindowFontScale(1.0f);
         }
-        finally
+
+        if (scrollToBottom)
         {
-            ImGui.EndChild();
+            ImGui.SetScrollHereY(1.0f);
+            scrollToBottom = false;
+        }
+        
+        ImGui.EndChild();
+    }
+    
+    public void Dispose()
+    {
+        lock (logLock)
+        {
+            logHistory.Clear();
         }
     }
 }

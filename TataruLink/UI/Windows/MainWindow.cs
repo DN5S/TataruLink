@@ -6,6 +6,7 @@ using System.Linq;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
+using Microsoft.Extensions.Logging;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
 using TataruLink.Utilities;
@@ -13,134 +14,105 @@ using TataruLink.Utilities;
 namespace TataruLink.UI.Windows;
 
 /// <summary>
-/// The main plugin window, which serves as a detailed viewer for the translation history stored in the <see cref="ICacheService"/>.
+/// The main plugin window serving as a detailed viewer for translation history.
 /// </summary>
 public class MainWindow : Window, IDisposable
 {
     private readonly ICacheService cacheService;
+    private readonly ILogger<MainWindow> logger;
     private string searchText = string.Empty;
     
+    // Caches the sorted history to prevent expensive sorting on every frame.
     private List<TranslationResult> sortedHistoryCache = [];
     private int lastKnownHistoryCount = -1;
 
-    public MainWindow(ICacheService cacheService) : base("TataruLink History##TataruLinkMain")
+    public MainWindow(ICacheService cacheService, ILogger<MainWindow> logger) : base("TataruLink History##TataruLinkMain")
     {
         this.cacheService = cacheService;
-        // Increased size to accommodate additional columns for comprehensive data display
+        this.logger = logger;
+        
         Size = new Vector2(1600, 800);
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
-    public void Dispose() { }
-
-    /// <inheritdoc/>
     public override void Draw()
     {
-        // Header section with controls and statistics
-        DrawHeaderSection();
-        
+        var history = cacheService.GetHistory().ToList(); // Get the list once per frame.
+
+        DrawHeaderSection(history.Count);
         ImGui.Separator();
-        
-        // Main translation history table
-        DrawHistoryTable();
+        DrawHistoryTable(history);
     }
     
-    /// <summary>
-    /// Draws the header section containing controls and cache statistics.
-    /// </summary>
-    private void DrawHeaderSection()
+    private void DrawHeaderSection(int historyCount)
     {
-        // First row: Action buttons
         if (ImGui.Button("Clear History"))
         {
+            logger.LogInformation("User cleared translation history.");
             cacheService.Clear();
         }
         ImGui.SameLine();
         ImGui.InputTextWithHint("##SearchFilter", "Search history...", ref searchText, 256);
         
-        // Second row: Cache statistics display
         var stats = cacheService.Statistics;
-        var totalEntries = cacheService.GetHistory().Count();
+        var hitRatio = stats.TotalRequests > 0 ? $"| Hit Ratio: {(stats.HitRatio * 100.0):F1}%" : "";
         
-        ImGui.Text($"Total Entries: {totalEntries} | Cache Hits: {stats.HitCount} | Cache Misses: {stats.MissCount}");
-        ImGui.SameLine();
-        if (stats.TotalRequests > 0)
-        {
-            var hitRatioPercent = (stats.HitRatio * 100.0).ToString("F1");
-            ImGui.Text($"| Hit Ratio: {hitRatioPercent}%");
-        }
+        ImGui.Text($"Total Entries: {historyCount} | Hits: {stats.HitCount} | Misses: {stats.MissCount} {hitRatio}");
     }
     
-   /// <summary>
-    /// Draws the comprehensive translation history table with all available data.
-    /// </summary>
-    private void DrawHistoryTable()
+    private void DrawHistoryTable(IReadOnlyList<TranslationResult> history)
     {
         const ImGuiTableFlags tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
                                            ImGuiTableFlags.ScrollY | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX;
         
-        if (ImGui.BeginTable("HistoryTable", 14, tableFlags))
+        if (!ImGui.BeginTable("HistoryTable", 14, tableFlags)) return;
+
+        ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 80);
+        ImGui.TableSetupColumn("Timestamp", ImGuiTableColumnFlags.WidthFixed, 150);
+        ImGui.TableSetupColumn("Sender", ImGuiTableColumnFlags.WidthFixed, 120);
+        ImGui.TableSetupColumn("Chat Type", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("Engine", ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("Time(ms)", ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("Chars", ImGuiTableColumnFlags.WidthFixed, 50);
+        ImGui.TableSetupColumn("Source Lang", ImGuiTableColumnFlags.WidthFixed, 85);
+        ImGui.TableSetupColumn("Detected Lang", ImGuiTableColumnFlags.WidthFixed, 85);
+        ImGui.TableSetupColumn("Target Lang", ImGuiTableColumnFlags.WidthFixed, 85);
+        ImGui.TableSetupColumn("Prompt Tokens", ImGuiTableColumnFlags.WidthFixed, 90);
+        ImGui.TableSetupColumn("Completion Tokens", ImGuiTableColumnFlags.WidthFixed, 110);
+        ImGui.TableSetupColumn("Original Text", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("Translated Text", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableHeadersRow();
+
+        // Refresh the sorted cache only when the underlying data has changed.
+        if (history.Count != lastKnownHistoryCount)
         {
-            // Define columns with appropriate sizing
-            ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 80);
-            ImGui.TableSetupColumn("Timestamp", ImGuiTableColumnFlags.WidthFixed, 150);
-            ImGui.TableSetupColumn("Sender", ImGuiTableColumnFlags.WidthFixed, 120);
-            ImGui.TableSetupColumn("Chat Type", ImGuiTableColumnFlags.WidthFixed, 100);
-            ImGui.TableSetupColumn("Engine", ImGuiTableColumnFlags.WidthFixed, 70);
-            ImGui.TableSetupColumn("Time(ms)", ImGuiTableColumnFlags.WidthFixed, 70);
-            ImGui.TableSetupColumn("Chars", ImGuiTableColumnFlags.WidthFixed, 50);
-            ImGui.TableSetupColumn("Source Lang", ImGuiTableColumnFlags.WidthFixed, 85);
-            ImGui.TableSetupColumn("Detected Lang", ImGuiTableColumnFlags.WidthFixed, 85);
-            ImGui.TableSetupColumn("Target Lang", ImGuiTableColumnFlags.WidthFixed, 85);
-            ImGui.TableSetupColumn("Prompt Tokens", ImGuiTableColumnFlags.WidthFixed, 90);
-            ImGui.TableSetupColumn("Completion Tokens", ImGuiTableColumnFlags.WidthFixed, 110);
-            ImGui.TableSetupColumn("Original Text", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Translated Text", ImGuiTableColumnFlags.WidthStretch);
-            
-            ImGui.TableHeadersRow();
-
-            // Retrieve and sort the history by timestamp (newest first)
-            var currentHistoryCount = cacheService.GetHistory().Count();
-            if (currentHistoryCount != lastKnownHistoryCount)
-            {
-                sortedHistoryCache = cacheService.GetHistory().OrderByDescending(r => r.Timestamp).ToList();
-                lastKnownHistoryCount = currentHistoryCount;
-            }
-
-            // Render each translation result in the table
-            foreach (var result in sortedHistoryCache)
-            {
-                // Enhanced filtering logic covering all searchable fields
-                if (!string.IsNullOrEmpty(searchText) && !MatchesSearchFilter(result, searchText))
-                {
-                    continue;
-                }
-
-                DrawTableRow(result);
-            }
-            ImGui.EndTable();
+            logger.LogDebug("History count changed from {old} to {new}. Re-sorting display cache.", lastKnownHistoryCount, history.Count);
+            sortedHistoryCache = history.OrderByDescending(r => r.Timestamp).ToList();
+            lastKnownHistoryCount = history.Count;
         }
+
+        // Render the filtered rows from the sorted cache.
+        var filteredHistory = string.IsNullOrEmpty(searchText)
+            ? sortedHistoryCache
+            : sortedHistoryCache.Where(result => MatchesSearchFilter(result, searchText));
+            
+        foreach (var result in filteredHistory)
+        {
+            DrawTableRow(result);
+        }
+        
+        ImGui.EndTable();
     }
    
-    /// <summary>
-    /// Determines if a translation result matches the current search filter.
-    /// </summary>
-    /// <param name="result">The translation result to check.</param>
-    /// <param name="searchText">The search text to match against.</param>
-    /// <returns>True if the result matches the search criteria.</returns>
     private static bool MatchesSearchFilter(TranslationResult result, string searchText)
     {
-        return result.Id.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               result.Sender.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               result.OriginalText.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               result.TranslatedText.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               result.EngineUsed.ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               result.SourceLanguage.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               (result.DetectedSourceLanguage?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
-               result.TargetLanguage.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-               ChatTypeUtilities.GetDisplayName(result.ChatType).Contains(searchText, StringComparison.OrdinalIgnoreCase);
+        var comparison = StringComparison.OrdinalIgnoreCase;
+        return result.Sender.Contains(searchText, comparison) ||
+               result.OriginalText.Contains(searchText, comparison) ||
+               result.TranslatedText.Contains(searchText, comparison) ||
+               result.EngineUsed.ToString().Contains(searchText, comparison) ||
+               ChatTypeUtilities.GetDisplayName(result.ChatType).Contains(searchText, comparison);
     }
-
     /// <summary>
     /// Draws a single row in the history table for the given translation result.
     /// </summary>
@@ -236,4 +208,6 @@ public class MainWindow : Window, IDisposable
         ImGui.TableNextColumn(); 
         ImGui.TextWrapped(result.TranslatedText);
     }
+    
+    public void Dispose() { }
 }

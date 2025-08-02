@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Interfaces.Filtering;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
@@ -17,15 +17,11 @@ using TataruLink.Utilities;
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Implements <see cref="IMessageService"/> to orchestrate the chat translation pipeline.
+/// Implements IMessageService to orchestrate the chat translation pipeline using a robust, asynchronous queue.
 /// </summary>
-/// <remarks>
-/// This service uses a TPL Dataflow <see cref="ActionBlock{T}"/> for robust, asynchronous processing.
-/// It ensures the cancellation token is properly propagated through the entire pipeline.
-/// </remarks>
 public class MessageService : IMessageService
 {
-    private readonly IPluginLog pluginLog;
+    private readonly ILogger<MessageService> logger;
     private readonly ITranslationService translationService;
     private readonly IEnumerable<IMessageFilter> messageFilters;
     private readonly ActionBlock<ChatMessage> translationBlock;
@@ -35,132 +31,126 @@ public class MessageService : IMessageService
     public event Action<SeString>? OnTranslationReady;
 
     public MessageService(
-        IPluginLog pluginLog,
+        ILogger<MessageService> logger,
         ITranslationService translationService,
         IEnumerable<IMessageFilter> messageFilters)
     {
-        this.pluginLog = pluginLog ?? throw new ArgumentNullException(nameof(pluginLog));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.translationService = translationService ?? throw new ArgumentNullException(nameof(translationService));
         this.messageFilters = messageFilters ?? throw new ArgumentNullException(nameof(messageFilters));
 
         var executionOptions = new ExecutionDataflowBlockOptions
         {
-            MaxDegreeOfParallelism = 5, // Reduced from 10 - network calls are the bottleneck
+            MaxDegreeOfParallelism = 5, // Network calls are the bottleneck.
             CancellationToken = cancellationTokenSource.Token
         };
 
         translationBlock = new ActionBlock<ChatMessage>(HandleMessageAsync, executionOptions);
 
-        pluginLog.Info("MessageService pipeline started with {MaxConcurrency} max concurrency", 
-                       executionOptions.MaxDegreeOfParallelism);
+        logger.LogInformation("MessageService pipeline started with {MaxConcurrency} max concurrency.", executionOptions.MaxDegreeOfParallelism);
     }
 
     /// <inheritdoc />
     public void EnqueueMessage(XivChatType chatType, SeString sender, SeString message)
     {
-        if (message.Payloads.Count == 0)
-        {
-            pluginLog.Debug("Empty message ignored in EnqueueMessage");
-            return;
-        }
+        if (message.Payloads.Count == 0) return;
 
         var chatMessage = new ChatMessage(chatType, sender, message);
         var posted = translationBlock.Post(chatMessage);
         
         if (!posted)
         {
-            pluginLog.Warning("Failed to enqueue message - pipeline may be shutting down");
+            logger.LogWarning("Failed to enqueue message. The pipeline may be shutting down or full.");
         }
     }
 
-    /// <summary>
-    /// The core processing logic for a single chat message.
-    /// Properly propagates cancellation tokens through the entire pipeline.
-    /// </summary>
     private async Task HandleMessageAsync(ChatMessage chatMessage)
     {
         var messageText = chatMessage.Message.TextValue;
-        
-        // CRITICAL FIX: Pass the cancellation token to all downstream operations
         var cancellationToken = cancellationTokenSource.Token;
         
+        logger.LogTrace("Processing message: \"{message}\"", messageText);
+
         try
         {
-            // Early cancellation check
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Run the message through all registered filters
-            var shouldTranslate = messageFilters.All(filter => 
-                filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender.TextValue, messageText));
-                
+            // Run the message through all registered filters.
+            var filterResults = messageFilters.Select(filter => (Filter: filter.GetType().Name, Result: filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender.TextValue, messageText))).ToList();
+            var shouldTranslate = filterResults.All(fr => fr.Result);
+            
             if (!shouldTranslate)
             {
-                pluginLog.Debug("Message filtered out: {MessageText}", messageText);
+                var failedFilter = filterResults.FirstOrDefault(fr => !fr.Result);
+                logger.LogDebug("Message filtered out by {filterName}. Content: \"{message}\"", failedFilter.Filter, messageText);
                 return;
             }
+            
+            logger.LogTrace("All filters passed. Extracting text for translation.");
 
-            // SIMPLIFIED APPROACH: Use SeStringUtils instead of ArrayPool complexity
             var (textsToTranslate, payloadTemplate) = SeStringUtils.ExtractTextAndPayloadStructure(chatMessage.Message);
             
             if (textsToTranslate.Count == 0 || textsToTranslate.All(string.IsNullOrWhiteSpace))
             {
-                pluginLog.Debug("No translatable text found in message");
+                logger.LogDebug("No translatable text found in message after extraction.");
                 return;
             }
+            
+            logger.LogTrace("Calling translation service for {count} text segments.", textsToTranslate.Count);
 
-            // CRITICAL FIX: Pass cancellation token to translation service
             var translatedMessage = await translationService.ProcessTranslationRequestAsync(
                 textsToTranslate, payloadTemplate, chatMessage.Sender.TextValue, chatMessage.Type, cancellationToken);
 
             if (translatedMessage != null)
             {
                 OnTranslationReady?.Invoke(translatedMessage);
-                pluginLog.Debug("Translation completed for message: {MessageText}", messageText);
+                logger.LogDebug("Translation completed and event invoked for: \"{message}\"", messageText);
             }
             else
             {
-                pluginLog.Debug("Translation service returned null for message: {MessageText}", messageText);
+                logger.LogWarning("Translation service returned a null result for: \"{message}\"", messageText);
             }
         }
         catch (OperationCanceledException)
         {
-            pluginLog.Debug("Message processing cancelled: {MessageText}", messageText);
-            // Don't rethrow - this is expected during shutdown
+            logger.LogDebug("Message processing was canceled for: \"{message}\"", messageText);
+            // This is an expected exception during a shutdown. Do not rethrow.
         }
         catch (Exception ex)
         {
-            pluginLog.Error(ex, "Error processing message: {MessageText}", messageText);
+            logger.LogError(ex, "An unexpected error occurred while processing message: \"{message}\"", messageText);
         }
     }
 
-    /// <inheritdoc />
     public void Dispose()
     {
-        pluginLog.Info("MessageService disposing...");
+        if (cancellationTokenSource.IsCancellationRequested) return;
         
-        // Signal shutdown to prevent new messages
+        logger.LogInformation("Disposing MessageService...");
+        
+        // Step 1: Signal that no new items will be accepted.
         translationBlock.Complete();
         
-        // Cancel all in-flight operations (THIS WAS THE MISSING PIECE!)
+        // Step 2: Cancel all currently executing operations.
         cancellationTokenSource.Cancel();
         
         try
         {
-            // Wait for a graceful shutdown
-            translationBlock.Completion.Wait(TimeSpan.FromMilliseconds(2000));
-            pluginLog.Info("MessageService pipeline stopped gracefully");
+            // Step 3: Wait for the pipeline to gracefully shut down.
+            translationBlock.Completion.Wait(TimeSpan.FromSeconds(2));
+            logger.LogInformation("MessageService pipeline stopped gracefully.");
         }
         catch (AggregateException ex)
         {
-            // Filter out expected cancellation exceptions
-            var nonCancellationExceptions = ex.InnerExceptions
-                .Where(e => e is not (TaskCanceledException or OperationCanceledException))
-                .ToList();
-                
-            if (nonCancellationExceptions.Any())
+            // Filter out expected cancellation exceptions but log any others.
+            var unexpectedExceptions = ex.InnerExceptions.Where(e => e is not (TaskCanceledException or OperationCanceledException)).ToList();
+            if (unexpectedExceptions.Count != 0)
             {
-                pluginLog.Error("Unexpected exceptions during MessageService disposal: {Exceptions}", 
-                               string.Join(", ", nonCancellationExceptions.Select(e => e.Message)));
+                logger.LogError(new AggregateException(unexpectedExceptions), "Unexpected exceptions during MessageService disposal.");
+            }
+            else
+            {
+                logger.LogDebug("MessageService shutdown completed with expected cancellations.");
             }
         }
         finally

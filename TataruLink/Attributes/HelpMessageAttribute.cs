@@ -12,5 +12,5 @@ public class HelpMessageAttribute(string helpMessage) : Attribute
     /// <summary>
     /// The help message to display for this command.
     /// </summary>
-    public string HelpMessage { get; } = helpMessage ?? string.Empty;
+    public string HelpMessage { get; } = helpMessage;
 }

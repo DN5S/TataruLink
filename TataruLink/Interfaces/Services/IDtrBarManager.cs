@@ -8,32 +8,12 @@ namespace TataruLink.Interfaces.Services;
 public interface IDtrBarManager : IDisposable
 {
     /// <summary>
-    /// Updates the translation status text displayed in the DTR bar.
-    /// This method refreshes the display to reflect current translation settings.
+    /// Refreshes the DTR bar display (text and visibility) to match the current configuration.
     /// </summary>
-    /// <param name="status">This parameter is ignored - the method uses current translation configuration</param>
-    void UpdateStatus(string status);
+    void Refresh();
 
     /// <summary>
-    /// Refreshes the DTR bar display to reflect current translation configuration.
-    /// Call this method when translation settings change.
-    /// </summary>
-    void RefreshTranslationDisplay();
-
-    /// <summary>
-    /// Sets the visibility of the DTR bar entry.
-    /// </summary>
-    /// <param name="show">Whether to show the DTR bar entry</param>
-    void SetVisibility(bool show);
-
-    /// <summary>
-    /// Updates the DTR bar visibility based on current display configuration.
-    /// Call this method when the ShowInServerStatusBar setting changes.
-    /// </summary>
-    void RefreshVisibility();
-
-    /// <summary>
-    /// Event raised when the DTR bar is clicked.
+    /// Event raised when the DTR bar entry is clicked. The boolean indicates if Ctrl was held.
     /// </summary>
     event Action<bool>? OnDtrBarClicked; // bool isCtrlPressed
 }

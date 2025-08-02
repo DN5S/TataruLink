@@ -2,6 +2,15 @@
   "version": 1,
   "dependencies": {
     "net9.0-windows7.0": {
+      "Dalamud.Extensions.MicrosoftLogging": {
+        "type": "Direct",
+        "requested": "[4.0.1, )",
+        "resolved": "4.0.1",
+        "contentHash": "fMEL2ajtF/30SBBku7vMyG0yye5eHN/A9fgT//1CEjUth/Wz2CYco5Ehye21T8KN1IuAPwoqJuu49rB71j+8ug==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging": "8.0.0"
+        }
+      },
       "DalamudPackager": {
         "type": "Direct",
         "requested": "[12.0.0, )",
@@ -34,6 +43,17 @@
         "contentHash": "i05AYA91vgq0as84ROVCyltD2gnxaba/f1Qw2rG7mUsS0gv8cPTr1Gm7jPQHq7JTr4MJoQUcanLVs16tIOUJaQ==",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.7"
+        }
+      },
+      "Microsoft.Extensions.Logging": {
+        "type": "Direct",
+        "requested": "[9.0.7, )",
+        "resolved": "9.0.7",
+        "contentHash": "fdIeQpXYV8yxSWG03cCbU2Otdrq4NWuhnQLXokWLv3L9YcK055E7u8WFJvP+uuP4CFeCEoqZQL4yPcjuXhCZrg==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection": "9.0.7",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.7",
+          "Microsoft.Extensions.Options": "9.0.7"
         }
       },
       "Microsoft.Extensions.Caching.Abstractions": {
