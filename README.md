@@ -1,88 +1,71 @@
 # TataruLink
 
-A Dalamud plugin for `FINAL FANTASY XIV` that provides real-time chat translation directly in-game, supporting multiple translation engines.
+A Dalamud plugin for Final Fantasy XIV that provides real-time chat translation with multiple engines and advanced features.
 
 ## Features
 
-* **Real-time Chat Translation**: Automatically translates incoming chat messages seamlessly.
-* **Multiple Translation Engines**: Natively supports Google Translate (free) and DeepL (API key required).
-* **Flexible Display Options**: Choose to display translations in the standard in-game chat, a dedicated overlay window, or both.
-* **Smart Filtering**: A powerful filtering system to precisely control which chat types, senders, or message types are translated.
-* **Performance-Oriented Caching**: An intelligent caching system reduces redundant API calls, saving bandwidth and improving response time.
-* **Comprehensive UI Suite**:
-    * **Main Window (`/tatarulink`):** A detailed history viewer to browse and search your recent translations.
-    * **Overlay Window (`/tataruoverlay`):** A customizable, movable window for a dedicated translation feed.
-    * **Configuration Window (`/tataruconfig`):** A central hub to manage all plugin settings.
+- **Translation Engines**: Google Translate (free), DeepL, Gemini AI, and Ollama (local LLM)
+- **Real-time Translation**: Automatic chat translation with smart filtering
+- **Outgoing Translation**: Translate your messages before sending (`/tl`)
+- **User Glossary**: Custom dictionary for consistent translations (`/tg`)
+- **Display**: In-game chat, overlay window, or both
+- **Caching**: Reduces API calls and improves performance
 
-## Installation
+## Commands
 
-### From the official repository (Not Supported)
+- `/tataruconfig` - Configuration window
+- `/tatarulink` - Translation history window
+- `/tataruoverlay` - Toggle the overlay window
+- `/tatarutest <text>` - Test translation
+- `/tl <text>` - Translate text and copy to clipboard
+- `/tg <original> <translation>` - Add glossary entry
 
-*Coming soon. Once approved, TataruLink will be available through the official Dalamud plugin repository via the `/xlplugins` command.*
+## Quick Setup
 
-### Manual Installation (Building from Source)
-
-For developers and testers. See the `Development` section below for instructions on how to build the plugin from source.
-
------
-
-## Usage
-
-### Initial Setup
-
-1.  Use the `/tataruconfig` command to open the configuration window.
-2.  Navigate through the tabs to configure your preferred settings:
-    * **General**: Enable translations, choose your primary engine, and set your source/target languages.
-    * **Chat Types**: Select the specific chat channels (e.g., Say, Party, FC) you want to translate.
-    * **Display**: Configure the output mode (in-game, overlay, or both) and customize the message format.
-
-### Available Commands
-
-* `/tatarulink` - Toggles the main history/cache window.
-* `/tataruoverlay` - Toggles the real-time translation overlay window.
-* `/tataruconfig` - Toggles the configuration window.
-* `/tatarutest <text>` - Performs a test translation with the provided text using your current settings.
+1. Install manually (official repository coming soon)
+2. Open `/tataruconfig`:
+   - **General**: Enable translation, select engine, set languages
+   - **Chat Types**: Choose channels to translate
+   - **Glossary**: Add custom translations
+3. **API Keys** (optional):
+   - **DeepL**: Get key from [deepl.com/pro-api](https://www.deepl.com/pro-api)
+   - **Gemini**: Get key from `Google AI Studio`
+   - **Ollama**: Set local endpoint (default: `http://localhost:11434`)
 
 ## Development
 
-### Prerequisites
+### Building
+```bash
+git clone https://github.com/DN5S/TataruLink.git
+cd TataruLink
+# Open TataruLink.sln and build
+# Output: TataruLink/bin/x64/[Debug|Release]/TataruLink.dll
+```
 
-* [**Visual Studio 2022**](https://visualstudio.microsoft.com) or [**JetBrains Rider**](https://www.jetbrains.com/rider/).
-* Dalamud plugin development environment correctly set up. The project is configured to work with the official Dalamud template.
-
-### Building from Source
-
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/your-username/TataruLink.git
-    cd TataruLink
-    ```
-2.  Open `TataruLink.sln` in your IDE.
-3.  Build the solution. The dependencies, including Dalamud references, will be handled by NuGet.
-4.  The compiled plugin DLL will be located at:
-    `TataruLink/bin/x64/[Debug or Release]/TataruLink.dll`
-
------
-
-## API Keys
-
-### DeepL API (Optional)
-
-To use DeepL translation (recommended for better accuracy):
-
-1. Sign up for a DeepL API account at [https://www.deepl.com/pro-api](https://www.deepl.com/pro-api)
-2. Get your API key from the account dashboard
-3. Enter the API key in the plugin configuration (`/tataruconfig`)
-
-Note: DeepL offers a free tier with 500,000 characters per month.
-
------
 
 ## Contributing
 
-Contributions are welcome. Please feel free to submit pull requests or open issues for bugs and feature requests. All contributions will be reviewed based on the architectural principles established in the project.
+We welcome contributions! Here's how to get started:
+
+### Bug Reports
+- Use the [GitHub Issues](https://github.com/DN5S/TataruLink/issues) page
+- Include steps to reproduce, expected vs. actual behavior
+- Attach logs from `%AppData%\XIVLauncher\pluginConfigs\TataruLink\`
+
+### Feature Requests
+- Open an issue with the `enhancement` label
+- Describe the use case and expected behavior
+- Consider if it fits the plugin's scope
+
+### Code Contributions
+
+#### Getting Started
+1. **Fork** the repository
+2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
+3. **Follow** the coding standards below
+4. **Test** your changes thoroughly
+5. **Submit** a Pull Request
 
 ## License
 
-This project is licensed under the `GNU AFFERO GENERAL PUBLIC LICENSE`. See the [LICENSE.md](LICENSE.md) file for details.
-
+**GNU AFFERO GENERAL PUBLIC LICENSE v3.0** - See [LICENSE.md](LICENSE.md)
