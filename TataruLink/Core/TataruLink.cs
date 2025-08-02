@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TataruLink.Attributes;
 using TataruLink.Interfaces.Core;
 using TataruLink.Interfaces.Services;
+using TataruLink.Services.Providers;
 using TataruLink.UI.Windows;
 
 namespace TataruLink.Core;
@@ -49,7 +50,7 @@ public sealed class TataruLink : IDalamudPlugin
         try
         {
             // Configure the dependency injection container with all required services.
-            services = Services.Providers.ServiceProvider.ConfigureServices(
+            services = ServiceHandler.ConfigureServices(
                 pluginInterface, dalamudCommandManager, log, chatGui, clientState, framework, dtrBar);
 
             // Retrieve essential services from the container.
@@ -74,7 +75,7 @@ public sealed class TataruLink : IDalamudPlugin
                 }
             };
             
-            // Set up DTR bar click event handling
+            // Set up the DTR bar click event handling
             dtrBarManager.OnDtrBarClicked += dtrBarClickHandler;
             
             // Create and initialize the command manager with this instance as the command host
@@ -85,7 +86,7 @@ public sealed class TataruLink : IDalamudPlugin
             var configService = services.GetRequiredService<IConfigService>();
             var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
             
-            // Create config changed handler that updates both engine factory and DTR bar
+            // Create a config changed handler that updates both engine factory and DTR bar
             configChangedHandler = () =>
             {
                 engineFactory.ClearCache();

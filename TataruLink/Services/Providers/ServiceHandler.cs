@@ -20,13 +20,13 @@ namespace TataruLink.Services.Providers;
 /// A static class responsible for configuring the dependency injection (DI) container.
 /// This acts as the Composition Root for the entire application, wiring up all services and dependencies.
 /// </summary>
-public static class ServiceProvider
+public static class ServiceHandler
 {
     /// <summary>
     /// Configures and builds the service provider with all necessary application services.
     /// </summary>
     /// <returns>A configured <see cref="Microsoft.Extensions.DependencyInjection.ServiceProvider"/> instance.</returns>
-    public static Microsoft.Extensions.DependencyInjection.ServiceProvider ConfigureServices(
+    public static ServiceProvider ConfigureServices(
         IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IPluginLog log,
         IChatGui chatGui, IClientState clientState, IFramework framework, IDtrBar dtrBar)
     {
