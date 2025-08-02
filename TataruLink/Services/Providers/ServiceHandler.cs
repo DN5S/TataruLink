@@ -44,7 +44,11 @@ public static class ServiceHandler
         services.AddLogging(builder =>
         {
             builder.AddDalamudLogger(logger);
-            builder.SetMinimumLevel(LogLevel.Trace); 
+#if DEBUG
+            builder.SetMinimumLevel(LogLevel.Trace);
+#else
+            builder.SetMinimumLevel(LogLevel.Information);
+#endif
         });
         
         RegisterDalamudServices(services, pluginInterface, commandManager, logger, chatGui, clientState, framework, dtrBar);
