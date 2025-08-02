@@ -16,6 +16,11 @@ public interface ITranslationEngine
     /// Gets the enum type of this translation engine.
     /// </summary>
     TranslationEngine EngineType { get; }
+    
+    /// <summary>
+    /// Gets a value indicating whether this engine supports structured translation using tags like XML.
+    /// </summary>
+    bool SupportsStructuredTranslation { get; }
 
     /// <summary>
     /// Translates the given text asynchronously.

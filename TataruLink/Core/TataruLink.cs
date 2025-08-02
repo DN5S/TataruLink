@@ -75,7 +75,7 @@ public sealed class TataruLink : IDalamudPlugin
             };
             
             // Set up DTR bar click event handling
-            dtrBarManager.DtrBarClicked += dtrBarClickHandler;
+            dtrBarManager.OnDtrBarClicked += dtrBarClickHandler;
             
             // Create and initialize the command manager with this instance as the command host
             this.commandManager = new CommandManager(dalamudCommandManager, this);
@@ -146,7 +146,7 @@ public sealed class TataruLink : IDalamudPlugin
                 pi.UiBuilder.OpenMainUi -= openMainUiHandler;
                 
             if (dtrBarClickHandler != null)
-                dtrBarManager.DtrBarClicked -= dtrBarClickHandler;
+                dtrBarManager.OnDtrBarClicked -= dtrBarClickHandler;
                 
             if (configChangedHandler != null)
                 configService.OnConfigChanged -= configChangedHandler;

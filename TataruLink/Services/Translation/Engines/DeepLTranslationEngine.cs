@@ -30,6 +30,9 @@ public class DeepLTranslationEngine : TranslationEngineBase
 
     /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.DeepL;
+    
+    /// <inheritdoc />
+    public override bool SupportsStructuredTranslation => true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DeepLTranslationEngine"/> class.

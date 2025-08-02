@@ -34,5 +34,8 @@ public abstract class TranslationEngineBase(IPluginLog log) : ITranslationEngine
     public abstract TranslationEngine EngineType { get; }
     
     /// <inheritdoc />
+    public abstract bool SupportsStructuredTranslation { get; }
+    
+    /// <inheritdoc />
     public abstract Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default);
 }

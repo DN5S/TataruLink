@@ -30,7 +30,10 @@ public class GeminiTranslationEngine : TranslationEngineBase
 
     /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.Gemini;
-
+    
+    /// <inheritdoc />
+    public override bool SupportsStructuredTranslation => true;
+    
     /// <summary>
     /// Initializes a new instance of the <see cref="GeminiTranslationEngine"/> class.
     /// </summary>

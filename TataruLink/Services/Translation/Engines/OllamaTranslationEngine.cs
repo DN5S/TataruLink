@@ -28,6 +28,9 @@ public class OllamaTranslationEngine : TranslationEngineBase
 
     /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.Ollama;
+    
+    /// <inheritdoc />
+    public override bool SupportsStructuredTranslation => true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OllamaTranslationEngine"/> class.

@@ -29,6 +29,9 @@ public class GoogleTranslationEngine(IPluginLog log) : TranslationEngineBase(log
 
     /// <inheritdoc />
     public override TranslationEngine EngineType => TranslationEngine.Google;
+    
+    /// <inheritdoc />
+    public override bool SupportsStructuredTranslation => false;
 
     /// <inheritdoc />
     public override async Task<TranslationResult?> TranslateAsync(
