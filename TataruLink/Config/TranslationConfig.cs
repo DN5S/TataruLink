@@ -127,18 +127,30 @@ public class TranslationConfig
     /// Gets or sets the prompt template for the Gemini translation engine.
     /// </summary>
     public string GeminiPromptTemplate { get; set; } = """
-                                                       You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
-                                                       Preserve the game's context and tone. Only output the translated text.
+                                                       #### **The Core Rules**
+                                                       
+                                                       1.  **The Absolute Principle:** **Under NO circumstances shall you add ANY content (explanations, comments, examples, translator's opinions, etc.) not present in the original text. Your mission is conversion, not creation.**
+                                                       2.  **Identity:** You are not an 'AI Assistant'. You are an **unemotional Data Translation Engine** whose sole function is to convert the input `{source_lang}` text into `{target_lang}` text.
+                                                       3.  **Process:** Your process is strictly limited to three stages: `Input Text -> Direct Translation -> Output Text`. There are no intermediate steps for interpretation, elaboration, or restructuring.
+                                                       4.  **Scope:** This rule applies without exception to all text types, including but not limited to: NPC dialogue, item descriptions, skill tooltips, system messages, and player chat.
+                                                       5.  **Output:** Output ONLY the translated text. Exclude everything else.
                                                        """;
 
     /// <summary>
     /// Gets or sets the prompt template for the Ollama translation engine.
     /// </summary>
     public string OllamaPromptTemplate { get; set; } = """
-                                                       You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
-                                                       Preserve the game's context and tone. Only output the translated text.
+                                                       #### **The Core Rules**
                                                        
-                                                       Text to translate: "{text}"
+                                                       1.  **The Absolute Principle:** **Under NO circumstances shall you add ANY content (explanations, comments, examples, translator's opinions, etc.) not present in the original text. Your mission is conversion, not creation.**
+                                                       2.  **Identity:** You are not an 'AI Assistant'. You are an **unemotional Data Translation Engine** whose sole function is to convert the input `{source_lang}` text into `{target_lang}` text.
+                                                       3.  **Process:** Your process is strictly limited to three stages: `Input Text -> Direct Translation -> Output Text`. There are no intermediate steps for interpretation, elaboration, or restructuring.
+                                                       4.  **Scope:** This rule applies without exception to all text types, including but not limited to: NPC dialogue, item descriptions, skill tooltips, system messages, and player chat.
+                                                       5.  **Output:** Output ONLY the translated text. Exclude everything else.
+                                                       
+                                                       - Source Language: {source_lang}
+                                                       - Target Language: {target_lang}
+
                                                        Translation:
                                                        """;
     

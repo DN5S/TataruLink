@@ -4,6 +4,7 @@ using System;
 using System.Numerics;
 using ImGuiNET;
 using TataruLink.Config;
+using TataruLink.Interfaces.Services;
 using TataruLink.Interfaces.UI;
 
 namespace TataruLink.UI.Panels;
@@ -12,8 +13,24 @@ namespace TataruLink.UI.Panels;
 /// A settings panel for managing the core configuration of the plugin.
 /// This includes translation engine settings, language preferences, and API keys.
 /// </summary>
-public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
+public class GeneralPanel : ISettingsPanel
 {
+    private readonly TataruConfig tataruConfig;
+    private IDtrBarManager? dtrBarManager;
+
+    public GeneralPanel(TataruConfig tataruConfig)
+    {
+        this.tataruConfig = tataruConfig;
+    }
+
+    /// <summary>
+    /// Sets the DTR bar manager reference. This is called after DI container initialization.
+    /// </summary>
+    public void SetDtrBarManager(IDtrBarManager dtrBarManager)
+    {
+        this.dtrBarManager = dtrBarManager;
+    }
+
     /// <inheritdoc />
     public bool Draw()
     {
@@ -175,9 +192,9 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
             ImGui.TextDisabled("(e.g., en, ja, ko)");
             
             var outgoingTo = translationSettings.OutgoingTranslateTo;
-            if (ImGui.InputText("Source Language", ref outgoingTo, 5))
+            if (ImGui.InputText("Target Language", ref outgoingTo, 5))
             {
-                translationSettings.OutgoingFromLanguage = outgoingTo;
+                translationSettings.OutgoingTranslateTo = outgoingTo;
                 configChanged = true;
             }
             ImGui.SameLine();
@@ -221,6 +238,19 @@ public class GeneralPanel(TataruConfig tataruConfig) : ISettingsPanel
             displaySettings.DisplayMode = TranslationDisplayMode.Both;
             configChanged = true;
         }
+
+        ImGui.Separator();
+        
+        var showInServerStatusBar = displaySettings.ShowInServerStatusBar;
+        if (ImGui.Checkbox("Show translation status in server status bar", ref showInServerStatusBar))
+        {
+            displaySettings.ShowInServerStatusBar = showInServerStatusBar;
+            configChanged = true;
+    
+            // Update DTR bar visibility immediately
+            dtrBarManager?.RefreshVisibility();
+        }
+        ImGui.TextDisabled("Displays translation direction (e.g., [JP→KO | KO→JP]) in the server status bar. Click to open main window, Ctrl+Click for settings.");
 
         ImGui.Separator();
         

@@ -1,7 +1,7 @@
-﻿// File: TataruLink/Core/TataruLink.cs
+﻿
+// File: TataruLink/Core/TataruLink.cs
 
 using System;
-using Dalamud.Game;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -23,6 +23,12 @@ public sealed class TataruLink : IDalamudPlugin
     private readonly ServiceProvider? services;
     private readonly IPluginLog log;
     private readonly CommandManager commandManager;
+    
+    // Event handler references for proper unsubscription
+    private readonly Action<bool>? dtrBarClickHandler;
+    private readonly Action? openConfigUiHandler;
+    private readonly Action? openMainUiHandler;
+    private readonly Action? configChangedHandler;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TataruLink"/> class.
@@ -34,7 +40,8 @@ public sealed class TataruLink : IDalamudPlugin
         IPluginLog log,
         IChatGui chatGui,
         IClientState clientState,
-        IFramework framework)
+        IFramework framework,
+        IDtrBar dtrBar)
     {
         this.log = log;
         log.Info("TataruLink is starting up.");
@@ -43,11 +50,32 @@ public sealed class TataruLink : IDalamudPlugin
         {
             // Configure the dependency injection container with all required services.
             services = Services.Providers.ServiceProvider.ConfigureServices(
-                pluginInterface, dalamudCommandManager, log, chatGui, clientState, framework);
+                pluginInterface, dalamudCommandManager, log, chatGui, clientState, framework, dtrBar);
 
             // Retrieve essential services from the container.
             var windowSystem = services.GetRequiredService<WindowSystem>();
             var hookManager = services.GetRequiredService<IChatHookManager>();
+            var dtrBarManager = services.GetRequiredService<IDtrBarManager>();
+            var mainWindow = services.GetRequiredService<MainWindow>();
+            var settingsWindow = services.GetRequiredService<SettingsWindow>();
+            
+            // Create an event handler with proper reference for unsubscription
+            dtrBarClickHandler = (isCtrlPressed) =>
+            {
+                if (isCtrlPressed)
+                {
+                    settingsWindow.IsOpen = !settingsWindow.IsOpen;
+                    log.Debug("Settings window toggled (Ctrl + Click)");
+                }
+                else
+                {
+                    mainWindow.IsOpen = !mainWindow.IsOpen;
+                    log.Debug("Main window toggled (Click)");
+                }
+            };
+            
+            // Set up DTR bar click event handling
+            dtrBarManager.DtrBarClicked += dtrBarClickHandler;
             
             // Create and initialize the command manager with this instance as the command host
             this.commandManager = new CommandManager(dalamudCommandManager, this);
@@ -56,15 +84,28 @@ public sealed class TataruLink : IDalamudPlugin
             // Services required for dynamic reconfiguration
             var configService = services.GetRequiredService<IConfigService>();
             var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
-            configService.OnConfigChanged += engineFactory.ClearCache;
+            
+            // Create config changed handler that updates both engine factory and DTR bar
+            configChangedHandler = () =>
+            {
+                engineFactory.ClearCache();
+                dtrBarManager.RefreshTranslationDisplay();
+                log.Debug("Configuration changed - updated engine cache and DTR bar display");
+            };
+            
+            configService.OnConfigChanged += configChangedHandler;
             
             // Initialize core components.
             hookManager.Initialize();
             
+            // Create UI event handlers with proper references for unsubscription
+            openConfigUiHandler = () => settingsWindow.Toggle();
+            openMainUiHandler = () => mainWindow.Toggle();
+            
             // Subscribe to the UI Builder events for drawing windows and handling config commands.
             pluginInterface.UiBuilder.Draw += windowSystem.Draw;
-            pluginInterface.UiBuilder.OpenConfigUi += () => services.GetRequiredService<SettingsWindow>().Toggle();
-            pluginInterface.UiBuilder.OpenMainUi += () => services.GetRequiredService<MainWindow>().Toggle();
+            pluginInterface.UiBuilder.OpenConfigUi += openConfigUiHandler;
+            pluginInterface.UiBuilder.OpenMainUi += openMainUiHandler;
             
             log.Info("TataruLink started successfully.");
         }
@@ -88,18 +129,27 @@ public sealed class TataruLink : IDalamudPlugin
             if (services == null) return;
             
             // Dispose command manager first
-            this.commandManager?.Dispose();
+            commandManager.Dispose();
 
             var pi = services.GetRequiredService<IDalamudPluginInterface>();
             var windowSystem = services.GetRequiredService<WindowSystem>();
             var configService = services.GetRequiredService<IConfigService>();
-            var engineFactory = services.GetRequiredService<ITranslationEngineFactory>();
+            var dtrBarManager = services.GetRequiredService<IDtrBarManager>();
 
-            // --- 1. Unsubscribe from external and static events ---
+            // --- 1. Unsubscribe from external and static events using stored references ---
             pi.UiBuilder.Draw -= windowSystem.Draw;
-            pi.UiBuilder.OpenConfigUi -= () => services.GetRequiredService<SettingsWindow>().Toggle();
-            pi.UiBuilder.OpenMainUi -= () => services.GetRequiredService<MainWindow>().Toggle();
-            configService.OnConfigChanged -= engineFactory.ClearCache;
+            
+            if (openConfigUiHandler != null)
+                pi.UiBuilder.OpenConfigUi -= openConfigUiHandler;
+                
+            if (openMainUiHandler != null)
+                pi.UiBuilder.OpenMainUi -= openMainUiHandler;
+                
+            if (dtrBarClickHandler != null)
+                dtrBarManager.DtrBarClicked -= dtrBarClickHandler;
+                
+            if (configChangedHandler != null)
+                configService.OnConfigChanged -= configChangedHandler;
 
             // --- 2. Clean up UI ---
             windowSystem.RemoveAllWindows();

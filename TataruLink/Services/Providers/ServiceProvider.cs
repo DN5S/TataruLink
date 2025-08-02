@@ -28,7 +28,7 @@ public static class ServiceProvider
     /// <returns>A configured <see cref="Microsoft.Extensions.DependencyInjection.ServiceProvider"/> instance.</returns>
     public static Microsoft.Extensions.DependencyInjection.ServiceProvider ConfigureServices(
         IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IPluginLog log,
-        IChatGui chatGui, IClientState clientState, IFramework framework)
+        IChatGui chatGui, IClientState clientState, IFramework framework, IDtrBar dtrBar)
     {
         var services = new ServiceCollection();
         
@@ -36,7 +36,7 @@ public static class ServiceProvider
         var configService = new ConfigService(pluginInterface);
         var tataruConfig = configService.Config;
 
-        RegisterDalamudServices(services, pluginInterface, commandManager, log, chatGui, clientState, framework);
+        RegisterDalamudServices(services, pluginInterface, commandManager, log, chatGui, clientState, framework, dtrBar);
         RegisterConfigurationServices(services, configService, tataruConfig);
         RegisterCoreServices(services);
         RegisterChatFilters(services);
@@ -50,7 +50,7 @@ public static class ServiceProvider
     /// Registers core services provided by the Dalamud framework.
     /// </summary>
     private static void RegisterDalamudServices(IServiceCollection services, IDalamudPluginInterface pluginInterface,
-        ICommandManager commandManager, IPluginLog log, IChatGui chatGui, IClientState clientState, IFramework framework)
+        ICommandManager commandManager, IPluginLog log, IChatGui chatGui, IClientState clientState, IFramework framework, IDtrBar dtrBar)
     {
         services.AddSingleton(pluginInterface);
         services.AddSingleton(commandManager);
@@ -58,6 +58,7 @@ public static class ServiceProvider
         services.AddSingleton(chatGui);
         services.AddSingleton(clientState);
         services.AddSingleton(framework);
+        services.AddSingleton(dtrBar);
     }
 
     /// <summary>
@@ -87,6 +88,7 @@ public static class ServiceProvider
         services.AddSingleton<ITranslationService, TranslationService>();
         services.AddSingleton<IMessageService, MessageService>();
         services.AddSingleton<IOutgoingTranslationService, OutgoingTranslationService>();
+        services.AddSingleton<IDtrBarManager, DtrBarManager>();
     }
     
     /// <summary>
