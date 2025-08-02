@@ -3,7 +3,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.Text;
-using TataruLink.Resources; // Assuming Localize is in this namespace.
 
 namespace TataruLink.Utilities;
 
@@ -51,7 +50,8 @@ public static class ChatTypeUtilities
     public static readonly IReadOnlyDictionary<string, List<XivChatType>> CategorizedChatTypesForDisplay = new Dictionary<string, List<XivChatType>>
     {
         {
-            Localize.CategorizedChatTypes_General, [ // Correctly using the 'Localize' standard.
+            "General", 
+            [
                 XivChatType.Say, XivChatType.Shout, XivChatType.Yell, XivChatType.Party,
                 XivChatType.CrossParty, XivChatType.Alliance, XivChatType.TellIncoming,
                 XivChatType.TellOutgoing, XivChatType.FreeCompany, XivChatType.NoviceNetwork,
@@ -59,24 +59,23 @@ public static class ChatTypeUtilities
             ]
         },
         {
-            Localize.CategorizedChatTypes_Linkshells,
-            // Dynamically generate the list of 8 Linkshell types.
+            "Linkshells",
             Enumerable.Range((int)XivChatType.Ls1, 8).Select(i => (XivChatType)i).ToList()
         },
         {
-            Localize.CategorizedChatTypes_CWLS,
+            "Cross World Linkshells",
             // Dynamically generate the list of 8 Cross-world Linkshell types.
             Enumerable.Range((int)XivChatType.CrossLinkShell1, 8).Select(i => (XivChatType)i).ToList()
         },
         {
-            Localize.CategorizedChatTypes_System_and_Emotes, [
+            "System & Emotes", [
                 XivChatType.Echo, XivChatType.SystemMessage, XivChatType.SystemError, XivChatType.ErrorMessage,
                 XivChatType.StandardEmote, XivChatType.CustomEmote, XivChatType.Notice, XivChatType.Urgent,
                 XivChatType.GatheringSystemMessage
             ]
         },
         {
-            Localize.CategorizedChatTypes_NPC,
+            "NPC",
             [XivChatType.NPCDialogue, XivChatType.NPCDialogueAnnouncements, XivChatType.RetainerSale]
         }
     };

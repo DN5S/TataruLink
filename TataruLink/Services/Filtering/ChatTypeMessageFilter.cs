@@ -9,7 +9,7 @@ namespace TataruLink.Services.Filtering;
 /// <summary>
 /// A filter that checks if translation is enabled for a specific <see cref="XivChatType"/>.
 /// </summary>
-public class ChatTypeMessageFilter(TranslationConfig translationConfig) : IMessageFilter
+public sealed class ChatTypeMessageFilter(TranslationConfig translationConfig) : IMessageFilter
 {
     /// <inheritdoc />
     public bool ShouldTranslate(XivChatType type, string sender, string message)

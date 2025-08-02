@@ -1,46 +1,76 @@
 ﻿// File: TataruLink/Services/Core/ConfigService.cs
 
 using System;
+using System.IO;
+using System.Text.Json;
 using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Implements <see cref="IConfigService"/> to manage the lifecycle of the plugin's configuration.
-/// It is the single source of truth for loading from and saving to the configuration file.
+/// Implements IConfigService to manage the lifecycle of the plugin's configuration.
 /// </summary>
 public class ConfigService : IConfigService
 {
-    private readonly IDalamudPluginInterface pluginInterface;
+    private readonly string configFilePath;
+    private readonly IPluginLog log; // Use IPluginLog directly for bootstrapping.
+    
+    public TataruConfig Config { get; private set; }
     
     public event Action? OnConfigChanged;
-    
-    /// <inheritdoc />
-    public TataruConfig Config { get; }
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ConfigService"/> class.
-    /// </summary>
-    /// <remarks>
-    /// Upon instantiation, it immediately loads the plugin configuration from disk.
-    /// If no configuration file exists, it creates a new default configuration object.
-    /// </remarks>
-    /// <param name="pluginInterface">The Dalamud plugin interface, used for config persistence.</param>
-    public ConfigService(IDalamudPluginInterface pluginInterface)
+    public ConfigService(IDalamudPluginInterface pluginInterface, IPluginLog log)
     {
-        this.pluginInterface = pluginInterface;
-
-        // Load the existing configuration from disk or create a new one if it doesn't exist.
-        // This ensures that a valid Config object is always available.
-        Config = this.pluginInterface.GetPluginConfig() as TataruConfig ?? new TataruConfig();
+        this.log = log;
+        var configDirectory = pluginInterface.GetPluginConfigDirectory();
+        configFilePath = Path.Combine(configDirectory, "config.json");
+        
+        Config = Load();
     }
 
-    /// <inheritdoc />
     public void Save()
     {
-        pluginInterface.SavePluginConfig(Config);
-        OnConfigChanged?.Invoke();
+        try
+        {
+            var configDirectory = Path.GetDirectoryName(configFilePath);
+            if (configDirectory != null) Directory.CreateDirectory(configDirectory);
+
+            var json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(configFilePath, json);
+            
+            log.Information("Configuration saved successfully to {Path}", configFilePath);
+            OnConfigChanged?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "Failed to save configuration to {Path}", configFilePath);
+        }
+    }
+    
+    private TataruConfig Load()
+    {
+        try
+        {
+            if (File.Exists(configFilePath))
+            {
+                var json = File.ReadAllText(configFilePath);
+                var config = JsonSerializer.Deserialize<TataruConfig>(json);
+                if (config != null)
+                {
+                    log.Information("Configuration loaded successfully from {Path}", configFilePath);
+                    return config;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex, "Failed to load or parse configuration from {Path}. A new default configuration will be used.", configFilePath);
+        }
+        
+        log.Information("Configuration file not found or invalid. Creating a new default configuration.");
+        return new TataruConfig();
     }
 }

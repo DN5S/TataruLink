@@ -1,5 +1,6 @@
 ﻿// File: TataruLink/Services/Interfaces/ITranslationEngine.cs
 
+using System.Threading;
 using System.Threading.Tasks;
 using TataruLink.Config;
 using TataruLink.Models;
@@ -15,6 +16,11 @@ public interface ITranslationEngine
     /// Gets the enum type of this translation engine.
     /// </summary>
     TranslationEngine EngineType { get; }
+    
+    /// <summary>
+    /// Gets a value indicating whether this engine supports structured translation using tags like XML.
+    /// </summary>
+    bool SupportsStructuredTranslation { get; }
 
     /// <summary>
     /// Translates the given text asynchronously.
@@ -22,9 +28,11 @@ public interface ITranslationEngine
     /// <param name="text">The text to translate.</param>
     /// <param name="sourceLanguage">The source language code (e.g., "ja", "auto").</param>
     /// <param name="targetLanguage">The target language code (e.g., "en").</param>
+    /// <param name="cancellationToken">Token for timeout cancellation</param>
     /// <returns>
     /// A task that represents the translation operation.
     /// The result contains the generated <see cref="TranslationResult"/>, or null on failure.
     /// </returns>
-    Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
+    Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default
+    );
 }

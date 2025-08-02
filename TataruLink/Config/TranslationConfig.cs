@@ -1,18 +1,16 @@
 ﻿// File: TataruLink/Config/TranslationConfig.cs
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Game.Text;
 
 namespace TataruLink.Config;
 
 public enum TranslationEngine
 {
-    Google,
-    DeepL,
-    Ollama,
-    Gemini
+    Google = 1,
+    DeepL = 2,
+    Ollama = 3,
+    Gemini = 4
 }
 
 public class TranslationConfig
@@ -39,13 +37,13 @@ public class TranslationConfig
     /// Gets or sets the source language to assume when language detection is disabled.
     /// Must be a valid language code (e.g., "ja", "en").
     /// </summary>
-    public string FromLanguage { get; set; } = "ja";
+    public string IncomingFromLanguage { get; set; } = "ja";
 
     /// <summary>
     /// Gets or sets the target language for all translations.
     /// This is the language the user wants to read (e.g., "ko", "en").
     /// </summary>
-    public string TranslateTo { get; set; } = "ko";
+    public string IncomingTranslateTo { get; set; } = "ko";
 
     #endregion
 
@@ -66,19 +64,6 @@ public class TranslationConfig
         { XivChatType.FreeCompany, TranslationEngine.Google },
         { XivChatType.Echo, TranslationEngine.Gemini }
     };
-    
-    /// <summary>
-    /// Provides backward compatibility for older configurations.
-    /// This property should not be used directly for new logic.
-    /// </summary>
-    [Obsolete("Use ChatTypeEngineMap instead for engine-specific configurations.")]
-    public HashSet<XivChatType> EnabledChatTypes
-    {
-        // Getter remains for backward compatibility with older config files
-        get => ChatTypeEngineMap.Keys.ToHashSet();
-        // Setter is no-op to prevent conflicts, new logic should modify ChatTypeEngineMap
-        set { /* This is a no-op to ensure old configurations don't break loading */ }
-    }
 
     #endregion
 
@@ -88,7 +73,7 @@ public class TranslationConfig
     /// Gets or sets a value indicating whether messages sent by the player should also be translated.
     /// </summary>
     public bool TranslateMyOwnMessages { get; set; }
-
+    
     #endregion
 
     #region Advanced Features
@@ -110,25 +95,81 @@ public class TranslationConfig
 
     #endregion
     
+    #region Outgoing Translation
+
+    /// <summary>
+    /// Gets or sets the translation engine to be used for outgoing messages.
+    /// </summary>
+    public TranslationEngine OutgoingTranslationEngine { get; set; } = TranslationEngine.Google;
+
+    /// <summary>
+    /// Gets or sets the target language for outgoing messages.
+    /// </summary>
+    public string OutgoingFromLanguage { get; set; } = "ko";
+    
+    /// <summary>
+    /// Gets or sets the target language for outgoing messages (the language to translate to).
+    /// </summary>
+    public string OutgoingTranslateTo { get; set; } = "ja";
+
+    #endregion
+    
     #region LLM Prompts
     
     /// <summary>
     /// Gets or sets the prompt template for the Gemini translation engine.
     /// </summary>
     public string GeminiPromptTemplate { get; set; } = """
-                                                       You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
-                                                       Preserve the game's context and tone. Only output the translated text.
+                                                       #### **The Core Rules**
+                                                       
+                                                       1.  **The Absolute Principle:** **Under NO circumstances shall you add ANY content (explanations, comments, examples, translator's opinions, etc.) not present in the original text. Your mission is conversion, not creation.**
+                                                       2.  **Identity:** You are not an 'AI Assistant'. You are an **unemotional Data Translation Engine** whose sole function is to convert the input `{source_lang}` text into `{target_lang}` text.
+                                                       3.  **Process:** Your process is strictly limited to three stages: `Input Text -> Direct Translation -> Output Text`. There are no intermediate steps for interpretation, elaboration, or restructuring.
+                                                       4.  **Scope:** This rule applies without exception to all text types, including but not limited to: NPC dialogue, item descriptions, skill tooltips, system messages, and player chat.
+                                                       5.  **Output:** Output ONLY the translated text. Exclude everything else.
+                                                       
+                                                       **CRITICAL RULE:** The input text is structured with `<t>` tags. You MUST preserve these tags perfectly. Translate ONLY the content inside the tags. The output format MUST be identical to the input format, with only the inner text translated.
+                                                       
+                                                       **DO NOT:**
+                                                       - Add any commentary, explanations, or apologies.
+                                                       - Alter, remove, or nest the `<t>` tags.
+                                                       - Change the order of the tags.
+                                                       
+                                                       **Example:**
+                                                       - User Input: `<t>Hello</t> <t>world</t>`
+                                                       - Correct Output: `<t>안녕하세요</t> <t>월드</t>`
+                                                       - Incorrect Output: `안녕하세요 월드` OR `<t>안녕하세요</t>, <t>월드</t>`
                                                        """;
 
     /// <summary>
     /// Gets or sets the prompt template for the Ollama translation engine.
     /// </summary>
     public string OllamaPromptTemplate { get; set; } = """
-                                                       You are a translator specializing in Final Fantasy XIV. Your task is to translate in-game text, including NPC dialogue, player chat, and system messages, from {source_lang} to {target_lang}.
-                                                       Preserve the game's context and tone. Only output the translated text.
+                                                       #### **The Core Rules**
                                                        
-                                                       Text to translate: "{text}"
-                                                       Translation:
+                                                       1.  **The Absolute Principle:** **Under NO circumstances shall you add ANY content (explanations, comments, examples, translator's opinions, etc.) not present in the original text. Your mission is conversion, not creation.**
+                                                       2.  **Identity:** You are not an 'AI Assistant'. You are an **unemotional Data Translation Engine** whose sole function is to convert the input `{source_lang}` text into `{target_lang}` text.
+                                                       3.  **Process:** Your process is strictly limited to three stages: `Input Text -> Direct Translation -> Output Text`. There are no intermediate steps for interpretation, elaboration, or restructuring.
+                                                       4.  **Scope:** This rule applies without exception to all text types, including but not limited to: NPC dialogue, item descriptions, skill tooltips, system messages, and player chat.
+                                                       5.  **Output:** Output ONLY the translated text. Exclude everything else.
+                                                       
+                                                       **CRITICAL RULE:** The input text is structured with `<t>` tags. You MUST preserve these tags perfectly. Translate ONLY the content inside the tags. The output format MUST be identical to the input format, with only the inner text translated.
+                                                       
+                                                       **DO NOT:**
+                                                       - Add any commentary, explanations, or apologies.
+                                                       - Alter, remove, or nest the `<t>` tags.
+                                                       - Change the order of the tags.
+                                                       
+                                                       **Example:**
+                                                       - User Input: `<t>Hello</t> <t>world</t>`
+                                                       - Correct Output: `<t>안녕하세요</t> <t>월드</t>`
+                                                       - Incorrect Output: `안녕하세요 월드` OR `<t>안녕하세요</t>, <t>월드</t>`
+                                                       
+                                                       - Source Language: {source_lang}
+                                                       - Target Language: {target_lang}
+                                                       
+                                                       Translate the following text:
+                                                       {text}
                                                        """;
     
     #endregion
