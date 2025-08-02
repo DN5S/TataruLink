@@ -26,6 +26,7 @@ public partial class TranslationService : ITranslationService
     private readonly ICacheService cacheService;
     private readonly IMessageFormatter formatter;
     private readonly ITranslationEngineFactory engineFactory;
+    private readonly IGlossaryManager glossaryManager;
 
     private const string XmlTag = "t";
     private static readonly Regex XmlTagRegex = StructureSeparator();
@@ -35,13 +36,15 @@ public partial class TranslationService : ITranslationService
         TranslationConfig translationConfig,
         ICacheService cacheService,
         IMessageFormatter formatter,
-        ITranslationEngineFactory engineFactory)
+        ITranslationEngineFactory engineFactory,
+        IGlossaryManager glossaryManager)
     {
         this.log = log;
         this.translationConfig = translationConfig;
         this.cacheService = cacheService;
         this.formatter = formatter;
         this.engineFactory = engineFactory;
+        this.glossaryManager = glossaryManager;
         this.log.Info("TranslationService initialized with Dynamic Engine Factory.");
     }
 
@@ -92,11 +95,11 @@ public partial class TranslationService : ITranslationService
     private (string FullText, string SourceLang, string TargetLang) PrepareRequestData(IReadOnlyList<string> textSegments, ITranslationEngine engine)
     {
         var combinedText = CombineTextSegments(textSegments, engine);
-        var processedText = ApplyGlossary(combinedText);
-
+        var processedText = glossaryManager.Apply(combinedText);
         string sourceLang;
+        
         var useExplicitSourceLang = engine.EngineType is TranslationEngine.Gemini or TranslationEngine.Ollama ||
-                                    translationConfig.Glossary.Any(e => e.IsEnabled);
+                                     glossaryManager.HasActiveEntries();
 
         if (useExplicitSourceLang)
         {
@@ -122,16 +125,6 @@ public partial class TranslationService : ITranslationService
             return string.Join(" ", textSegments.Select(s => $"<{XmlTag}>{s}</{XmlTag}>"));
         }
         return string.Join(" ", textSegments);
-    }
-
-    /// <summary>
-    /// Applies user-defined glossary entries to the text before translation.
-    /// </summary>
-    private string ApplyGlossary(string text)
-    {
-        var activeGlossaryEntries = translationConfig.Glossary.Where(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.OriginalText));
-        return activeGlossaryEntries.Aggregate(text, (current, entry) =>
-            current.Replace(entry.OriginalText, entry.ReplacementText, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

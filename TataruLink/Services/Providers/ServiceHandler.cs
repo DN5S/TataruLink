@@ -89,6 +89,8 @@ public static class ServiceHandler
         services.AddSingleton<IMessageService, MessageService>();
         services.AddSingleton<IOutgoingTranslationService, OutgoingTranslationService>();
         services.AddSingleton<IDtrBarManager, DtrBarManager>();
+        services.AddSingleton<IGlossaryManager, GlossaryManager>();
+        services.AddSingleton<IGlossaryIOService, GlossaryIOService>();
     }
     
     /// <summary>
@@ -121,7 +123,12 @@ public static class ServiceHandler
     {
         // Register each window class as a singleton.
         services.AddSingleton<MainWindow>();
-        services.AddSingleton<SettingsWindow>();
+        services.AddSingleton(provider => new SettingsWindow(
+                                  provider.GetRequiredService<IConfigService>(),
+                                  provider.GetRequiredService<IGlossaryManager>(),
+                                  provider.GetRequiredService<IGlossaryIOService>(),
+                                  provider.GetRequiredService<IDtrBarManager>()
+                              ));
         services.AddSingleton<TranslationOverlayWindow>();
         
         // Register the WindowSystem using a factory delegate.

@@ -1,4 +1,5 @@
-﻿
+﻿// File: TataruLink/UI/Windows/SettingsWindow.cs
+
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -20,7 +21,12 @@ public class SettingsWindow : Window, IDisposable
     private readonly List<ISettingsPanel> settingsPanels = [];
     private readonly List<string> tabNames = ["General", "Chat Types", "Glossary"];
 
-    public SettingsWindow(IConfigService configService) : base("TataruLink Settings") 
+    public SettingsWindow(
+            IConfigService configService,
+            IGlossaryManager glossaryManager,
+            IGlossaryIOService glossaryIOService,
+            IDtrBarManager dtrBarManager) // IDtrBarManager 추가
+        : base("TataruLink Settings")
     {
         SizeConstraints = new WindowSizeConstraints
         {
@@ -29,12 +35,14 @@ public class SettingsWindow : Window, IDisposable
         };
 
         this.configService = configService;
-        var configuration = configService.Config;
+        var config = configService.Config;
 
         // Initialize and add all UI panels that will be rendered as tabs.
-        settingsPanels.Add(new GeneralPanel(configuration));
-        settingsPanels.Add(new ChatTypesPanel(configuration));
-        settingsPanels.Add(new GlossaryPanel(configuration.TranslationSettings));
+        var generalPanel = new GeneralPanel(config.TranslationSettings, config.DisplaySettings, config.ApiConfig);
+        generalPanel.SetDtrBarManager(dtrBarManager);
+        settingsPanels.Add(generalPanel);
+        settingsPanels.Add(new ChatTypesPanel(config.TranslationSettings));
+        settingsPanels.Add(new GlossaryPanel(glossaryManager, glossaryIOService));
     }
 
     public void Dispose() { }

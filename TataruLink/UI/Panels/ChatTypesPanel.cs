@@ -14,14 +14,16 @@ namespace TataruLink.UI.Panels;
 /// This panel directly configures the <see cref="TranslationConfig.ChatTypeEngineMap"/> set,
 /// which is used by the <see cref="ChatTypeMessageFilter"/>.
 /// </summary>
-public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel
+public class ChatTypesPanel(TranslationConfig translationConfig) : ISettingsPanel
 {
     private readonly string[] engineNames = Enum.GetNames<TranslationEngine>();
+
+    
     /// <inheritdoc />
     public bool Draw()
     {
         var configChanged = false;
-        var chatTypeEngineMap = tataruConfig.TranslationSettings.ChatTypeEngineMap;
+        var chatTypeEngineMap = translationConfig.ChatTypeEngineMap;
 
         ImGui.TextWrapped("Enable translation for specific chat types and assign a translation engine to each.");
         ImGui.Separator();
@@ -93,7 +95,6 @@ public class ChatTypesPanel(TataruConfig tataruConfig) : ISettingsPanel
 
             ImGui.EndTable();
         }
-
         return configChanged;
     }
 }

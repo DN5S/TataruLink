@@ -13,15 +13,11 @@ namespace TataruLink.UI.Panels;
 /// A settings panel for managing the core configuration of the plugin.
 /// This includes translation engine settings, language preferences, and API keys.
 /// </summary>
-public class GeneralPanel : ISettingsPanel
+public class GeneralPanel(TranslationConfig translationSettings, DisplayConfig displaySettings, ApiConfig apiConfig)
+    : ISettingsPanel
 {
-    private readonly TataruConfig tataruConfig;
-    private IDtrBarManager? dtrBarManager;
 
-    public GeneralPanel(TataruConfig tataruConfig)
-    {
-        this.tataruConfig = tataruConfig;
-    }
+    private IDtrBarManager? dtrBarManager;
 
     /// <summary>
     /// Sets the DTR bar manager reference. This is called after DI container initialization.
@@ -36,9 +32,6 @@ public class GeneralPanel : ISettingsPanel
     {
         var configChanged = false;
         // For clarity, get direct references to the specific config sections.
-        var translationSettings = tataruConfig.TranslationSettings;
-        var displaySettings = tataruConfig.DisplaySettings;
-        var apiConfig = tataruConfig.ApiConfig;
 
         #region Core Controls
 

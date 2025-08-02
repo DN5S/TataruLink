@@ -1,8 +1,6 @@
 ﻿// File: TataruLink/Config/TranslationConfig.cs
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Game.Text;
 
 namespace TataruLink.Config;
@@ -76,11 +74,6 @@ public class TranslationConfig
     /// </summary>
     public bool TranslateMyOwnMessages { get; set; }
     
-    /// <summary>
-    /// Gets or sets the user-defined list of glossary entries for pre-translation replacement.
-    /// </summary>
-    public List<GlossaryEntry> Glossary { get; set; } = [];
-
     #endregion
 
     #region Advanced Features
