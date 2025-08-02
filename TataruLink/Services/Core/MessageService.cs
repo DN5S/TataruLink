@@ -1,7 +1,6 @@
 ﻿// File: TataruLink/Services/Core/MessageService.cs
 
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -9,28 +8,22 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Interfaces.Filtering;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
+using TataruLink.Utilities;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Implements <see cref="IMessageService"/> to orchestrate the chat translation pipeline.
+/// Implements IMessageService to orchestrate the chat translation pipeline using a robust, asynchronous queue.
 /// </summary>
-/// <remarks>
-/// This service uses a TPL Dataflow <see cref="ActionBlock{T}"/> to create a robust, asynchronous pipeline.
-/// This approach decouples the message reception (which must be fast) from the message processing
-/// (which can be long-running due to network calls), ensuring the game's main thread is never blocked.
-/// It supports concurrent processing to handle rapid incoming messages efficiently.
-/// </remarks>
 public class MessageService : IMessageService
 {
-    private readonly IPluginLog log;
+    private readonly ILogger<MessageService> logger;
     private readonly ITranslationService translationService;
-    private readonly IEnumerable<IMessageFilter> filters;
+    private readonly IEnumerable<IMessageFilter> messageFilters;
     private readonly ActionBlock<ChatMessage> translationBlock;
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
@@ -38,147 +31,131 @@ public class MessageService : IMessageService
     public event Action<SeString>? OnTranslationReady;
 
     public MessageService(
-        IPluginLog log,
+        ILogger<MessageService> logger,
         ITranslationService translationService,
-        IEnumerable<IMessageFilter> filters)
+        IEnumerable<IMessageFilter> messageFilters)
     {
-        this.log = log;
-        this.translationService = translationService;
-        this.filters = filters;
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.translationService = translationService ?? throw new ArgumentNullException(nameof(translationService));
+        this.messageFilters = messageFilters ?? throw new ArgumentNullException(nameof(messageFilters));
 
         var executionOptions = new ExecutionDataflowBlockOptions
         {
-            MaxDegreeOfParallelism = 10, // Allow up to 10 messages to be processed concurrently.
+            MaxDegreeOfParallelism = 5, // Network calls are the bottleneck.
             CancellationToken = cancellationTokenSource.Token
         };
 
         translationBlock = new ActionBlock<ChatMessage>(HandleMessageAsync, executionOptions);
 
-        log.Info($"MessageService pipeline started with {executionOptions.MaxDegreeOfParallelism} max concurrency.");
+        logger.LogInformation("MessageService pipeline started with {MaxConcurrency} max concurrency.", executionOptions.MaxDegreeOfParallelism);
     }
 
     /// <inheritdoc />
-    public void EnqueueMessage(XivChatType type, SeString sender, SeString message)
+    public void EnqueueMessage(XivChatType chatType, SeString sender, SeString message)
     {
-        // Post a new message to the ActionBlock. This is a non-blocking call.
-        translationBlock.Post(new ChatMessage(type, sender, message));
+        if (message.Payloads.Count == 0) return;
+
+        var chatMessage = new ChatMessage(chatType, sender, message);
+        var posted = translationBlock.Post(chatMessage);
+        
+        if (!posted)
+        {
+            logger.LogWarning("Failed to enqueue message. The pipeline may be shutting down or full.");
+        }
     }
 
-    /// <summary>
-    /// The core processing logic for a single chat message.
-    /// This method is executed by the ActionBlock for each enqueued message.
-    /// </summary>
     private async Task HandleMessageAsync(ChatMessage chatMessage)
     {
-        // First, run the message through all registered filters.
         var messageText = chatMessage.Message.TextValue;
-        if (filters.Any(filter => !filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender.TextValue, messageText)))
-        {
-            return; // If any filter returns false, we abort processing for this message.
-        }
-
-        var payloads = chatMessage.Message.Payloads;
-        var payloadCount = payloads.Count;
-
-        // --- High-Performance Two-Pass Strategy to Avoid Memory Allocation ---
-        // This strategy is deliberately chosen to avoid creating new lists or collections on the heap for every message,
-        // which is critical for performance in a high-frequency system like a chat handler.
-
-        // 1. Count Pass: First, determine the exact number of text payloads that need translation.
-        var textPayloadCount = 0;
-        foreach (var payload in payloads)
-        {
-            if ((payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text)) ||
-                (payload is AutoTranslatePayload autoPayload && !string.IsNullOrWhiteSpace(autoPayload.Text)))
-            {
-                textPayloadCount++;
-            }
-        }
-
-        if (textPayloadCount == 0) return; // No text to translate.
-
-        // 2. Rent from ArrayPool: Rent arrays from a shared pool instead of allocating new ones.
-        var payloadTemplate = ArrayPool<Payload?>.Shared.Rent(payloadCount);
-        var textsToTranslate = ArrayPool<string>.Shared.Rent(textPayloadCount);
+        var cancellationToken = cancellationTokenSource.Token;
+        
+        logger.LogTrace("Processing message: \"{message}\"", messageText);
 
         try
         {
-            // 3. Populate Pass: Iterate again to populate the rented arrays.
-            var textIndex = 0;
-            for (var i = 0; i < payloadCount; i++)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Run the message through all registered filters.
+            var filterResults = messageFilters.Select(filter => (Filter: filter.GetType().Name, Result: filter.ShouldTranslate(chatMessage.Type, chatMessage.Sender.TextValue, messageText))).ToList();
+            var shouldTranslate = filterResults.All(fr => fr.Result);
+            
+            if (!shouldTranslate)
             {
-                var payload = payloads[i];
-                if (payload is TextPayload textPayload && !string.IsNullOrWhiteSpace(textPayload.Text))
-                {
-                    // For text payloads, store the text and leave a null placeholder in the template.
-                    var cleanText = System.Text.RegularExpressions.Regex.Replace(
-                        textPayload.Text.Trim(), @"\s+", " ");
-
-                    textsToTranslate[textIndex++] = cleanText;
-                    payloadTemplate[i] = null;
-                }
-                else if (payload is AutoTranslatePayload autoPayload && !string.IsNullOrWhiteSpace(autoPayload.Text))
-                {
-                    var cleanText = System.Text.RegularExpressions.Regex.Replace(
-                        autoPayload.Text.Trim(), @"\s+", " ");
-
-                    textsToTranslate[textIndex++] = cleanText;
-                    payloadTemplate[i] = null;
-                }
-                else
-                {
-                    // For non-text payloads, store them directly in the template.
-                    payloadTemplate[i] = payload;
-                }
+                var failedFilter = filterResults.FirstOrDefault(fr => !fr.Result);
+                logger.LogDebug("Message filtered out by {filterName}. Content: \"{message}\"", failedFilter.Filter, messageText);
+                return;
             }
             
-            // 4. Create ArraySegments: Pass the data to the translation service using ArraySegments.
-            // This avoids creating copies and correctly represents the populated portion of the rented arrays.
-            var textsSegment = new ArraySegment<string>(textsToTranslate, 0, textPayloadCount);
-            var templateSegment = new ArraySegment<Payload?>(payloadTemplate, 0, payloadCount);
+            logger.LogTrace("All filters passed. Extracting text for translation.");
 
-            var formattedMessage = await translationService.ProcessTranslationRequestAsync(
-                textsSegment, templateSegment, chatMessage.Sender.TextValue, chatMessage.Type);
-
-            if (formattedMessage != null)
+            var (textsToTranslate, payloadTemplate) = SeStringUtils.ExtractTextAndPayloadStructure(chatMessage.Message);
+            
+            if (textsToTranslate.Count == 0 || textsToTranslate.All(string.IsNullOrWhiteSpace))
             {
-                // If translation was successful, fire the event for subscribers to handle.
-                OnTranslationReady?.Invoke(formattedMessage);
+                logger.LogDebug("No translatable text found in message after extraction.");
+                return;
+            }
+            
+            logger.LogTrace("Calling translation service for {count} text segments.", textsToTranslate.Count);
+
+            var translatedMessage = await translationService.ProcessTranslationRequestAsync(
+                textsToTranslate, payloadTemplate, chatMessage.Sender.TextValue, chatMessage.Type, cancellationToken);
+
+            if (translatedMessage != null)
+            {
+                OnTranslationReady?.Invoke(translatedMessage);
+                logger.LogDebug("Translation completed and event invoked for: \"{message}\"", messageText);
+            }
+            else
+            {
+                logger.LogWarning("Translation service returned a null result for: \"{message}\"", messageText);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
         {
-            log.Error(ex, $"Error processing message: {messageText}");
+            logger.LogDebug("Message processing was canceled for: \"{message}\"", messageText);
+            // This is an expected exception during a shutdown. Do not rethrow.
         }
-        finally
+        catch (Exception ex)
         {
-            // CRITICAL: Always return the rented arrays to the pool to prevent memory leaks.
-            ArrayPool<Payload?>.Shared.Return(payloadTemplate);
-            ArrayPool<string>.Shared.Return(textsToTranslate);
+            logger.LogError(ex, "An unexpected error occurred while processing message: \"{message}\"", messageText);
         }
     }
 
-    /// <inheritdoc />
     public void Dispose()
     {
-        // Gracefully shut down the ActionBlock.
-        // 1. Signal that no more new items will be accepted.
+        if (cancellationTokenSource.IsCancellationRequested) return;
+        
+        logger.LogInformation("Disposing MessageService...");
+        
+        // Step 1: Signal that no new items will be accepted.
         translationBlock.Complete();
-        // 2. Cancel any operations currently in progress.
+        
+        // Step 2: Cancel all currently executing operations.
         cancellationTokenSource.Cancel();
         
         try
         {
-            // 3. Wait for a short period for in-flight tasks to finish or acknowledge cancellation.
-            translationBlock.Completion.Wait(1500);
+            // Step 3: Wait for the pipeline to gracefully shut down.
+            translationBlock.Completion.Wait(TimeSpan.FromSeconds(2));
+            logger.LogInformation("MessageService pipeline stopped gracefully.");
         }
         catch (AggregateException ex)
         {
-            // It's expected that cancellation will throw exceptions. We only care about TaskCanceledException.
-            ex.Handle(e => e is TaskCanceledException or OperationCanceledException);
+            // Filter out expected cancellation exceptions but log any others.
+            var unexpectedExceptions = ex.InnerExceptions.Where(e => e is not (TaskCanceledException or OperationCanceledException)).ToList();
+            if (unexpectedExceptions.Count != 0)
+            {
+                logger.LogError(new AggregateException(unexpectedExceptions), "Unexpected exceptions during MessageService disposal.");
+            }
+            else
+            {
+                logger.LogDebug("MessageService shutdown completed with expected cancellations.");
+            }
         }
-        
-        cancellationTokenSource.Dispose();
-        log.Info("MessageService pipeline stopped.");
+        finally
+        {
+            cancellationTokenSource.Dispose();
+        }
     }
 }

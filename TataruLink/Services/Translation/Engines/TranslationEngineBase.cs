@@ -1,8 +1,9 @@
 ﻿// File: TataruLink/Services/Translation/Engines/TranslationEngineBase.cs
 
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
@@ -13,25 +14,27 @@ namespace TataruLink.Services.Translation.Engines;
 /// Provides a foundational abstract class for translation engines, sharing common infrastructure.
 /// </summary>
 /// <remarks>
-/// This class manages a static <see cref="HttpClient"/> instance to be shared across all derived engine classes.
-/// This is a critical performance optimization to prevent socket exhaustion, which can occur when creating many
-/// HttpClient instances in a short period. It also provides a logger instance for all engines.
+/// This class manages a static HttpClient instance to be shared across all derived engine classes.
+/// This is a critical performance optimization to prevent socket exhaustion.
 /// </remarks>
-public abstract class TranslationEngineBase(IPluginLog log) : ITranslationEngine
+public abstract class TranslationEngineBase(ILogger log) : ITranslationEngine
 {
     /// <summary>
-    /// Gets the shared HttpClient for all translation engines.
+    /// A shared HttpClient for all translation engines to reuse TCP connections.
     /// </summary>
     protected static readonly HttpClient HttpClient = new();
 
     /// <summary>
-    /// Gets the logger instance for use in derived classes.
+    /// The logger instance for use in derived classes.
     /// </summary>
-    protected readonly IPluginLog Log = log;
+    protected readonly ILogger Logger = log;
 
     /// <inheritdoc />
     public abstract TranslationEngine EngineType { get; }
-
+    
     /// <inheritdoc />
-    public abstract Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage);
+    public abstract bool SupportsStructuredTranslation { get; }
+    
+    /// <inheritdoc />
+    public abstract Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage, CancellationToken cancellationToken = default);
 }

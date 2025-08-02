@@ -5,12 +5,23 @@ using System;
 namespace TataruLink.Interfaces.Core;
 
 /// <summary>
-/// Defines a contract for a service that manages all hooks into Dalamud's chat-related events.
+/// Defines the contract for managing chat event hooks within the Dalamud framework.
+/// Enhanced with better lifecycle management and error handling support.
 /// </summary>
 public interface IChatHookManager : IDisposable
 {
     /// <summary>
-    /// Subscribes to all necessary chat events to begin processing messages.
+    /// Initializes the chat hook manager and registers necessary event handlers.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if already initialized or if initialization fails.</exception>
+    /// <remarks>
+    /// This method should be called once during plugin startup. 
+    /// Multiple calls will be safely ignored with appropriate logging.
+    /// </remarks>
     void Initialize();
+    
+    /// <summary>
+    /// Gets a value indicating whether the hook manager is currently initialized and active.
+    /// </summary>
+    bool IsInitialized { get; }
 }

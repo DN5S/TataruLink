@@ -26,4 +26,9 @@ public class TataruConfig : IPluginConfiguration
     /// Gets or sets the settings related to how translations are displayed.
     /// </summary>
     public DisplayConfig DisplaySettings { get; set; } = new();
+    
+    /// <summary>
+    ///  Gets or sets the settings related to cache options.
+    /// </summary>
+    public CacheConfig CacheSettings { get; set; } = new();
 }

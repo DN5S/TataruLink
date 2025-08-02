@@ -3,18 +3,173 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
 
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// A class for configuring the CacheService.
+/// Thread-safe, high-performance translation cache service with robust IMemoryCache abstraction.
+/// </summary>
+public class CacheService : ICacheService, IDisposable
+{
+    private readonly IMemoryCache memoryCache;
+    private readonly ILogger<CacheService> logger;
+    private readonly CacheOptions options;
+    private readonly ConcurrentDictionary<string, WeakReference<TranslationResult>> resultIndex;
+    private volatile bool disposed;
+
+    public CacheStatistics Statistics { get; } = new();
+
+    public CacheService(IMemoryCache memoryCache, ILogger<CacheService> logger, IOptions<CacheOptions> options)
+    {
+        this.memoryCache = memoryCache;
+        this.logger = logger;
+        this.options = options.Value;
+        this.resultIndex = new ConcurrentDictionary<string, WeakReference<TranslationResult>>();
+        logger.LogInformation("CacheService initialized.");
+    }
+
+    public bool TryGet(string originalText, string sourceLanguage, string targetLanguage, out TranslationResult? result)
+    {
+        ThrowIfDisposed();
+        
+        if (string.IsNullOrEmpty(originalText))
+        {
+            result = null;
+            return false;
+        }
+
+        var cacheKey = GenerateCacheKey(originalText, sourceLanguage, targetLanguage);
+        if (memoryCache.TryGetValue(cacheKey, out result) && result != null)
+        {
+            Statistics.IncrementHit();
+            result.FromCache = true;
+            logger.LogDebug("Cache HIT for key: {key}", cacheKey);
+            return true;
+        }
+
+        Statistics.IncrementMiss();
+        logger.LogDebug("Cache MISS for key: {key}", cacheKey);
+        result = null;
+        return false;
+    }
+
+    public void Set(TranslationResult translationResult)
+    {
+        ThrowIfDisposed();
+        
+        ArgumentNullException.ThrowIfNull(translationResult.OriginalText, nameof(translationResult.OriginalText));
+
+        var cacheKey = GenerateCacheKey(
+            translationResult.OriginalText, 
+            translationResult.SourceLanguage, 
+            translationResult.TargetLanguage);
+
+        var entryOptions = new MemoryCacheEntryOptions
+        {
+            SlidingExpiration = options.DefaultSlidingExpiration,
+            AbsoluteExpirationRelativeToNow = options.DefaultAbsoluteExpiration,
+            Size = 1, // Each entry has a size of 1 for size-limited caches.
+            Priority = CacheItemPriority.Normal
+        };
+
+        entryOptions.RegisterPostEvictionCallback((key, value, reason, state) =>
+        {
+            if (key is string evictedKey && state is ConcurrentDictionary<string, WeakReference<TranslationResult>> index)
+            {
+                index.TryRemove(evictedKey, out _);
+                logger.LogInformation("Cache entry evicted. Key: {key}, Reason: {reason}", evictedKey, reason);
+            }
+        });
+
+        memoryCache.Set(cacheKey, translationResult, entryOptions);
+        resultIndex.TryAdd(cacheKey, new WeakReference<TranslationResult>(translationResult));
+        logger.LogDebug("Cache SET for key: {key}", cacheKey);
+    }
+
+    public IEnumerable<TranslationResult> GetHistory()
+    {
+        ThrowIfDisposed();
+        
+        var results = new List<TranslationResult>(resultIndex.Count);
+        var staleKeys = new List<string>();
+
+        foreach (var (key, weakRef) in resultIndex)
+        {
+            if (weakRef.TryGetTarget(out var result))
+            {
+                results.Add(result);
+            }
+            else
+            {
+                staleKeys.Add(key);
+            }
+        }
+
+        // Clean up stale weak references from the index if any were found.
+        if (staleKeys.Any())
+        {
+            logger.LogDebug("Cleaning up {count} stale references from history index.", staleKeys.Count);
+            foreach (var staleKey in staleKeys)
+            {
+                resultIndex.TryRemove(staleKey, out _);
+            }
+        }
+
+        return results.OrderByDescending(r => r.Timestamp);
+    }
+
+    public void Clear()
+    {
+        ThrowIfDisposed();
+        
+        var keysToRemove = resultIndex.Keys.ToArray();
+        resultIndex.Clear();
+        
+        // Remove all known keys from the memory cache.
+        foreach (var key in keysToRemove)
+        {
+            memoryCache.Remove(key);
+        }
+        
+        Statistics.Reset();
+        logger.LogInformation("Cache cleared successfully. {count} items removed.", keysToRemove.Length);
+    }
+
+    private static string GenerateCacheKey(string originalText, string sourceLanguage, string targetLanguage)
+    {
+        var keyComponents = $"{originalText.Trim()}|{sourceLanguage.ToLowerInvariant()}|{targetLanguage.ToLowerInvariant()}";
+        var keyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyComponents));
+        return Convert.ToBase64String(keyBytes);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+    }
+
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+        
+        resultIndex.Clear();
+        memoryCache.Dispose(); // The DI container owns the cache, but disposing is safe.
+        logger.LogInformation("CacheService disposed.");
+        GC.SuppressFinalize(this);
+    }
+}
+
+/// <summary>
+/// Configuration options for the cache service.
 /// </summary>
 public class CacheOptions
 {
@@ -35,147 +190,42 @@ public class CacheOptions
 }
 
 /// <summary>
-/// A thread-safe class for tracking cache performance statistics.
+/// Thread-safe cache performance statistics tracker with fully atomic operations.
 /// </summary>
 public class CacheStatistics
 {
     private long hitCount;
     private long missCount;
 
-    public long HitCount => hitCount;
-    public long MissCount => missCount;
+    /// <summary>
+    /// Gets the number of cache hits using atomic read operation.
+    /// </summary>
+    public long HitCount => Interlocked.Read(ref hitCount);
+    
+    /// <summary>
+    /// Gets the number of cache misses using atomic read operation.
+    /// </summary>
+    public long MissCount => Interlocked.Read(ref missCount);
+    
+    /// <summary>
+    /// Gets the total number of cache requests (hits plus misses).
+    /// </summary>
     public long TotalRequests => HitCount + MissCount;
-    public double HitRatio => TotalRequests > 0 ? (double)HitCount / TotalRequests : 0;
+    
+    /// <summary>
+    /// Gets the cache hit ratio as a value between 0.0 and 1.0.
+    /// </summary>
+    public double HitRatio => TotalRequests > 0 ? (double)HitCount / TotalRequests : 0.0;
 
     internal void IncrementHit() => Interlocked.Increment(ref hitCount);
     internal void IncrementMiss() => Interlocked.Increment(ref missCount);
 
     /// <summary>
-    /// Resets all statistics counters to zero.
+    /// Resets all statistics counters to zero using atomic operations.
     /// </summary>
     public void Reset()
     {
         Interlocked.Exchange(ref hitCount, 0);
         Interlocked.Exchange(ref missCount, 0);
-    }
-}
-
-/// <summary>
-/// A thread-safe, high-performance translation cache service built upon <see cref="IMemoryCache"/>.
-/// </summary>
-/// <remarks>
-/// This service uses a hybrid approach:
-/// 1.  <see cref="IMemoryCache"/>: Stores the actual <see cref="TranslationResult"/> objects, handling automatic expiration and size limiting.
-/// 2.  <see cref="ConcurrentDictionary{TKey, TValue}"/>: Stores only the cache keys. This provides a highly efficient way to list all current keys for features like a history view, a capability that <see cref="IMemoryCache"/> lacks.
-/// A PostEvictionCallback ensures that when an item is removed from <see cref="IMemoryCache"/>, its key is also removed from the dictionary, keeping them synchronized.
-/// </remarks>
-public class CacheService : ICacheService, IDisposable
-{
-    private readonly IMemoryCache memoryCache;
-    private readonly ConcurrentDictionary<string, bool> cacheKeys = new();
-    private readonly CacheOptions options;
-    public CacheStatistics Statistics { get; } = new();
-    
-    public CacheService(CacheOptions? cacheOptions = null, IMemoryCache? memoryCache = null)
-    {
-        options = cacheOptions ?? new CacheOptions();
-        this.memoryCache = memoryCache ?? new MemoryCache(new MemoryCacheOptions
-        {
-            SizeLimit = options.MaxCacheSize
-        });
-    }
-    
-    /// <inheritdoc />
-    public bool TryGet(string originalText, string sourceLanguage, string targetLanguage, out TranslationResult? result)
-    {
-        var key = GetCacheKey(originalText, sourceLanguage, targetLanguage);
-        if (memoryCache.TryGetValue(key, out result) && result != null)
-        {
-            Statistics.IncrementHit();
-            result.FromCache = true;
-            return true;
-        }
-
-        Statistics.IncrementMiss();
-        result = null;
-        return false;
-    }
-    
-    /// <inheritdoc />
-    public void Set(TranslationResult translationResult)
-    {
-        var key = GetCacheKey(translationResult.OriginalText, translationResult.SourceLanguage, translationResult.TargetLanguage);
-        var entryOptions = new MemoryCacheEntryOptions
-        {
-            SlidingExpiration = options.DefaultSlidingExpiration,
-            AbsoluteExpirationRelativeToNow = options.DefaultAbsoluteExpiration,
-            Size = 1, // Assume each entry has a size of 1 for size limiting purposes.
-            Priority = CacheItemPriority.Normal
-        };
-        
-        entryOptions.RegisterPostEvictionCallback((cacheKey, _, _, state) =>
-        {
-            ((ConcurrentDictionary<string, bool>)state!).TryRemove(cacheKey.ToString()!, out _);
-        }, cacheKeys);
-
-        memoryCache.Set(key, translationResult, entryOptions);
-        cacheKeys.TryAdd(key, true);
-    }
-
-    /// <inheritdoc />
-    public IEnumerable<TranslationResult> GetHistory()
-    {
-        // Iterate through the key dictionary for performance, as listing IMemoryCache is not supported.
-        foreach (var key in cacheKeys.Keys)
-        {
-            if (memoryCache.TryGetValue(key, out TranslationResult? result) && result != null)
-            {
-                yield return result;
-            }
-        }
-    }
-    
-    /// <summary>
-    /// Generates a consistent, unique cache key for a given translation request.
-    /// </summary>
-    private static string GetCacheKey(string originalText, string sourceLanguage, string targetLanguage)
-    {
-        // The key is a SHA256 hash to ensure a uniform, fixed-length key, avoiding issues with very long text.
-        var keyComponents = $"{originalText}|{sourceLanguage.ToLower()}|{targetLanguage.ToLower()}";
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyComponents));
-        return Convert.ToBase64String(bytes);
-    }
-
-    /// <summary>
-    /// Asynchronously pre-loads the cache with a collection of translation results.
-    /// This is useful for restoring a persistent cache from a file on plugin startup.
-    /// </summary>
-    /// <param name="preloadData">An enumerable collection of <see cref="TranslationResult"/> objects to load into the cache.</param>
-    public Task WarmUpAsync(IEnumerable<TranslationResult> preloadData)
-    {
-        return Task.Run(() =>
-        {
-            foreach (var result in preloadData)
-            {
-                Set(result);
-            }
-        });
-    }
-    
-    /// <inheritdoc />
-    public void Clear()
-    {
-        // Clear the key tracker first. The eviction callbacks from Compact will be no-ops.
-        cacheKeys.Clear();
-        // Request a 100% compaction, which will remove all entries from the memory cache.
-        (memoryCache as MemoryCache)?.Compact(1.0);
-        Statistics.Reset();
-    }
-    
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        memoryCache.Dispose();
-        GC.SuppressFinalize(this);
     }
 }

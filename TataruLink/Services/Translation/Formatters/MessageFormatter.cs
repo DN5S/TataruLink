@@ -2,8 +2,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
@@ -12,92 +14,109 @@ using TataruLink.Utilities;
 namespace TataruLink.Services.Translation.Formatters;
 
 /// <summary>
-/// Implements <see cref="IMessageFormatter"/> to construct a final, displayable <see cref="SeString"/> from a <see cref="TranslationResult"/>.
+/// Implements IMessageFormatter to construct a final, displayable SeString from a TranslationResult.
 /// </summary>
-public class MessageFormatter(DisplayConfig displayConfig) : IMessageFormatter
+public class MessageFormatter(DisplayConfig displayConfig, ILogger<MessageFormatter> logger) : IMessageFormatter
 {
-    /// <inheritdoc />
+    private static readonly Dictionary<string, Func<TranslationResult, string>> PlaceholderResolvers = new()
+    {
+        ["{sender}"] = r => r.Sender,
+        ["{original}"] = r => r.OriginalText,
+        ["{engine}"] = r => r.EngineUsed.ToString(),
+        ["{time}"] = r => $"{r.TimeTakenMs}ms",
+        ["{charCount}"] = r => r.CharacterCount.ToString(),
+        ["{detectedLang}"] = r => r.DetectedSourceLanguage ?? "N/A",
+        ["{fromCache}"] = r => r.FromCache ? "(Cached)" : string.Empty,
+        ["{chatType}"] = r => ChatTypeUtilities.GetDisplayName(r.ChatType),
+        ["{sourceLang}"] = r => r.SourceLanguage,
+        ["{targetLang}"] = r => r.TargetLanguage
+    };
+
     public SeString FormatMessage(TranslationResult translationResult, IReadOnlyList<Payload?> payloadTemplate, string[] translatedSegments)
     {
+        ArgumentNullException.ThrowIfNull(translationResult);
+        ArgumentNullException.ThrowIfNull(payloadTemplate);
+        ArgumentNullException.ThrowIfNull(translatedSegments);
+
         var format = displayConfig.TranslationFormat;
         var builder = new SeStringBuilder();
-
         const string placeholder = "{translated}";
         var placeholderIndex = format.IndexOf(placeholder, StringComparison.Ordinal);
 
-        // This is the critical logic for re-assembling the SeString.
-        // It handles cases where the user wants decorations before and after the translated content.
         if (placeholderIndex == -1)
         {
-            // If the user's format string is missing the mandatory {translated} placeholder,
-            // we append the raw formatted string with an error message to avoid losing the translation.
-            var fullText = FormatPlaceholders(format, translationResult, "ERROR: Missing {translated} placeholder");
-            builder.AddText(fullText);
+            logger.LogWarning("Missing '{{translated}}' placeholder in format string: '{format}'. Using fallback.", format);
+            const string errorMessage = $"[TataruLink ERROR] Missing '{{translated}}' in format.";
+            const string fallbackFormat = $"[T] {{translated}} ({{engine}})";
+            var fullText = FormatPlaceholders(fallbackFormat, translationResult, translatedSegments);
+            builder.AddText(errorMessage).AddText(" ").AddText(fullText);
+            return builder.Build();
         }
-        else
+        
+        // 1. Add a prefix part (before {translated})
+        var prefix = format[..placeholderIndex];
+        if (!string.IsNullOrEmpty(prefix))
         {
-            // 1. Add the prefix part of the format string (e.g., "[T] ").
-            var prefix = format[..placeholderIndex];
-            if (!string.IsNullOrEmpty(prefix))
-                builder.AddText(FormatPlaceholders(prefix, translationResult));
+            builder.AddText(FormatPlaceholders(prefix, translationResult, null));
+        }
 
-            // 2. Reconstruct the core message by iterating through the original payload template.
-            // This preserves all original non-text payloads like player names, items, and icons.
-            var segmentIndex = 0;
-            foreach (var payload in payloadTemplate)
+        // 2. Reconstruct the core message by inserting translated segments into the payload template.
+        var segmentIndex = 0;
+        foreach (var payload in payloadTemplate)
+        {
+            if (payload == null) // This is a placeholder for a text segment.
             {
-                if (payload == null)
+                if (segmentIndex < translatedSegments.Length)
                 {
-                    // A null in the template is a placeholder for a text segment we translated.
-                    // We insert the corresponding translated segment here.
-                    if (segmentIndex < translatedSegments.Length)
+                    var segment = translatedSegments[segmentIndex];
+                    if (!string.IsNullOrEmpty(segment))
                     {
-                        builder.AddText(translatedSegments[segmentIndex++]);
+                        builder.AddText(segment);
                     }
-                }
-                else
-                {
-                    // If the payload is not null, it's a non-text payload that should be preserved as-is.
-                    builder.Add(payload);
+                    segmentIndex++;
                 }
             }
+            else
+            {
+                // Preserve non-text payloads (icons, items, etc.).
+                builder.Add(payload);
+            }
+        }
 
-            // 3. Add the suffix part of the format string (e.g., " ({engine})").
-            var suffix = format[(placeholderIndex + placeholder.Length)..];
-            if (!string.IsNullOrEmpty(suffix))
-                builder.AddText(FormatPlaceholders(suffix, translationResult));
+        // 3. Add suffix part (after {translated})
+        var suffix = format[(placeholderIndex + placeholder.Length)..];
+        if (!string.IsNullOrEmpty(suffix))
+        {
+            builder.AddText(FormatPlaceholders(suffix, translationResult, null));
         }
 
         return builder.Build();
     }
-
-    /// <summary>
-    /// Efficiently replaces all placeholders in a given format string with values from a <see cref="TranslationResult"/>.
-    /// </summary>
-    /// <remarks>
-    /// This method uses <see cref="StringBuilder"/> instead of chained <c>string.Replace()</c> calls.
-    /// This is a critical performance optimization that avoids creating numerous intermediate string objects,
-    /// significantly reducing memory allocation and GC pressure.
-    /// </remarks>
-    private static string FormatPlaceholders(string format, TranslationResult translationResult, string translatedReplacement = "")
+    
+    private static string FormatPlaceholders(string format, TranslationResult translationResult, string[]? fallbackTranslation)
     {
-        var sb = new StringBuilder(format);
+        if (string.IsNullOrEmpty(format)) return string.Empty;
 
-        sb.Replace("{sender}", translationResult.Sender);
-        sb.Replace("{original}", translationResult.OriginalText);
-        sb.Replace("{engine}", translationResult.EngineUsed.ToString());
-        sb.Replace("{time}", $"{translationResult.TimeTakenMs}ms");
-        sb.Replace("{charCount}", translationResult.CharacterCount.ToString());
-        sb.Replace("{detectedLang}", translationResult.DetectedSourceLanguage ?? "N/A");
-        sb.Replace("{fromCache}", translationResult.FromCache ? "(Cached)" : string.Empty);
-        sb.Replace("{chatType}", ChatTypeUtilities.GetDisplayName(translationResult.ChatType));
-        sb.Replace("{sourceLang}", translationResult.SourceLanguage);
-        sb.Replace("{targetLang}", translationResult.TargetLanguage);
-
-        // This is used for the special case where the main {translated} placeholder is missing.
-        if (!string.IsNullOrEmpty(translatedReplacement))
+        // Efficiently check if any replacement is needed at all.
+        var needsReplacement = fallbackTranslation != null && format.Contains("{translated}", StringComparison.Ordinal);
+        if (!needsReplacement)
         {
-            sb.Replace("{translated}", translatedReplacement);
+            needsReplacement = PlaceholderResolvers.Keys.Any(p => format.Contains(p, StringComparison.Ordinal));
+        }
+
+        if (!needsReplacement) return format;
+
+        var sb = new StringBuilder(format, format.Length * 2);
+
+        foreach (var (placeholder, resolver) in PlaceholderResolvers)
+        {
+            sb.Replace(placeholder, resolver(translationResult));
+        }
+
+        // Handle the {translated} placeholder for fallback scenarios.
+        if (fallbackTranslation != null)
+        {
+            sb.Replace("{translated}", string.Join(" ", fallbackTranslation));
         }
 
         return sb.ToString();

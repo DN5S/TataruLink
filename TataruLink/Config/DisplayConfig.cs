@@ -38,4 +38,9 @@ public class DisplayConfig
     /// Gets or sets the mode determining the output location for translated messages.
     /// </summary>
     public TranslationDisplayMode DisplayMode { get; set; } = TranslationDisplayMode.InGameChat;
+    
+    /// <summary>
+    /// Gets or sets a value indicating whether to show translation status in the server status bar (DTR bar).
+    /// </summary>
+    public bool ShowInServerStatusBar { get; set; } = true;
 }

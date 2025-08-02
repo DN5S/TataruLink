@@ -1,45 +1,59 @@
-﻿// File: TataruLink/Services/Providers/ServiceProvider.cs
+﻿// File: TataruLink/Services/Providers/ServiceHandler.cs
 
+using System;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Dalamud.Extensions.MicrosoftLogging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Core;
 using TataruLink.Interfaces.Core;
 using TataruLink.Interfaces.Filtering;
 using TataruLink.Interfaces.Services;
+using TataruLink.Interfaces.UI;
 using TataruLink.Services.Core;
 using TataruLink.Services.Filtering;
-using TataruLink.Services.Translation.Engines;
 using TataruLink.Services.Translation.Formatters;
+using TataruLink.UI.Panels;
 using TataruLink.UI.Windows;
 
 namespace TataruLink.Services.Providers;
 
 /// <summary>
-/// A static class responsible for configuring the dependency injection (DI) container.
-/// This acts as the Composition Root for the entire application, wiring up all services and dependencies.
+/// A static class that configures the dependency injection (DI) container.
+/// This acts as the Composition Root for the application.
 /// </summary>
-public static class ServiceProvider
+public static class ServiceHandler
 {
     /// <summary>
     /// Configures and builds the service provider with all necessary application services.
     /// </summary>
-    /// <returns>A configured <see cref="Microsoft.Extensions.DependencyInjection.ServiceProvider"/> instance.</returns>
-    public static Microsoft.Extensions.DependencyInjection.ServiceProvider ConfigureServices(
-        IDalamudPluginInterface pluginInterface, Dalamud.Plugin.Services.ICommandManager commandManager, IPluginLog log,
-        IChatGui chatGui, IClientState clientState, IFramework framework)
+    public static ServiceProvider ConfigureServices(
+        IDalamudPluginInterface pluginInterface, ICommandManager commandManager, IPluginLog logger,
+        IChatGui chatGui, IClientState clientState, IFramework framework, IDtrBar dtrBar)
     {
         var services = new ServiceCollection();
         
-        // Configuration is loaded first as many other services depend on it.
-        var configService = new ConfigService(pluginInterface);
-        var tataruConfig = configService.Config;
-
-        RegisterDalamudServices(services, pluginInterface, commandManager, log, chatGui, clientState, framework);
+        // Configuration must be loaded first.
+        var configService = new ConfigService(pluginInterface, logger);
+        var tataruConfig = configService.Config;    
+        
+        services.AddSingleton(logger);
+        services.AddLogging(builder =>
+        {
+            builder.AddDalamudLogger(logger);
+#if DEBUG
+            builder.SetMinimumLevel(LogLevel.Trace);
+#else
+            builder.SetMinimumLevel(LogLevel.Information);
+#endif
+        });
+        
+        RegisterDalamudServices(services, pluginInterface, commandManager, logger, chatGui, clientState, framework, dtrBar);
         RegisterConfigurationServices(services, configService, tataruConfig);
-        RegisterCoreServices(services);
+        RegisterCoreServices(services, tataruConfig);
         RegisterChatFilters(services);
         RegisterManagers(services);
         RegisterWindows(services);
@@ -51,7 +65,7 @@ public static class ServiceProvider
     /// Registers core services provided by the Dalamud framework.
     /// </summary>
     private static void RegisterDalamudServices(IServiceCollection services, IDalamudPluginInterface pluginInterface,
-        Dalamud.Plugin.Services.ICommandManager commandManager, IPluginLog log, IChatGui chatGui, IClientState clientState, IFramework framework)
+        ICommandManager commandManager, IPluginLog log, IChatGui chatGui, IClientState clientState, IFramework framework, IDtrBar dtrBar)
     {
         services.AddSingleton(pluginInterface);
         services.AddSingleton(commandManager);
@@ -59,6 +73,7 @@ public static class ServiceProvider
         services.AddSingleton(chatGui);
         services.AddSingleton(clientState);
         services.AddSingleton(framework);
+        services.AddSingleton(dtrBar);
     }
 
     /// <summary>
@@ -69,33 +84,43 @@ public static class ServiceProvider
         // Register the main service for saving/loading.
         services.AddSingleton(configService);
         
-        // Register each configuration section as a singleton. This allows other services
-        // to depend directly on specific settings (e.g., TranslationConfig) without needing
-        // to couple themselves to the entire IConfigService.
+        // Register each configuration section as a singleton.
+        // This allows services to depend on specific settings (e.g., TranslationConfig)
+        // without coupling to the entire IConfigService.
         services.AddSingleton(tataruConfig.ApiConfig);
         services.AddSingleton(tataruConfig.TranslationSettings);
         services.AddSingleton(tataruConfig.DisplaySettings);
     }
 
     /// <summary>
-    /// Registers the core application services.
+    /// Registers the core application logic services.
     /// </summary>
-    private static void RegisterCoreServices(IServiceCollection services)
+    private static void RegisterCoreServices(IServiceCollection services, TataruConfig tataruConfig)
     {
+        services.AddMemoryCache(options => {
+            options.SizeLimit = tataruConfig.CacheSettings.MaxCacheSize;
+        });
+        services.Configure<CacheOptions>(options =>
+        {
+            options.MaxCacheSize = tataruConfig.CacheSettings.MaxCacheSize;
+            options.DefaultSlidingExpiration = TimeSpan.FromMinutes(tataruConfig.CacheSettings.SlidingExpirationMinutes);
+            options.DefaultAbsoluteExpiration = TimeSpan.FromHours(tataruConfig.CacheSettings.AbsoluteExpirationHours);
+        });
+        
         services.AddSingleton<ICacheService, CacheService>();
         services.AddSingleton<IMessageFormatter, MessageFormatter>();
         services.AddSingleton<ITranslationEngineFactory, TranslationEngineFactory>();
         services.AddSingleton<ITranslationService, TranslationService>();
         services.AddSingleton<IMessageService, MessageService>();
+        services.AddSingleton<IOutgoingTranslationService, OutgoingTranslationService>();
+        services.AddSingleton<IDtrBarManager, DtrBarManager>();
+        services.AddSingleton<IGlossaryManager, GlossaryManager>();
+        services.AddSingleton<IGlossaryIOService, GlossaryIOService>();
     }
     
     /// <summary>
-    /// Registers all message filter implementations.
+    /// Registers all message filter implementations. The MessageService will receive all of them.
     /// </summary>
-    /// <remarks>
-    /// The <see cref="MessageService"/> will receive an IEnumerable IMessageFilter; containing all registered filters,
-    /// allowing for easy expansion by simply adding new implementations here.
-    /// </remarks>
     private static void RegisterChatFilters(IServiceCollection services)
     {
         services.AddSingleton<IMessageFilter, TranslationStatusFilter>();
@@ -105,27 +130,30 @@ public static class ServiceProvider
     }
 
     /// <summary>
-    /// Registers high-level managers for core functionalities.
+    /// Registers high-level managers.
     /// </summary>
     private static void RegisterManagers(IServiceCollection services)
     {
         services.AddSingleton<IChatHookManager, ChatHookManager>();
-        services.AddSingleton<Interfaces.Core.ICommandManager, CommandManager>();
     }
 
     /// <summary>
-    /// Registers all UI windows and the main WindowSystem that manages them.
+    /// Registers all UI windows and the WindowSystem that manages them.
     /// </summary>
     private static void RegisterWindows(IServiceCollection services)
     {
+        // --- Register Panels as individual services ---
+        services.AddSingleton<ISettingsPanel, GeneralPanel>();
+        services.AddSingleton<ISettingsPanel, ChatTypesPanel>();
+        services.AddSingleton<ISettingsPanel, GlossaryPanel>();
+        
         // Register each window class as a singleton.
+        // The DI container will automatically resolve their dependencies.
         services.AddSingleton<MainWindow>();
         services.AddSingleton<SettingsWindow>();
         services.AddSingleton<TranslationOverlayWindow>();
         
-        // Register the WindowSystem using a factory delegate.
-        // This is necessary because the WindowSystem needs to be constructed with references
-        // to the window instances that have just been registered in the same DI container.
+        // Register the WindowSystem using a factory delegate, as it requires complex setup.
         services.AddSingleton(provider =>
         {
             var windowSystem = new WindowSystem("TataruLink");

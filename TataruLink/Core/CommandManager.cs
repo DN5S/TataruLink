@@ -1,78 +1,169 @@
-﻿// File: TataruLink/Core/CommandManager.cs
-
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
 using Dalamud.Game.Command;
-using Dalamud.Game.Text;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
-using TataruLink.Interfaces.Services;
-using TataruLink.UI.Windows;
-using Core_ICommandManager = TataruLink.Interfaces.Core.ICommandManager;
+using Microsoft.Extensions.Logging;
+using TataruLink.Attributes;
 
 namespace TataruLink.Core;
 
 /// <summary>
-/// Manages the registration and handling of all slash commands for the plugin.
+/// Automatically discovers and registers command methods marked with [Command] attributes
+/// using a declarative, reflection-based approach.
 /// </summary>
 public class CommandManager(
-    ICommandManager commandManager,
-    IChatGui chatGui,
-    IMessageService messageService,
-    MainWindow mainWindow,
-    SettingsWindow settingsWindow,
-    TranslationOverlayWindow translationOverlayWindow)
-    : Core_ICommandManager
+    ICommandManager dalamudCommandManager,
+    object commandHost,
+    ILogger<CommandManager> logger)
+    : IDisposable
 {
-    private const string CommandName = "/tatarulink";
-    private const string OverlayCommandName = "/tataruoverlay";
-    private const string ConfigCommandName = "/tataruconfig";
-    private const string TestCommandName = "/tatarutest";
+    private readonly Dictionary<string, MethodInfo> registeredCommands = new();
+    private readonly Lock lockObject = new();
+    private bool isInitialized;
+    private bool isDisposed;
 
-    /// <inheritdoc />
+    public int RegisteredCommandCount => registeredCommands.Count;
+    public IReadOnlyCollection<string> RegisteredCommandNames => registeredCommands.Keys;
+
     public void Initialize()
     {
-        commandManager.AddHandler(CommandName, new CommandInfo((_, _) => mainWindow.Toggle())
+        lock (lockObject)
         {
-            HelpMessage = "Opens the main window, showing translation history and statistics."
-        });
-        commandManager.AddHandler(OverlayCommandName, new CommandInfo((_, _) => translationOverlayWindow.Toggle())
-        {
-            HelpMessage = "Toggles the real-time translation overlay window."
-        });
-        commandManager.AddHandler(ConfigCommandName, new CommandInfo((_, _) => settingsWindow.Toggle())
-        {
-            HelpMessage = "Opens the settings window to configure TataruLink."
-        });
-        commandManager.AddHandler(TestCommandName, new CommandInfo(OnTestCommand)
-        {
-            HelpMessage = "Sends a test message for translation. Usage: /tatarutest <text>"
-        });
+            if (isInitialized)
+            {
+                logger.LogWarning("CommandManager is already initialized. Skipping.");
+                return;
+            }
+            if (isDisposed) throw new ObjectDisposedException(nameof(CommandManager));
+
+            try
+            {
+                logger.LogInformation("Initializing CommandManager...");
+                var commandMethods = DiscoverCommandMethods();
+                var successCount = 0;
+
+                foreach (var method in commandMethods)
+                {
+                    try
+                    {
+                        RegisterCommandMethod(method);
+                        successCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to register command method: {methodName}", method.Name);
+                    }
+                }
+
+                isInitialized = true;
+                logger.LogInformation("CommandManager initialized. Registered {successCount}/{total} commands.", successCount, commandMethods.Length);
+            }
+            catch (Exception ex)
+            {
+                logger.LogCritical(ex, "A critical error occurred during CommandManager initialization.");
+                CleanupRegisteredCommands(); // Attempt to clean up any partial registrations.
+                throw;
+            }
+        }
     }
 
-    /// <summary>
-    /// Handles the test command execution.
-    /// </summary>
-    /// <param name="command">The command used.</param>
-    /// <param name="args">The arguments provided with the command.</param>
-    private void OnTestCommand(string command, string args)
+    private MethodInfo[] DiscoverCommandMethods()
     {
-        if (string.IsNullOrWhiteSpace(args))
+        var hostType = commandHost.GetType();
+        var methods = hostType
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.NonPublic)
+            .Where(m => m.GetCustomAttribute<CommandAttribute>() != null)
+            .ToArray();
+
+        logger.LogDebug("Discovered {count} methods with [Command] attribute in {typeName}.", methods.Length, hostType.Name);
+        return methods;
+    }
+
+    private void RegisterCommandMethod(MethodInfo method)
+    {
+        var commandAttr = method.GetCustomAttribute<CommandAttribute>()!;
+        var helpAttr = method.GetCustomAttribute<HelpMessageAttribute>();
+        var commandName = commandAttr.Command;
+
+        if (registeredCommands.ContainsKey(commandName))
         {
-            chatGui.Print("Usage: /tatarutest <text to translate>");
-            return;
+            throw new InvalidOperationException($"Command '{commandName}' is already registered.");
         }
 
-        var testSender = new SeStringBuilder().AddText("Test").Build();
-        var testMessage = new SeStringBuilder().AddText(args).Build();
-        messageService.EnqueueMessage(XivChatType.Echo, testSender, testMessage);
-        chatGui.Print($"Test message enqueued: \"{args}\"");
+        ValidateCommandMethodSignature(method);
+
+        var commandInfo = new CommandInfo(CreateCommandHandler(method, commandName))
+        {
+            HelpMessage = helpAttr?.HelpMessage ?? string.Empty,
+            ShowInHelp = !string.IsNullOrEmpty(helpAttr?.HelpMessage)
+        };
+
+        dalamudCommandManager.AddHandler(commandName, commandInfo);
+        registeredCommands[commandName] = method;
+        logger.LogDebug("Successfully registered command: {commandName} -> {methodName}", commandName, method.Name);
     }
 
-    /// <inheritdoc />
+    private static void ValidateCommandMethodSignature(MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        if (parameters.Length != 2 || parameters[0].ParameterType != typeof(string) || parameters[1].ParameterType != typeof(string))
+        {
+            throw new InvalidOperationException($"Command method '{method.Name}' must have the signature: void MethodName(string command, string args).");
+        }
+        if (method.ReturnType != typeof(void))
+        {
+            throw new InvalidOperationException($"Command method '{method.Name}' must return void.");
+        }
+    }
+
+    // FIXED: Changed return type from Action<string, string> to the explicit delegate type.
+    private IReadOnlyCommandInfo.HandlerDelegate CreateCommandHandler(MethodInfo method, string commandName)
+    {
+        return (cmd, args) =>
+        {
+            try
+            {
+                method.Invoke(commandHost, [cmd, args]);
+            }
+            catch (TargetInvocationException tie) when (tie.InnerException != null)
+            {
+                logger.LogError(tie.InnerException, "An exception occurred while executing command '{commandName}'.", commandName);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An unexpected error occurred in the command handler for '{commandName}'.", commandName);
+            }
+        };
+    }
+
+    private void CleanupRegisteredCommands()
+    {
+        logger.LogInformation("Cleaning up {count} registered commands.", registeredCommands.Count);
+        foreach (var commandName in registeredCommands.Keys.ToArray())
+        {
+            try
+            {
+                dalamudCommandManager.RemoveHandler(commandName);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Error removing command during cleanup: {commandName}", commandName);
+            }
+        }
+        registeredCommands.Clear();
+    }
+
     public void Dispose()
     {
-        commandManager.RemoveHandler(CommandName);
-        commandManager.RemoveHandler(OverlayCommandName);
-        commandManager.RemoveHandler(ConfigCommandName);
-        commandManager.RemoveHandler(TestCommandName);
+        lock (lockObject)
+        {
+            if (isDisposed) return;
+            isDisposed = true;
+            CleanupRegisteredCommands();
+            logger.LogInformation("CommandManager disposed.");
+        }
     }
 }

@@ -3,11 +3,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
-using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Dalamud.Plugin.Services;
+using Microsoft.Extensions.Logging;
 using TataruLink.Config;
 using TataruLink.Interfaces.Services;
 using TataruLink.Models;
@@ -15,214 +16,245 @@ using TataruLink.Models;
 namespace TataruLink.Services.Core;
 
 /// <summary>
-/// Implements <see cref="ITranslationService"/> to orchestrate the entire translation pipeline.
-/// It coordinates caching, execution via different translation engines, and final message formatting.
+/// Implements ITranslationService to orchestrate the entire translation pipeline.
 /// </summary>
-public class TranslationService : ITranslationService
+public partial class TranslationService : ITranslationService
 {
-    private readonly IPluginLog log;
+    private readonly ILogger<TranslationService> logger;
     private readonly TranslationConfig translationConfig;
     private readonly ICacheService cacheService;
     private readonly IMessageFormatter formatter;
     private readonly ITranslationEngineFactory engineFactory;
+    private readonly IGlossaryManager glossaryManager;
 
-    // A unique, non-standard separator to join and split text segments.
-    // This is designed to be unlikely to appear in normal chat and to be preserved by translation engines.
-    // Only use structured translation with DeepL
-    private const string StructureSeparator = "⒯";
+    private const string XmlTag = "t";
+    private static readonly Regex XmlTagRegex = StructureSeparator();
 
     public TranslationService(
-        IPluginLog log,
+        ILogger<TranslationService> logger,
         TranslationConfig translationConfig,
         ICacheService cacheService,
         IMessageFormatter formatter,
-        ITranslationEngineFactory engineFactory)
+        ITranslationEngineFactory engineFactory,
+        IGlossaryManager glossaryManager)
     {
-        this.log = log;
+        this.logger = logger;
         this.translationConfig = translationConfig;
         this.cacheService = cacheService;
         this.formatter = formatter;
         this.engineFactory = engineFactory;
-        this.log.Info("TranslationService initialized with Dynamic Engine Factory.");
+        this.glossaryManager = glossaryManager;
+        this.logger.LogInformation("TranslationService initialized.");
     }
 
     /// <inheritdoc />
     public async Task<SeString?> ProcessTranslationRequestAsync(
-        IReadOnlyList<string> textsToTranslate,
-        IReadOnlyList<Payload?> payloadTemplate,
+        IReadOnlyList<string> textSegments,
+        IReadOnlyList<Payload?> messageTemplate,
         string sender,
-        XivChatType chatType)
+        XivChatType chatType,
+        CancellationToken cancellationToken = default)
     {
-        // Dynamically select the engine based on the chat type mapping.
-        if (!translationConfig.ChatTypeEngineMap.TryGetValue(chatType, out var engineForThisChatType))
+        // 1. Select Engine
+        if (!translationConfig.ChatTypeEngineMap.TryGetValue(chatType, out var selectedEngineType))
         {
-            log.Debug($"Translation skipped for chat type {chatType} as no engine is mapped.");
+            logger.LogDebug("Translation skipped for chat type {chatType}: no engine mapped.", chatType);
+            return null;
+        }
+
+        var engine = engineFactory.GetEngine(selectedEngineType);
+        if (engine == null)
+        {
+            logger.LogWarning("Translation engine '{engine}' is not available (e.g., missing API key).", selectedEngineType);
             return null;
         }
         
-        // Join all text segments into a single string for a single API call.
-        // Use structured translation only for DeepL, simple concatenation for others
-        var separator = engineForThisChatType != TranslationEngine.Google ? StructureSeparator : " ";
-        var combinedText = string.Join(separator, textsToTranslate);
-    
-        string sourceLang;
-        // LLM engines do not reliably support 'auto' detection.
-        // We will always provide them with the user-configured 'FromLanguage' as a hint.
-        if (engineForThisChatType is TranslationEngine.Gemini or TranslationEngine.Ollama)
+        logger.LogDebug("Selected engine {engine} for chat type {chatType}.", engine.EngineType, chatType);
+
+        // 2. Prepare Data
+        var (fullText, sourceLang, targetLang) = PrepareRequestData(textSegments, engine);
+        if (string.IsNullOrWhiteSpace(fullText))
         {
-            sourceLang = translationConfig.FromLanguage;
-            log.Debug($"LLM engine ({engineForThisChatType}) detected. Using explicit source language: {sourceLang}");
+             logger.LogDebug("Translation skipped: text was empty after processing glossary.");
+             return null;
+        }
+
+        // 3. Translate
+        var translationResult = await GetTranslationWithCacheAndFallbackAsync(fullText, sourceLang, targetLang, engine, cancellationToken);
+        if (translationResult == null)
+        {
+            logger.LogWarning("All translation attempts failed for text: \"{text}\"", fullText);
+            return null;
+        }
+
+        // 4. Enrich and Cache Result
+        var finalResult = EnrichTranslationResult(translationResult, fullText, sender, chatType, sourceLang, targetLang);
+        if (!finalResult.FromCache && translationConfig.UseCache)
+        {
+            logger.LogDebug("Storing new translation in cache. Key: {key}", finalResult.OriginalText);
+            cacheService.Set(finalResult);
+        }
+
+        // 5. Format Final Message
+        return FormatFinalMessage(finalResult, messageTemplate, textSegments.Count, engine);
+    }
+
+    private (string FullText, string SourceLang, string TargetLang) PrepareRequestData(IReadOnlyList<string> textSegments, ITranslationEngine engine)
+    {
+        var combinedText = CombineTextSegments(textSegments, engine);
+        var processedText = glossaryManager.Apply(combinedText);
+        
+        if (combinedText != processedText)
+            logger.LogDebug("Glossary applied. Original: \"{original}\", Processed: \"{processed}\"", combinedText, processedText);
+
+        string sourceLang;
+        var useExplicitSourceLang = engine.EngineType is TranslationEngine.Gemini or TranslationEngine.Ollama || glossaryManager.HasActiveEntries();
+
+        if (useExplicitSourceLang)
+        {
+            sourceLang = translationConfig.IncomingFromLanguage;
+            logger.LogDebug("LLM engine or active glossary detected. Using explicit source language: {sourceLang}", sourceLang);
         }
         else
         {
-            // Traditional engines can use the auto-detection feature.
-            sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.FromLanguage;
-        }
-        var targetLang = translationConfig.TranslateTo;
-
-        // Perform the core translation logic, including caching and fallbacks.
-        var translationResult = await TranslateAsync(combinedText, sourceLang, targetLang, engineForThisChatType);
-        if (translationResult == null) return null;
-
-        // The initial result from TranslateAsync is partial. We now enrich it with the full context.
-        var finalResult = new TranslationResult(
-            combinedText, translationResult.TranslatedText, sender, chatType,
-            translationResult.EngineUsed, translationResult.SourceLanguage, translationResult.DetectedSourceLanguage, targetLang
-        )
-        {
-            TimeTakenMs = translationResult.TimeTakenMs,
-            FromCache = translationResult.FromCache,
-            PromptTokens = translationResult.PromptTokens,
-            CompletionTokens = translationResult.CompletionTokens,
-            TotalTokens = translationResult.TotalTokens
-        };
-
-        // If the result did not come from the cache, add it now for future requests.
-        if (!finalResult.FromCache && translationConfig.UseCache)
-        {
-            cacheService.Set(finalResult);
-        }
-        
-        // Attempt to re-assemble the message structure for any engine that used the separator.
-        if (engineForThisChatType != TranslationEngine.Google)
-        {
-            var translatedSegments = finalResult.TranslatedText.Split([StructureSeparator], StringSplitOptions.None);
-
-            if (translatedSegments.Length == textsToTranslate.Count)
-            {
-                for (var i = 0; i < translatedSegments.Length; i++)
-                {
-                    translatedSegments[i] = translatedSegments[i].Trim();
-                }
-                return formatter.FormatMessage(finalResult, payloadTemplate, translatedSegments);
-            }
-
-            log.Warning($"[{finalResult.EngineUsed}] Structure preservation failed. Expected {textsToTranslate.Count} segments, but got {translatedSegments.Length}. Falling back to simple format.");
+            sourceLang = translationConfig.EnableLanguageDetection ? "auto" : translationConfig.IncomingFromLanguage;
         }
 
-        // Fallback for Google Translate or if structure preservation fails.
-        // This creates a simple, flat string from the translation.
-        var fallbackBuilder = new SeStringBuilder();
-        foreach (var payload in payloadTemplate.OfType<Payload>())
-        {
-            if (payload is not TextPayload && payload is not AutoTranslatePayload)
-            {
-                fallbackBuilder.Add(payload);
-            }
-        }
-        fallbackBuilder.AddText($" {finalResult.TranslatedText}");
-
-        var builtSeString = fallbackBuilder.Build();
-        return formatter.FormatMessage(finalResult, builtSeString.Payloads, [finalResult.TranslatedText]);
+        var targetLang = translationConfig.IncomingTranslateTo;
+        return (processedText, sourceLang, targetLang);
     }
 
-
-    /// <summary>
-    /// Handles the core translation logic, including cache checks, primary engine execution, and fallback attempts.
-    /// </summary>
-    private async Task<TranslationResult?> TranslateAsync(string text, string sourceLanguage, string targetLanguage, TranslationEngine primaryEngine)
+    private static string CombineTextSegments(IReadOnlyList<string> textSegments, ITranslationEngine engine)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        return engine.SupportsStructuredTranslation
+            ? string.Join(" ", textSegments.Select(s => $"<{XmlTag}>{s}</{XmlTag}>"))
+            : string.Join(" ", textSegments);
+    }
+    
+    private async Task<TranslationResult?> GetTranslationWithCacheAndFallbackAsync(string text, string sourceLanguage, string targetLanguage, ITranslationEngine primaryEngine, CancellationToken cancellationToken)
+    {
+        // Attempt to get from the cache first.
+        if (translationConfig.UseCache && cacheService.TryGet(text, sourceLanguage, targetLanguage, out var cachedResult))
         {
-            log.Debug("Skipping translation for empty or whitespace text.");
-            return null;
-        }
-
-        // 1. Attempt to retrieve from the cache first.
-        if (translationConfig.UseCache &&
-            cacheService.TryGet(text, sourceLanguage, targetLanguage, out var cachedResult))
-        {
-            log.Debug($"Cache hit for: \"{text}\" ({sourceLanguage} -> {targetLanguage})");
+            logger.LogDebug("Cache hit for: \"{text}\" ({sourceLang} -> {targetLang})", text, sourceLanguage, targetLanguage);
             return cachedResult;
         }
 
-        log.Debug($"Cache miss for: \"{text}\". Proceeding with API translation.");
-        
-        var result = await ExecuteTranslationAsync(primaryEngine, text, sourceLanguage, targetLanguage);
+        logger.LogDebug("Cache miss for: \"{text}\". Proceeding with API translation using {engine}.", text, primaryEngine.EngineType);
 
-        // 3. If primary fails and fallback is enabled, attempt with the fallback engine.
-        if (result == null && translationConfig.EnableFallback)
+        var result = await ExecuteTranslationAsync(primaryEngine, text, sourceLanguage, targetLanguage, cancellationToken);
+
+        // If it fails, the attempt fallback if enabled.
+        if (result != null || !translationConfig.EnableFallback) return result;
+        logger.LogWarning("Primary engine ({engine}) failed. Attempting fallback.", primaryEngine.EngineType);
+        var fallbackEngineType = translationConfig.FallbackEngine;
+
+        if (fallbackEngineType == primaryEngine.EngineType)
         {
-            // --- WARNING: FALLBACK LOGIC ---
-            // This mechanism engages a secondary engine if the primary one fails.
-            // The check `fallbackEngineType != primaryEngine` is a critical safeguard to prevent
-            // an immediate recursive call if the failing primary engine is also set as the fallback.
-            // However, this logic assumes the fallback engine itself is functional. If the fallback
-            // engine is also unavailable, the translation will fail completely, which is the intended behavior.
-            log.Warning($"Primary engine ({primaryEngine}) failed. Attempting fallback.");
-            var fallbackEngineType = translationConfig.FallbackEngine;
-
-            if (fallbackEngineType != primaryEngine)
+            logger.LogWarning("Fallback engine is the same as the primary. Skipping fallback attempt.");
+            return null;
+        }
+            
+        var fallbackEngine = engineFactory.GetEngine(fallbackEngineType);
+        if (fallbackEngine != null)
+        {
+            logger.LogInformation("Executing translation with fallback engine: {engine}", fallbackEngine.EngineType);
+            result = await ExecuteTranslationAsync(fallbackEngine, text, sourceLanguage, targetLanguage, cancellationToken);
+            if (result != null)
             {
-                result = await ExecuteTranslationAsync(fallbackEngineType, text, sourceLanguage, targetLanguage);
-                if (result != null)
-                {
-                    log.Info($"Fallback engine ({fallbackEngineType}) succeeded where primary failed.");
-                }
-            }
-            else
-            {
-                log.Warning("Fallback engine is the same as the primary. Skipping fallback attempt.");
+                logger.LogInformation("Fallback engine ({engine}) succeeded.", fallbackEngine.EngineType);
             }
         }
-
-        if (result == null)
+        else
         {
-            log.Warning($"All translation attempts failed for: \"{text}\"");
+            logger.LogWarning("Fallback engine '{engine}' is not available.", fallbackEngineType);
         }
 
         return result;
     }
 
-    /// <summary>
-    /// Executes translation using a specific engine implementation.
-    /// </summary>
-    private async Task<TranslationResult?> ExecuteTranslationAsync(TranslationEngine engineType, string text, string source, string target)
+    private async Task<TranslationResult?> ExecuteTranslationAsync(ITranslationEngine engine, string text, string source, string target, CancellationToken cancellationToken)
     {
-        var engine = engineFactory.GetEngine(engineType);
-        
-        if (engine == null)
-        {
-            log.Warning($"Translation engine '{engineType}' is not available (missing API key). Fallback logic will handle this.");
-            return null;
-        }
-
         try
         {
-            log.Debug($"Translating with {engineType} engine...");
-            var result = await engine.TranslateAsync(text, source, target);
+            logger.LogTrace("Executing {engine} translation for: \"{text}\"", engine.EngineType, text);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
 
+            var result = await engine.TranslateAsync(text, source, target, timeoutCts.Token);
+            
             if (result != null)
             {
-                log.Debug($"Translation successful with {engineType}: \"{text}\" -> \"{result.TranslatedText}\"");
+                logger.LogDebug("Translation successful with {engine}: \"{translatedText}\"", engine.EngineType, result.TranslatedText);
             }
-
+            else
+            {
+                logger.LogWarning("Translation engine {engine} returned a null result for text: \"{text}\"", engine.EngineType, text);
+            }
             return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("Translation was canceled by the system for {engine}.", engine.EngineType);
+            return null;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Translation timed out after 30 seconds for {engine}.", engine.EngineType);
+            return null;
         }
         catch (Exception ex)
         {
-            log.Error(ex, $"An unexpected error occurred while executing the {engineType} engine.");
+            logger.LogError(ex, "An unexpected error occurred while executing {engine} engine.", engine.EngineType);
             return null;
         }
     }
+
+    private static TranslationResult EnrichTranslationResult(TranslationResult partialResult, string originalText, string sender, XivChatType chatType, string sourceLang, string targetLang)
+    {
+        return new TranslationResult(originalText, partialResult.TranslatedText, sender, chatType,
+            partialResult.EngineUsed, sourceLang, partialResult.DetectedSourceLanguage, targetLang)
+        {
+            TimeTakenMs = partialResult.TimeTakenMs,
+            FromCache = partialResult.FromCache,
+            PromptTokens = partialResult.PromptTokens,
+            CompletionTokens = partialResult.CompletionTokens,
+            TotalTokens = partialResult.TotalTokens
+        };
+    }
+
+    /// <summary>
+    /// Formats the final SeString message from the translation result.
+    /// </summary>
+    private SeString FormatFinalMessage(TranslationResult finalResult, IReadOnlyList<Payload?> messageTemplate, int originalSegmentCount, ITranslationEngine engine)
+    {
+        if (!engine.SupportsStructuredTranslation || originalSegmentCount == 0)
+        {
+            return formatter.FormatMessage(finalResult, messageTemplate, [finalResult.TranslatedText]);
+        }
+
+        var translatedSegments = XmlTagRegex.Matches(finalResult.TranslatedText)
+                                            .Select(m => m.Groups[1].Value.Trim())
+                                            .ToArray();
+
+        // The ideal path: the segment counts match, structure is preserved.
+        if (translatedSegments.Length == originalSegmentCount)
+        {
+            logger.LogDebug("XML structure preserved successfully. Segments: {count}", translatedSegments.Length);
+            return formatter.FormatMessage(finalResult, messageTemplate, translatedSegments);
+        }
+
+        // --- CORRECTED FALLBACK LOGIC ---
+        // The structure is broken. Do not pass the raw text with tags.
+        // Sanitize the text by stripping all tags before formatting.
+        logger.LogWarning("[{engine}] XML structure preservation failed. Expected {expected}, but got {actual}. Consolidating and sanitizing translation.",
+                          finalResult.EngineUsed, originalSegmentCount, translatedSegments.Length);
+        
+        var sanitizedText = finalResult.TranslatedText.Replace($"<{XmlTag}>", "").Replace($"</{XmlTag}>", "").Trim();
+        
+        return formatter.FormatMessage(finalResult, messageTemplate, [sanitizedText]);
+    }
+
+    [GeneratedRegex("<t>(.*?)</t>", RegexOptions.Compiled)]
+    private static partial Regex StructureSeparator();
 }
