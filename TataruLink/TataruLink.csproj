@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Dalamud.NET.Sdk/13.0.0">
+    <PropertyGroup>
+        <Version>0.0.0.2</Version>
+        <Description>Tataru Link</Description>
+        <PackageProjectUrl>https://github.com/DN5S/TataruLink</PackageProjectUrl>
+        <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+</Project>
