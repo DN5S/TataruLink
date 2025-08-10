@@ -43,7 +43,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         if (providers.TryGetValue(providerName, out var provider))
         {
             // Initialize with the API key if available
-            var apiKey = configuration.Translation.ApiKeys.GetValueOrDefault(providerName);
+            string? apiKey = null;
+            if (configuration.Translation.ApiKeys.TryGetValue(providerName, out var key))
+            {
+                apiKey = key;
+            }
             provider.Initialize(apiKey);
             
             activeProvider = provider;
@@ -116,6 +120,39 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         // Normalize language codes to lowercase
         // Can be extended to handle different code formats
         return code.ToLowerInvariant();
+    }
+
+    public void ChangeProvider(string providerName)
+    {
+        Service.PluginLog.Information($"Changing translation provider from {ProviderName} to {providerName}");
+        
+        // Update configuration
+        configuration.Translation.Engine = providerName;
+        configuration.Save();
+        
+        // Select and initialize the new provider
+        SelectProvider(providerName);
+    }
+
+    public void UpdateApiKey(string providerName, string apiKey)
+    {
+        Service.PluginLog.Information($"Updating API key for provider: {providerName}");
+
+        // Update configuration
+        configuration.Translation.ApiKeys[providerName] = apiKey;
+        configuration.Save();
+
+        // If this is the active provider, reinitialize it
+        if (activeProvider?.Name == providerName)
+        {
+            Service.PluginLog.Information($"Reinitializing active provider {providerName} with new API key");
+            activeProvider.Initialize(apiKey);
+        }
+        // Also update the provider in the registry so it's ready if selected later
+        else if (providers.TryGetValue(providerName, out var provider))
+        {
+            provider.Initialize(apiKey);
+        }
     }
 
     public void Dispose()

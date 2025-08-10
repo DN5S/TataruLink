@@ -38,6 +38,19 @@ public interface ITranslationService
     void Initialize();
     
     /// <summary>
+    /// Change the active translation provider
+    /// </summary>
+    /// <param name="providerName">Name of the provider to switch to</param>
+    void ChangeProvider(string providerName);
+    
+    /// <summary>
+    /// Update API key for a provider and reinitialize if it's the active provider
+    /// </summary>
+    /// <param name="providerName">Name of the provider</param>
+    /// <param name="apiKey">New API key</param>
+    void UpdateApiKey(string providerName, string apiKey);
+    
+    /// <summary>
     /// Dispose resources
     /// </summary>
     void Dispose();

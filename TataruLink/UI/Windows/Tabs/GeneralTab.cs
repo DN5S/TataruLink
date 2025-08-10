@@ -1,0 +1,29 @@
+using Dalamud.Bindings.ImGui;
+using TataruLink.Configuration;
+using TataruLink.Translation;
+
+namespace TataruLink.UI.Windows.Tabs;
+
+/// <summary>
+/// General settings tab
+/// </summary>
+// ReSharper disable once ClassNeverInstantiated.Global
+public class GeneralTab(TataruConfig configuration, ITranslationService translationService)
+{
+    public void Draw()
+    {
+        var enabled = configuration.IsEnabled;
+        if (ImGui.Checkbox("Enable TataruLink", ref enabled))
+        {
+            configuration.IsEnabled = enabled;
+            configuration.Save();
+        }
+        
+        ImGui.Separator();
+        
+        // Status display - Using TextUnformatted (v13 change)
+        ImGui.TextUnformatted($"Status: {(configuration.IsEnabled ? "Active" : "Disabled")}");
+        ImGui.TextUnformatted($"Translation Engine: {translationService.ProviderName}");
+        ImGui.TextUnformatted($"Engine Status: {(translationService.IsConfigured ? "Configured" : "Not Configured")}");
+    }
+}

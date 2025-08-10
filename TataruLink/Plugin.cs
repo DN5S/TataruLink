@@ -1,4 +1,5 @@
 using Dalamud.Plugin;
+using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Pipeline;
 using TataruLink.Pipeline.Stages.Capture;
@@ -7,6 +8,7 @@ using TataruLink.Pipeline.Stages.Translation;
 using TataruLink.Pipeline.Stages.Validation;
 using TataruLink.Services;
 using TataruLink.Translation;
+using TataruLink.UI.Windows;
 
 namespace TataruLink;
 
@@ -27,6 +29,10 @@ public sealed class Plugin : IDalamudPlugin
     private MessagePipeline? messagePipeline;
     private ChatCaptureStage? chatCaptureStage;
     private ITranslationService? translationService;
+    
+    // UI components
+    private WindowSystem? windowSystem;
+    private SettingsWindow? settingsWindow;
     
     // Plugin lifecycle flag
     private bool isDisposed;
@@ -89,14 +95,47 @@ public sealed class Plugin : IDalamudPlugin
         // Log pipeline configuration
         Service.PluginLog.Information(messagePipeline.GetPipelineInfo());
         
-        // TODO: Initialize UI
-        // _windowSystem = new WindowSystem("TataruLink");
-        // _pluginInterface.UiBuilder.Draw += _windowSystem.Draw;
+        // Initialize UI
+        InitializeUI();
         
         // TODO: Register commands
         // Service.CommandManager.AddHandler("/tatarulink", new CommandInfo(OnCommand));
     }
 
+    /// <summary>
+    /// Initialize UI components
+    /// </summary>
+    private void InitializeUI()
+    {
+        // Create window system
+        windowSystem = new WindowSystem("TataruLink");
+        
+        // Create and add settings window
+        settingsWindow = new SettingsWindow(configuration!, translationService!);
+        windowSystem.AddWindow(settingsWindow);
+        
+        // Register draw handler
+        pluginInterface.UiBuilder.Draw += DrawUI;
+        pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
+    }
+    
+    /// <summary>
+    /// Draw UI windows
+    /// </summary>
+    private void DrawUI()
+    {
+        windowSystem?.Draw();
+    }
+    
+    /// <summary>
+    /// Open settings window
+    /// </summary>
+    private void OpenSettings()
+    {
+        if (settingsWindow != null)
+            settingsWindow.IsOpen = true;
+    }
+    
     /// <summary>
     /// Register event handlers for game events
     /// This connects our plugin to the game's event system
@@ -132,8 +171,13 @@ public sealed class Plugin : IDalamudPlugin
         messagePipeline?.Dispose();
         
         // Step 3: Dispose UI components
-        // _windowSystem?.RemoveAllWindows();
-        // _pluginInterface.UiBuilder.Draw -= _windowSystem?.Draw;
+        if (windowSystem != null)
+        {
+            pluginInterface.UiBuilder.Draw -= DrawUI;
+            pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
+            windowSystem.RemoveAllWindows();
+        }
+        settingsWindow?.Dispose();
         
         // Step 4: Unregister commands
         // Service.CommandManager.RemoveHandler("/tatarulink");
