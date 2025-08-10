@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace TataruLink.Configuration;
 
 /// <summary>
@@ -6,27 +10,65 @@ namespace TataruLink.Configuration;
 public class DisplayConfig
 {
     /// <summary>
-    /// Show a translation overlay window
-    /// </summary>
-    public bool ShowOverlay { get; set; } = true;
-    
-    /// <summary>
     /// Show translations in game chat
     /// </summary>
     public bool ShowInChat { get; set; } = true;
     
     /// <summary>
-    /// Overlay window opacity (0.0-1.0)
+    /// List of configured overlay windows
     /// </summary>
-    public float OverlayOpacity { get; set; } = 0.9f;
+    public List<OverlayWindowConfig> OverlayWindows { get; set; } = new();
     
     /// <summary>
-    /// Font size for overlay text
+    /// Show timestamp in messages (global setting for in-game chat)
     /// </summary>
-    public float FontSize { get; set; } = 14.0f;
+    public bool ShowTimestamp { get; set; } = true;
     
     /// <summary>
-    /// Maximum number of messages to show in overlay
+    /// Show the sender name in messages (global setting for in-game chat)
     /// </summary>
-    public int MaxOverlayMessages { get; set; } = 10;
+    public bool ShowSenderName { get; set; } = true;
+    
+    /// <summary>
+    /// Show chat type in messages (global setting for in-game chat)
+    /// </summary>
+    public bool ShowChatType { get; set; }
+    
+    /// <summary>
+    /// Get active overlay windows
+    /// </summary>
+    public IEnumerable<OverlayWindowConfig> GetActiveOverlays()
+    {
+        return OverlayWindows.Where(w => w.IsEnabled);
+    }
+    
+    /// <summary>
+    /// Add a new overlay window with default settings
+    /// </summary>
+    public OverlayWindowConfig AddOverlayWindow(string name)
+    {
+        var overlay = new OverlayWindowConfig
+        {
+            Name = name,
+            IsEnabled = true
+        };
+        OverlayWindows.Add(overlay);
+        return overlay;
+    }
+    
+    /// <summary>
+    /// Remove an overlay window by ID
+    /// </summary>
+    public bool RemoveOverlayWindow(Guid id)
+    {
+        return OverlayWindows.RemoveAll(w => w.Id == id) > 0;
+    }
+    
+    /// <summary>
+    /// Get an overlay window by ID
+    /// </summary>
+    public OverlayWindowConfig? GetOverlayWindow(Guid id)
+    {
+        return OverlayWindows.FirstOrDefault(w => w.Id == id);
+    }
 }

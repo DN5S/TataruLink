@@ -1,9 +1,10 @@
 using System;
 using System.Numerics;
-using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
-using TataruLink.Services;
+using TataruLink.Overlay;
 using TataruLink.Translation;
 using TataruLink.UI.Windows.Tabs;
 
@@ -16,6 +17,7 @@ public class SettingsWindow : Window, IDisposable
 {
     private readonly TataruConfig configuration;
     private readonly ITranslationService translationService;
+    private readonly OverlayManager overlayManager;
     
     // Tab panels
     private readonly GeneralTab generalTab;
@@ -23,13 +25,15 @@ public class SettingsWindow : Window, IDisposable
     private readonly LanguagesTab languagesTab;
     private readonly FiltersTab filtersTab;
     private readonly DisplayTab displayTab;
+    private readonly OverlayTab overlayTab;
     private readonly DebugTab debugTab;
 
-    public SettingsWindow(TataruConfig configuration, ITranslationService translationService) 
+    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
         this.configuration = configuration;
         this.translationService = translationService;
+        this.overlayManager = overlayManager;
         
         // Window configuration
         Size = new Vector2(600, 400);
@@ -41,50 +45,55 @@ public class SettingsWindow : Window, IDisposable
         languagesTab = new LanguagesTab(configuration);
         filtersTab = new FiltersTab(configuration);
         displayTab = new DisplayTab(configuration);
+        overlayTab = new OverlayTab(configuration, overlayManager);
         debugTab = new DebugTab(configuration, translationService);
     }
 
     public override void Draw()
     {
-        if (ImGui.BeginTabBar("##SettingsTabs"))
+        using var tabBar = ImRaii.TabBar("##SettingsTabs");
+        
+        if (!tabBar) return;
+        using (var tab = ImRaii.TabItem("General"))
         {
-            if (ImGui.BeginTabItem("General"))
-            {
+            if (tab)
                 generalTab.Draw();
-                ImGui.EndTabItem();
-            }
+        }
             
-            if (ImGui.BeginTabItem("Translation"))
-            {
+        using (var tab = ImRaii.TabItem("Translation"))
+        {
+            if (tab)
                 translationTab.Draw();
-                ImGui.EndTabItem();
-            }
+        }
             
-            if (ImGui.BeginTabItem("Languages"))
-            {
+        using (var tab = ImRaii.TabItem("Languages"))
+        {
+            if (tab)
                 languagesTab.Draw();
-                ImGui.EndTabItem();
-            }
+        }
             
-            if (ImGui.BeginTabItem("Filters"))
-            {
+        using (var tab = ImRaii.TabItem("Filters"))
+        {
+            if (tab)
                 filtersTab.Draw();
-                ImGui.EndTabItem();
-            }
+        }
             
-            if (ImGui.BeginTabItem("Display"))
-            {
+        using (var tab = ImRaii.TabItem("Display"))
+        {
+            if (tab)
                 displayTab.Draw();
-                ImGui.EndTabItem();
-            }
+        }
             
-            if (ImGui.BeginTabItem("Debug"))
-            {
+        using (var tab = ImRaii.TabItem("Overlay"))
+        {
+            if (tab)
+                overlayTab.Draw();
+        }
+            
+        using (var tab = ImRaii.TabItem("Debug"))
+        {
+            if (tab)
                 debugTab.Draw();
-                ImGui.EndTabItem();
-            }
-            
-            ImGui.EndTabBar();
         }
     }
 

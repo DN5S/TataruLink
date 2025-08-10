@@ -1,6 +1,7 @@
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
+using TataruLink.Overlay;
 using TataruLink.Pipeline;
 using TataruLink.Pipeline.Stages.Capture;
 using TataruLink.Pipeline.Stages.Display;
@@ -29,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     private MessagePipeline? messagePipeline;
     private ChatCaptureStage? chatCaptureStage;
     private ITranslationService? translationService;
+    private OverlayManager? overlayManager;
     
     // UI components
     private WindowSystem? windowSystem;
@@ -72,6 +74,9 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize translation service
         translationService = new TranslationService(configuration);
         
+        // Initialize UI first to create window system and overlay manager
+        InitializeUI();
+        
         // Initialize message processing pipeline
         messagePipeline = new MessagePipeline();
         
@@ -82,8 +87,8 @@ public sealed class Plugin : IDalamudPlugin
             .AddStage(new MessageValidationStage(configuration))
             // Stage 2: Translate the message using translation service
             .AddStage(new TranslationStage(configuration, translationService))
-            // Stage 3: Display the translated message
-            .AddStage(new DisplayStage(configuration));
+            // Stage 3: Display the translated message (with overlay support)
+            .AddStage(new DisplayStage(configuration, overlayManager));
         
         // Initialize the pipeline
         messagePipeline.Initialize();
@@ -94,9 +99,6 @@ public sealed class Plugin : IDalamudPlugin
         
         // Log pipeline configuration
         Service.PluginLog.Information(messagePipeline.GetPipelineInfo());
-        
-        // Initialize UI
-        InitializeUI();
         
         // TODO: Register commands
         // Service.CommandManager.AddHandler("/tatarulink", new CommandInfo(OnCommand));
@@ -110,8 +112,11 @@ public sealed class Plugin : IDalamudPlugin
         // Create window system
         windowSystem = new WindowSystem("TataruLink");
         
-        // Create and add settings window
-        settingsWindow = new SettingsWindow(configuration!, translationService!);
+        // Initialize overlay manager
+        overlayManager = new OverlayManager(configuration!, windowSystem);
+        
+        // Create and add settings window with overlay manager
+        settingsWindow = new SettingsWindow(configuration!, translationService!, overlayManager);
         windowSystem.AddWindow(settingsWindow);
         
         // Register draw handler
@@ -171,6 +176,7 @@ public sealed class Plugin : IDalamudPlugin
         messagePipeline?.Dispose();
         
         // Step 3: Dispose UI components
+        overlayManager?.Dispose();
         if (windowSystem != null)
         {
             pluginInterface.UiBuilder.Draw -= DrawUI;

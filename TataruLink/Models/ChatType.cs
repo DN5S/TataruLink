@@ -249,10 +249,26 @@ public static class ChatType
             XivChatType.NoviceNetwork => "Novice Network",
             XivChatType.CustomEmote or XivChatType.StandardEmote => "Emote",
             XivChatType.NPCDialogue or XivChatType.NPCDialogueAnnouncements => "NPC",
-            XivChatType.PvPTeam => "PvP Team",
-            XivChatType.CrossParty => "Cross Party",
-            _ when type.IsCrossLinkshell() => "CWLS",
-            _ when type.IsLinkshell() => "Linkshell",
+            XivChatType.PvPTeam => "PvP",
+            XivChatType.CrossParty => "Cross-Party",
+            // Specific linkshell numbers
+            XivChatType.Ls1 => "Linkshell1",
+            XivChatType.Ls2 => "Linkshell2",
+            XivChatType.Ls3 => "Linkshell3",
+            XivChatType.Ls4 => "Linkshell4",
+            XivChatType.Ls5 => "Linkshell5",
+            XivChatType.Ls6 => "Linkshell6",
+            XivChatType.Ls7 => "Linkshell7",
+            XivChatType.Ls8 => "Linkshell8",
+            // Specific cross-world linkshell numbers
+            XivChatType.CrossLinkShell1 => "CWLS1",
+            XivChatType.CrossLinkShell2 => "CWLS2",
+            XivChatType.CrossLinkShell3 => "CWLS3",
+            XivChatType.CrossLinkShell4 => "CWLS4",
+            XivChatType.CrossLinkShell5 => "CWLS5",
+            XivChatType.CrossLinkShell6 => "CWLS6",
+            XivChatType.CrossLinkShell7 => "CWLS7",
+            XivChatType.CrossLinkShell8 => "CWLS8",
             _ => "Other"
         };
     }
@@ -323,6 +339,21 @@ public static class ChatType
         if (IsTranslatable(typeValue)) return ChatCategory.Player;
         
         return ChatCategory.Other;
+    }
+    
+    /// <summary>
+    /// Gets all translatable chat types with their display names for UI
+    /// </summary>
+    public static IEnumerable<(XivChatType type, string displayName)> GetTranslatableChatTypes()
+    {
+        foreach (var type in TranslatableChannels)
+        {
+            // Skip emotes as they're special
+            if (type.IsEmote()) continue;
+            
+            var displayName = type.GetChannelName();
+            yield return (type, displayName);
+        }
     }
 }
 

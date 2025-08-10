@@ -4,22 +4,14 @@ using TataruLink.Configuration;
 namespace TataruLink.UI.Windows.Tabs;
 
 /// <summary>
-/// Display settings tab
+/// Display settings tab for general display options
 /// </summary>
-// ReSharper disable once ClassNeverInstantiated.Global
 public class DisplayTab(TataruConfig configuration)
 {
     public void Draw()
     {
-        ImGui.TextUnformatted("Display Options");
+        ImGui.TextUnformatted("General Display Options");
         ImGui.Separator();
-        
-        var showOverlay = configuration.Display.ShowOverlay;
-        if (ImGui.Checkbox("Show translation overlay window", ref showOverlay))
-        {
-            configuration.Display.ShowOverlay = showOverlay;
-            configuration.Save();
-        }
         
         var showInChat = configuration.Display.ShowInChat;
         if (ImGui.Checkbox("Show translations in game chat", ref showInChat))
@@ -28,27 +20,32 @@ public class DisplayTab(TataruConfig configuration)
             configuration.Save();
         }
         
-        ImGui.Separator();
-        
-        var maxMessages = configuration.Display.MaxOverlayMessages;
-        if (ImGui.SliderInt("Max overlay messages", ref maxMessages, 5, 50))
+        if (configuration.Display.ShowInChat)
         {
-            configuration.Display.MaxOverlayMessages = maxMessages;
-            configuration.Save();
-        }
-        
-        var opacity = configuration.Display.OverlayOpacity;
-        if (ImGui.SliderFloat("Overlay opacity", ref opacity, 0.1f, 1.0f))
-        {
-            configuration.Display.OverlayOpacity = opacity;
-            configuration.Save();
-        }
-        
-        var fontSize = configuration.Display.FontSize;
-        if (ImGui.SliderFloat("Font size", ref fontSize, 10.0f, 30.0f))
-        {
-            configuration.Display.FontSize = fontSize;
-            configuration.Save();
+            ImGui.Indent();
+            
+            var showTimestamp = configuration.Display.ShowTimestamp;
+            if (ImGui.Checkbox("Show timestamp in chat", ref showTimestamp))
+            {
+                configuration.Display.ShowTimestamp = showTimestamp;
+                configuration.Save();
+            }
+            
+            var showSenderName = configuration.Display.ShowSenderName;
+            if (ImGui.Checkbox("Show sender name in chat", ref showSenderName))
+            {
+                configuration.Display.ShowSenderName = showSenderName;
+                configuration.Save();
+            }
+            
+            var showChatType = configuration.Display.ShowChatType;
+            if (ImGui.Checkbox("Show chat type in chat", ref showChatType))
+            {
+                configuration.Display.ShowChatType = showChatType;
+                configuration.Save();
+            }
+            
+            ImGui.Unindent();
         }
     }
 }

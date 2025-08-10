@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using TataruLink.Models;
 using TataruLink.Configuration;
+using TataruLink.Overlay;
 using TataruLink.Services;
 using TataruLink.Utils;
 
@@ -9,9 +11,9 @@ namespace TataruLink.Pipeline.Stages.Display;
 
 /// <summary>
 /// Final stage: Displays translated messages to the user.
-/// Handles both in-game chat display and overlay window.
+/// Handles both in-game chat display and overlay windows.
 /// </summary>
-public class DisplayStage(TataruConfig configuration) : IPipelineStage
+public class DisplayStage(TataruConfig configuration, OverlayManager? overlayManager = null) : IPipelineStage
 {
     public string Name => "Display";
     public bool IsEnabled { get; set; } = true;
@@ -39,12 +41,8 @@ public class DisplayStage(TataruConfig configuration) : IPipelineStage
             return Task.FromResult<Message?>(message);
         }
 
-        // Get display settings from context or configuration
-        var displayInChat = configuration.Display.ShowInChat;
-        var displayInOverlay = configuration.Display.ShowOverlay;
-
         // Display in game chat
-        if (displayInChat)
+        if (configuration.Display.ShowInChat)
         {
             try
             {
@@ -57,17 +55,24 @@ public class DisplayStage(TataruConfig configuration) : IPipelineStage
             }
         }
 
-        // TODO: Implement overlay window for translations
-        if (displayInOverlay)
+        // Send it to overlay windows
+        if (overlayManager != null && configuration.Display.GetActiveOverlays().Any())
         {
-            // _overlayWindow.AddMessage(message);
-            Service.PluginLog.Debug("Overlay display not yet implemented");
+            try
+            {
+                overlayManager.SendMessage(message);
+                Service.PluginLog.Debug($"Sent message to overlay windows for message {message.Id}");
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Error(ex, "Failed to send message to overlay windows");
+            }
         }
 
         // Mark in context
         context.Set("display.completed", true);
-        context.Set("display.in_chat", displayInChat);
-        context.Set("display.in_overlay", displayInOverlay);
+        context.Set("display.in_chat", configuration.Display.ShowInChat);
+        context.Set("display.in_overlay", overlayManager != null);
 
         return Task.FromResult<Message?>(message);
     }
