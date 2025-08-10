@@ -22,10 +22,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     public void Initialize()
     {
         // Register available providers
-        RegisterProvider(new MockTranslationProvider()); // Placeholder for testing
+        RegisterProvider(new MockTranslationProvider());
+        RegisterProvider(new GoogleTranslateProvider());
         
-        // TODO: Register real providers
-        // RegisterProvider(new GoogleTranslateProvider());
+        // TODO: Register more providers
         // RegisterProvider(new DeepLProvider());
         
         // Select and initialize the configured provider

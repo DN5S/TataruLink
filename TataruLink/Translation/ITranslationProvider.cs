@@ -19,11 +19,6 @@ public interface ITranslationProvider
     bool IsConfigured { get; }
     
     /// <summary>
-    /// Supported language codes for this provider
-    /// </summary>
-    string[] SupportedLanguages { get; }
-    
-    /// <summary>
     /// Translate text
     /// </summary>
     Task<TranslationResponse> TranslateAsync(

@@ -10,11 +10,6 @@ public class MockTranslationProvider : ITranslationProvider
 {
     public string Name => "Mock";
     public bool IsConfigured { get; private set; }
-    
-    public string[] SupportedLanguages =>
-    [
-        "en", "ja", "de", "fr", "ko", "zh", "es", "it", "pt", "ru"
-    ];
 
     public void Initialize(string? apiKey = null)
     {
