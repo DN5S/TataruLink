@@ -82,7 +82,7 @@ public readonly struct ChatCode(ushort value) : IEquatable<ChatCode>
         return ChatType.IsGm(rawType);
     }
 
-    public bool ShouldTranslate(Configuration.Configuration config)
+    public bool ShouldTranslate(Configuration.TataruConfig config)
     {
         var rawType = GetRawChatType();
         var category = ChatType.GetCategory(rawType);
@@ -90,17 +90,17 @@ public readonly struct ChatCode(ushort value) : IEquatable<ChatCode>
         // Check category-based settings first
         var shouldTranslate = category switch
         {
-            ChatCategory.Player when config.PlayerChatEnabled => true,
-            ChatCategory.Npc when config.NpcEnabled => true,
-            ChatCategory.System when config.SystemEnabled => true,
-            ChatCategory.Emote when config.EmoteEnabled => true,
-            ChatCategory.Battle when config.BattleEnabled => true,
-            ChatCategory.Gm when config.GmEnabled => true,
+            ChatCategory.Player when config.Chat.PlayerChatEnabled => true,
+            ChatCategory.Npc when config.Chat.NpcEnabled => true,
+            ChatCategory.System when config.Chat.SystemEnabled => true,
+            ChatCategory.Emote when config.Chat.EmoteEnabled => true,
+            ChatCategory.Battle when config.Chat.BattleEnabled => true,
+            ChatCategory.Gm when config.Chat.GmEnabled => true,
             _ => false
         };
         
         // Additional check: verify the type is actually translatable
-        // (some system messages shouldn't be translated even if system is enabled)
+        // (some system messages shouldn't be translated even if the system is enabled)
         if (shouldTranslate)
         {
             shouldTranslate = ChatType.IsTranslatable(rawType);

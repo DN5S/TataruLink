@@ -5,7 +5,7 @@ namespace TataruLink.Models;
 
 public sealed class TranslationRequest
 {
-    private static long NextId = 0;
+    private static long NextId;
     
     public long Id { get; }
     public long MessageId { get; }
@@ -94,7 +94,6 @@ public static class PriorityResolver
             ChatCategory.Player => TranslationPriority.High,
             ChatCategory.Npc => TranslationPriority.High,
             ChatCategory.Emote => TranslationPriority.Normal,
-            ChatCategory.System => TranslationPriority.Low,
             _ => TranslationPriority.Low
         };
     }

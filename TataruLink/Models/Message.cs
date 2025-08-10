@@ -7,7 +7,7 @@ namespace TataruLink.Models;
 
 public sealed class Message
 {
-    private static long _nextId = 0;
+    private static long NextId;
     
     public long Id { get; }
     public DateTime Timestamp { get; }
@@ -26,7 +26,7 @@ public sealed class Message
     
     public Message(ChatCode code, SeString sender, SeString content)
     {
-        Id = Interlocked.Increment(ref _nextId);
+        Id = Interlocked.Increment(ref NextId);
         Timestamp = DateTime.Now;
         Code = code;
         OriginalSender = sender;

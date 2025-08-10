@@ -1,5 +1,12 @@
 using Dalamud.Plugin;
+using TataruLink.Configuration;
+using TataruLink.Pipeline;
+using TataruLink.Pipeline.Stages.Capture;
+using TataruLink.Pipeline.Stages.Display;
+using TataruLink.Pipeline.Stages.Translation;
+using TataruLink.Pipeline.Stages.Validation;
 using TataruLink.Services;
+using TataruLink.Translation;
 
 namespace TataruLink;
 
@@ -14,6 +21,12 @@ public sealed class Plugin : IDalamudPlugin
 
     // Core Dalamud plugin interface - gateway to all Dalamud services
     private readonly IDalamudPluginInterface pluginInterface;
+    
+    // Core plugin components
+    private TataruConfig? configuration;
+    private MessagePipeline? messagePipeline;
+    private ChatCaptureStage? chatCaptureStage;
+    private ITranslationService? translationService;
     
     // Plugin lifecycle flag
     private bool isDisposed;
@@ -47,11 +60,34 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     private void InitializeCore()
     {
-        // TODO: Initialize configuration
-        // _configuration = Configuration.Load(_pluginInterface);
+        // Initialize configuration
+        configuration = TataruConfig.Load(pluginInterface);
         
-        // TODO: Initialize translation services
-        // _translationService = new TranslationService(_configuration);
+        // Initialize translation service
+        translationService = new TranslationService(configuration);
+        
+        // Initialize message processing pipeline
+        messagePipeline = new MessagePipeline();
+        
+        // Build the pipeline - order matters!
+        // Each stage processes the message and passes it to the next
+        messagePipeline
+            // Stage 1: Validation (includes deduplication, chat type, and content validation)
+            .AddStage(new MessageValidationStage(configuration))
+            // Stage 2: Translate the message using translation service
+            .AddStage(new TranslationStage(configuration, translationService))
+            // Stage 3: Display the translated message
+            .AddStage(new DisplayStage(configuration));
+        
+        // Initialize the pipeline
+        messagePipeline.Initialize();
+        
+        // Create and initialize chat capture (feeds messages into the pipeline)
+        chatCaptureStage = new ChatCaptureStage(messagePipeline, configuration);
+        chatCaptureStage.Initialize();
+        
+        // Log pipeline configuration
+        Service.PluginLog.Information(messagePipeline.GetPipelineInfo());
         
         // TODO: Initialize UI
         // _windowSystem = new WindowSystem("TataruLink");
@@ -79,7 +115,7 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     /// <summary>
-    /// Cleanup and dispose resources
+    /// Clean up and dispose of resources
     /// CRITICAL: Must properly clean up to avoid memory leaks
     /// </summary>
     public void Dispose()
@@ -91,18 +127,25 @@ public sealed class Plugin : IDalamudPlugin
         // Step 1: Unregister event handlers (prevents memory leaks)
         UnregisterEventHandlers();
         
-        // Step 2: Dispose UI components
+        // Step 2: Dispose the pipeline and stages
+        chatCaptureStage?.Dispose();
+        messagePipeline?.Dispose();
+        
+        // Step 3: Dispose UI components
         // _windowSystem?.RemoveAllWindows();
         // _pluginInterface.UiBuilder.Draw -= _windowSystem?.Draw;
         
-        // Step 3: Unregister commands
+        // Step 4: Unregister commands
         // Service.CommandManager.RemoveHandler("/tatarulink");
         
-        // Step 4: Save configuration
-        // _configuration?.Save();
+        // Step 5: Save configuration
+        if (configuration != null)
+        {
+            pluginInterface.SavePluginConfig(configuration);
+        }
         
-        // Step 5: Dispose services
-        // _translationService?.Dispose();
+        // Step 6: Dispose services
+        translationService?.Dispose();
         
         isDisposed = true;
         Service.PluginLog.Info("TataruLink disposed successfully");
@@ -115,21 +158,8 @@ public sealed class Plugin : IDalamudPlugin
     private void UnregisterEventHandlers()
     {
         // TODO: Unregister all event handlers
-        // Service.ChatGui.ChatMessage -= OnChatMessage;
         // Service.Framework.Update -= OnFrameworkUpdate;
         // Service.ClientState.Login -= OnLogin;
         // Service.ClientState.Logout -= OnLogout;
     }
-
-    // Event handler examples (to be implemented)
-    
-    // private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
-    // {
-    //     // Handle chat messages for translation
-    // }
-    
-    // private void OnCommand(string command, string args)
-    // {
-    //     // Handle plugin commands
-    // }
 }
