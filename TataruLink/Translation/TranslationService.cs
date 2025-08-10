@@ -24,9 +24,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         // Register available providers
         RegisterProvider(new MockTranslationProvider());
         RegisterProvider(new GoogleTranslateProvider());
-        
-        // TODO: Register more providers
-        // RegisterProvider(new DeepLProvider());
+        RegisterProvider(new DeepLProvider());
         
         // Select and initialize the configured provider
         SelectProvider(configuration.Translation.Engine);
