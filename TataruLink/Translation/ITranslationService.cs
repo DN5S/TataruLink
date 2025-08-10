@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -6,7 +7,7 @@ namespace TataruLink.Translation;
 /// <summary>
 /// Main translation service interface that manages translation providers and caching
 /// </summary>
-public interface ITranslationService
+public interface ITranslationService : IDisposable
 {
     /// <summary>
     /// Translate text from source to target language
@@ -33,6 +34,11 @@ public interface ITranslationService
     string ProviderName { get; }
     
     /// <summary>
+    /// Whether the current provider supports structured translation with XML tags
+    /// </summary>
+    bool SupportsStructuredTranslation { get; }
+    
+    /// <summary>
     /// Initialize the service
     /// </summary>
     void Initialize();
@@ -44,14 +50,9 @@ public interface ITranslationService
     void ChangeProvider(string providerName);
     
     /// <summary>
-    /// Update API key for a provider and reinitialize if it's the active provider
+    /// Update the API key for a provider and reinitialize if it's the active provider
     /// </summary>
     /// <param name="providerName">Name of the provider</param>
     /// <param name="apiKey">New API key</param>
     void UpdateApiKey(string providerName, string apiKey);
-    
-    /// <summary>
-    /// Dispose resources
-    /// </summary>
-    void Dispose();
 }

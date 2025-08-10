@@ -1,7 +1,9 @@
+using System;
 using System.Threading.Tasks;
 using TataruLink.Models;
 using TataruLink.Configuration;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Display;
 
@@ -24,9 +26,16 @@ public class DisplayStage(TataruConfig configuration) : IPipelineStage
         if (!IsEnabled) return Task.FromResult<Message?>(message);
 
         // Only display if we have a translation
-        if (message.Status == TranslationStatus.Pending || message.Status == TranslationStatus.InProgress)
+        if (message.Status != TranslationStatus.Completed)
         {
-            Service.PluginLog.Debug("Message translation not ready, skipping display");
+            Service.PluginLog.Debug($"Message translation status is {message.Status}, skipping display");
+            return Task.FromResult<Message?>(message);
+        }
+
+        // Skip if no translated content
+        if (string.IsNullOrEmpty(message.TranslatedContent))
+        {
+            Service.PluginLog.Debug("No translated content available, skipping display");
             return Task.FromResult<Message?>(message);
         }
 
@@ -34,19 +43,25 @@ public class DisplayStage(TataruConfig configuration) : IPipelineStage
         var displayInChat = configuration.Display.ShowInChat;
         var displayInOverlay = configuration.Display.ShowOverlay;
 
-        // Log what we're displaying
-        var displayText = message.TranslatedContent ?? message.PlainTextContent;
-        Service.PluginLog.Information($"[{message.Code.GetChatType()}] {message.SenderName}: {displayText}");
-
-        // TODO: Implement actual display logic
+        // Display in game chat
         if (displayInChat)
         {
-            // Service.ChatGui.Print($"[TL] {displayText}");
+            try
+            {
+                DisplayInGameChat(message, configuration);
+                Service.PluginLog.Debug($"Displayed translation in game chat for message {message.Id}");
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Error(ex, "Failed to display translation in game chat");
+            }
         }
 
+        // TODO: Implement overlay window for translations
         if (displayInOverlay)
         {
             // _overlayWindow.AddMessage(message);
+            Service.PluginLog.Debug("Overlay display not yet implemented");
         }
 
         // Mark in context
@@ -57,6 +72,19 @@ public class DisplayStage(TataruConfig configuration) : IPipelineStage
         return Task.FromResult<Message?>(message);
     }
 
+    private void DisplayInGameChat(Message message, TataruConfig config)
+    {
+        // Use SeStringUtils to create the complete translated message with preserved payloads
+        var formattedMessage = SeStringUtils.BuildTranslation(
+            message.OriginalContent,
+            message.TranslatedContent!,
+            config.Translation.TranslationPrefix
+        );
+        
+        // Display the formatted message
+        Service.ChatGui.Print(formattedMessage);
+    }
+    
     public void Dispose()
     {
         Service.PluginLog.Information($"{Name} stage disposed");

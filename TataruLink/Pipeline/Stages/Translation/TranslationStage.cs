@@ -4,30 +4,23 @@ using TataruLink.Models;
 using TataruLink.Configuration;
 using TataruLink.Services;
 using TataruLink.Translation;
+using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Translation;
 
 /// <summary>
 /// Handles translation of messages using configured translation services.
 /// </summary>
-public class TranslationStage : IPipelineStage
+public class TranslationStage(TataruConfig configuration, ITranslationService translationService)
+    : IPipelineStage
 {
     public string Name => "Translation";
     public bool IsEnabled { get; set; } = true;
-    
-    private readonly TataruConfig _configuration;
-    private readonly ITranslationService _translationService;
-
-    public TranslationStage(TataruConfig configuration, ITranslationService translationService)
-    {
-        _configuration = configuration;
-        _translationService = translationService;
-    }
 
     public void Initialize()
     {
-        _translationService.Initialize();
-        Service.PluginLog.Information($"{Name} stage initialized with provider: {_translationService.ProviderName}");
+        translationService.Initialize();
+        Service.PluginLog.Information($"{Name} stage initialized with provider: {translationService.ProviderName}");
     }
 
     public async Task<Message?> ProcessAsync(Message message, PipelineContext context)
@@ -38,8 +31,8 @@ public class TranslationStage : IPipelineStage
         {
             Service.PluginLog.Debug($"Translation stage processing: {message.PlainTextContent}");
             
-            // Check if translation service is configured
-            if (!_translationService.IsConfigured)
+            // Check if a translation service is configured
+            if (!translationService.IsConfigured)
             {
                 Service.PluginLog.Warning("Translation service not configured");
                 message.Status = TranslationStatus.Failed;
@@ -47,15 +40,24 @@ public class TranslationStage : IPipelineStage
             }
             
             // Get language settings
-            var sourceLanguage = _configuration.Translation.SourceLanguage;
-            var targetLanguage = _configuration.Translation.TargetLanguage;
+            var sourceLanguage = configuration.Translation.SourceLanguage;
+            var targetLanguage = configuration.Translation.TargetLanguage;
             
             // Mark as in progress
             message.Status = TranslationStatus.InProgress;
             
+            // Check if the current provider supports structured translation (XML tags)
+            // Google Translate breaks XML structure, so we don't use it for Google
+            var useXmlTags = translationService.SupportsStructuredTranslation;
+            
+            // Prepare text for translation using SeStringUtils
+            var (textToTranslate, segmentCount) = SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags);
+            
+            Service.PluginLog.Debug($"Text segments for translation ({segmentCount}) [Provider: {translationService.ProviderName}, XML: {useXmlTags}]: {textToTranslate}");
+            
             // Perform translation
-            var translatedText = await _translationService.TranslateAsync(
-                message.PlainTextContent,
+            var translatedText = await translationService.TranslateAsync(
+                textToTranslate,
                 sourceLanguage,
                 targetLanguage);
             
@@ -66,18 +68,18 @@ public class TranslationStage : IPipelineStage
                 
                 // Mark in context
                 context.Set("translation.processed", true);
-                context.Set("translation.engine", _translationService.ProviderName);
+                context.Set("translation.engine", translationService.ProviderName);
                 context.Set("translation.source_lang", sourceLanguage);
                 context.Set("translation.target_lang", targetLanguage);
                 context.Set("translation.success", true);
                 
-                Service.PluginLog.Debug($"Translation completed: {message.PlainTextContent} -> {translatedText}");
+                Service.PluginLog.Debug($"Translation completed: {textToTranslate} -> {translatedText}");
             }
             else
             {
                 message.Status = TranslationStatus.Failed;
                 context.Set("translation.success", false);
-                Service.PluginLog.Warning($"Translation failed for message: {message.PlainTextContent}");
+                Service.PluginLog.Warning($"Translation failed for message: {textToTranslate}");
             }
         }
         catch (Exception ex)

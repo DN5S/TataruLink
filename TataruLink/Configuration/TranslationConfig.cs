@@ -47,7 +47,7 @@ public class TranslationConfig
     /// <summary>
     /// Retry failed translations
     /// </summary>
-    public bool RetryFailedTranslations { get; set; } = false;
+    public bool RetryFailedTranslations { get; set; }
     
     /// <summary>
     /// Maximum retry attempts for failed translations

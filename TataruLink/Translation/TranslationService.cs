@@ -11,13 +11,15 @@ namespace TataruLink.Translation;
 /// <summary>
 /// Main translation service that manages translation providers
 /// </summary>
-public class TranslationService(TataruConfig configuration) : ITranslationService, IDisposable
+public class TranslationService(TataruConfig configuration) : ITranslationService
 {
     private readonly Dictionary<string, ITranslationProvider> providers = new();
+    private readonly Lock providerLock = new();
     private ITranslationProvider? activeProvider;
 
     public bool IsConfigured => activeProvider?.IsConfigured ?? false;
     public string ProviderName => activeProvider?.Name ?? "None";
+    public bool SupportsStructuredTranslation => activeProvider?.SupportsStructuredTranslation ?? false;
 
     public void Initialize()
     {
@@ -40,28 +42,31 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
     private void SelectProvider(string providerName)
     {
-        if (providers.TryGetValue(providerName, out var provider))
+        lock (providerLock)
         {
-            // Initialize with the API key if available
-            string? apiKey = null;
-            if (configuration.Translation.ApiKeys.TryGetValue(providerName, out var key))
+            if (providers.TryGetValue(providerName, out var provider))
             {
-                apiKey = key;
+                // Initialize with the API key if available
+                string? apiKey = null;
+                if (configuration.Translation.ApiKeys.TryGetValue(providerName, out var key))
+                {
+                    apiKey = key;
+                }
+                provider.Initialize(apiKey);
+                
+                activeProvider = provider;
+                Service.PluginLog.Information($"Selected translation provider: {providerName}");
             }
-            provider.Initialize(apiKey);
-            
-            activeProvider = provider;
-            Service.PluginLog.Information($"Selected translation provider: {providerName}");
-        }
-        else
-        {
-            Service.PluginLog.Warning($"Translation provider not found: {providerName}");
-            
-            // Fallback to mock provider
-            if (providers.TryGetValue("Mock", out var mockProvider))
+            else
             {
-                activeProvider = mockProvider;
-                activeProvider.Initialize();
+                Service.PluginLog.Warning($"Translation provider not found: {providerName}");
+                
+                // Fallback to mock provider
+                if (providers.TryGetValue("Mock", out var mockProvider))
+                {
+                    activeProvider = mockProvider;
+                    activeProvider.Initialize();
+                }
             }
         }
     }
@@ -91,22 +96,61 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 return text;
             }
 
-            // Perform translation
-            var response = await activeProvider.TranslateAsync(
-                text, 
-                sourceLanguage, 
-                targetLanguage, 
-                cancellationToken);
+            // Perform translation with retry logic
+            var retryCount = 0;
+            var maxRetries = configuration.Translation.RetryFailedTranslations 
+                ? configuration.Translation.MaxRetryAttempts 
+                : 0;
 
-            if (response.Success)
+            while (retryCount <= maxRetries)
             {
-                Service.PluginLog.Debug($"Translation successful: {text[..Math.Min(20, text.Length)]}... -> " +
-                                        $"{response.TranslatedText?[..Math.Min(20, response.TranslatedText.Length)]}...");
-                return response.TranslatedText;
+                try
+                {
+                    // Create a new CTS for this attempt with timeout
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromMilliseconds(configuration.Translation.TimeoutMs));
+                    
+                    var response = await activeProvider.TranslateAsync(
+                        text, 
+                        sourceLanguage, 
+                        targetLanguage, 
+                        cts.Token);
+
+                    if (response.Success)
+                    {
+                        Service.PluginLog.Debug($"Translation successful: {text[..Math.Min(20, text.Length)]}... -> " +
+                                                $"{response.TranslatedText?[..Math.Min(20, response.TranslatedText.Length)]}...");
+                        return response.TranslatedText;
+                    }
+
+                    Service.PluginLog.Warning($"Translation failed (attempt {retryCount + 1}/{maxRetries + 1}): {response.Error}");
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Timeout occurred (cts was canceled but not the original token)
+                    Service.PluginLog.Warning($"Translation timed out after {configuration.Translation.TimeoutMs}ms (attempt {retryCount + 1}/{maxRetries + 1})");
+                }
+
+                // Check if we should retry
+                if (retryCount < maxRetries)
+                {
+                    retryCount++;
+                    // Wait before retry with exponential backoff
+                    // This is outside the `cts` scope, so use the original token
+                    await Task.Delay(TimeSpan.FromMilliseconds(500 * Math.Pow(2, retryCount - 1)), cancellationToken);
+                }
+                else
+                {
+                    return null;
+                }
             }
 
-            Service.PluginLog.Warning($"Translation failed: {response.Error}");
             return null;
+        }
+        catch (OperationCanceledException)
+        {
+            Service.PluginLog.Debug("Translation cancelled by user");
+            throw;
         }
         catch (Exception ex)
         {
@@ -115,7 +159,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
 
-    private string NormalizeLanguageCode(string code)
+    private static string NormalizeLanguageCode(string code)
     {
         // Normalize language codes to lowercase
         // Can be extended to handle different code formats
@@ -123,7 +167,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     }
 
     public void ChangeProvider(string providerName)
-    {
+    { 
         Service.PluginLog.Information($"Changing translation provider from {ProviderName} to {providerName}");
         
         // Update configuration
@@ -142,31 +186,46 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         configuration.Translation.ApiKeys[providerName] = apiKey;
         configuration.Save();
 
-        // If this is the active provider, reinitialize it
-        if (activeProvider?.Name == providerName)
+        lock (providerLock)
         {
-            Service.PluginLog.Information($"Reinitializing active provider {providerName} with new API key");
-            activeProvider.Initialize(apiKey);
-        }
-        // Also update the provider in the registry so it's ready if selected later
-        else if (providers.TryGetValue(providerName, out var provider))
-        {
-            provider.Initialize(apiKey);
+            // If this is the active provider, reinitialize it
+            if (activeProvider?.Name == providerName)
+            {
+                Service.PluginLog.Information($"Reinitializing active provider {providerName} with new API key");
+                activeProvider.Initialize(apiKey);
+            }
+            // Also, update the provider in the registry so it's ready if selected later
+            else if (providers.TryGetValue(providerName, out var provider))
+            {
+                provider.Initialize(apiKey);
+            }
         }
     }
 
     public void Dispose()
     {
-        // Dispose providers if they implement IDisposable
-        foreach (var provider in providers.Values)
+        lock (providerLock)
         {
-            if (provider is IDisposable disposable)
+            // Dispose providers if they implement IDisposable
+            foreach (var provider in providers.Values)
             {
-                disposable.Dispose();
+                if (provider is IDisposable disposable)
+                {
+                    try
+                    {
+                        disposable.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Service.PluginLog.Error(ex, $"Error disposing provider {provider.Name}");
+                    }
+                }
             }
+            
+            providers.Clear();
+            activeProvider = null;
         }
         
-        providers.Clear();
         Service.PluginLog.Information("Translation service disposed");
     }
 }

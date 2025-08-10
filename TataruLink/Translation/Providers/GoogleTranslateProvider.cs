@@ -32,6 +32,7 @@ public class GoogleTranslateProvider : ITranslationProvider
 
     public string Name => "Google";
     public bool IsConfigured { get; private set; }
+    public bool SupportsStructuredTranslation => false;  // Google breaks XML structure with nested tags
 
     public void Initialize(string? apiKey = null)
     {

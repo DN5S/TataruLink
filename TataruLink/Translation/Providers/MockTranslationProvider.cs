@@ -10,6 +10,7 @@ public class MockTranslationProvider : ITranslationProvider
 {
     public string Name => "Mock";
     public bool IsConfigured { get; private set; }
+    public bool SupportsStructuredTranslation => false;  // Mock provider doesn't need structured translation
 
     public void Initialize(string? apiKey = null)
     {
@@ -26,7 +27,7 @@ public class MockTranslationProvider : ITranslationProvider
         // Simulate network delay
         await Task.Delay(100, cancellationToken);
         
-        // If the source is "auto", pretend we detected Japanese (common in FFXIV)
+        // If the source is "auto", pretend we detected Japanese
         var detectedSource = sourceLanguage == "auto" ? "ja" : sourceLanguage;
         
         // Simple mock translation - just wrap the text
@@ -52,7 +53,7 @@ public class MockTranslationProvider : ITranslationProvider
         await Task.Delay(50, cancellationToken);
         
         // For mock purposes, return Japanese (common in FFXIV)
-        // Real providers (Google, DeepL) will use their own detection
+        // Real providers (Google, DeepL, ...) will use their own detection
         return "ja";
     }
 }

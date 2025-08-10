@@ -18,10 +18,11 @@ public class DeepLProvider : ITranslationProvider, IDisposable
     
     public string Name => "DeepL";
     public bool IsConfigured => translator != null && !string.IsNullOrEmpty(apiKey);
+    public bool SupportsStructuredTranslation => true;  // DeepL handles XML tags well
 
-    public void Initialize(string? apiKey = null)
+    public void Initialize(string? key = null)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
+        if (string.IsNullOrWhiteSpace(key))
         {
             Service.PluginLog.Warning("DeepL API key not provided");
             return;
@@ -29,11 +30,11 @@ public class DeepLProvider : ITranslationProvider, IDisposable
 
         try
         {
-            this.apiKey = apiKey;
+            apiKey = key;
             
-            // Create translator instance with the API key
-            // The library automatically detects Free vs Pro based on the key format
-            translator = new Translator(apiKey);
+            // Create a translator instance with the API key
+            // The library automatically detects Free or Pro based on the key format
+            translator = new Translator(key);
             
             Service.PluginLog.Information("DeepL provider initialized successfully");
         }
@@ -41,7 +42,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable
         {
             Service.PluginLog.Error(ex, "Failed to initialize DeepL provider");
             translator = null;
-            this.apiKey = null;
+            apiKey = null;
         }
     }
 
@@ -87,16 +88,24 @@ public class DeepLProvider : ITranslationProvider, IDisposable
                 targetLang = "EN-US";  // Default to US English
             }
 
-            // Perform translation
+            // Perform translation with XML tag preservation
+            // Create options to preserve XML tags for structured translation
+            var options = new TextTranslateOptions
+            {
+                TagHandling = "xml",  // Preserve XML tags
+                PreserveFormatting = true
+            };
+            
             var result = await translator.TranslateTextAsync(
                 text,
                 sourceLang,  // null for auto-detection
                 targetLang,
-                cancellationToken: cancellationToken);
+                options,
+                cancellationToken);
             
             stopwatch.Stop();
 
-            if (result == null || string.IsNullOrEmpty(result.Text))
+            if (string.IsNullOrEmpty(result.Text))
             {
                 Service.PluginLog.Warning("Empty translation result from DeepL");
                 return new TranslationResponse
@@ -112,7 +121,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable
             {
                 Success = true,
                 TranslatedText = result.Text,
-                DetectedSourceLanguage = result.DetectedSourceLanguageCode?.ToLowerInvariant() ?? sourceLanguage,
+                DetectedSourceLanguage = result.DetectedSourceLanguageCode.ToLowerInvariant(),
                 CharactersConsumed = text.Length
             };
         }
@@ -179,7 +188,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable
                 "EN-US",
                 cancellationToken: cancellationToken);
             
-            return result?.DetectedSourceLanguageCode?.ToLowerInvariant();
+            return result.DetectedSourceLanguageCode.ToLowerInvariant();
         }
         catch (Exception ex)
         {

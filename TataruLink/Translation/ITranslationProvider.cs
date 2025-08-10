@@ -19,6 +19,12 @@ public interface ITranslationProvider
     bool IsConfigured { get; }
     
     /// <summary>
+    /// Whether this provider supports structured translation with XML tags.
+    /// Providers that support this can preserve text segment boundaries.
+    /// </summary>
+    bool SupportsStructuredTranslation { get; }
+    
+    /// <summary>
     /// Translate text
     /// </summary>
     Task<TranslationResponse> TranslateAsync(
@@ -45,9 +51,9 @@ public interface ITranslationProvider
 /// </summary>
 public class TranslationResponse
 {
-    public bool Success { get; set; }
-    public string? TranslatedText { get; set; }
-    public string? DetectedSourceLanguage { get; set; }
-    public string? Error { get; set; }
-    public int CharactersConsumed { get; set; }
+    public bool Success { get; init; }
+    public string? TranslatedText { get; init; }
+    public string? DetectedSourceLanguage { get; init; }
+    public string? Error { get; init; }
+    public int CharactersConsumed { get; init; }
 }

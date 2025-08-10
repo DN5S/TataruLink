@@ -16,7 +16,7 @@ public class TranslationTab
     private readonly ITranslationService translationService;
     
     private string tempApiKey = string.Empty;
-    private int selectedEngineIndex = 0;
+    private int selectedEngineIndex;
     private readonly string[] availableEngines =
     [
         "Mock", "Google", "DeepL"
@@ -39,7 +39,7 @@ public class TranslationTab
     {
         ImGui.TextUnformatted("Translation Engine");
         
-        // Show current provider status
+        // Show the current provider status
         var statusColor = translationService.IsConfigured 
             ? new Vector4(0, 1, 0, 1)  // Green
             : new Vector4(1, 1, 0, 1);  // Yellow
@@ -89,6 +89,26 @@ public class TranslationTab
         }
         
         ImGui.Separator();
+        ImGui.Spacing();
+        
+        // Translation prefix
+        ImGui.TextUnformatted("Translation Prefix");
+        ImGui.SameLine();
+        ImGui.TextDisabled("(?)");
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.BeginTooltip();
+            ImGui.TextUnformatted("Prefix added to translated messages (e.g., '[TR]')");
+            ImGui.EndTooltip();
+        }
+        
+        var prefix = configuration.Translation.TranslationPrefix;
+        if (ImGui.InputText("##TranslationPrefix", ref prefix, 20))
+        {
+            configuration.Translation.TranslationPrefix = prefix;
+            configuration.Save();
+        }
+        
         ImGui.Spacing();
         
         // Translation options
