@@ -25,7 +25,7 @@ public class MessageValidationStage : IPipelineStage
         // Initialize validators in order of execution
         validators =
         [
-            new DeduplicationValidator(TimeSpan.FromMilliseconds(this.configuration.Validation.DeduplicationWindowMs)),
+            new DeduplicationValidator(TimeSpan.FromMilliseconds(this.configuration.Validation.DuplicateDetectionPeriodMs)),
             new ChatTypeValidator(this.configuration),
             new ContentValidator()
         ];

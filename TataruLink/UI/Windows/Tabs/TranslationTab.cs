@@ -112,13 +112,6 @@ public class TranslationTab
         ImGui.Spacing();
         
         // Translation options
-        var showOriginal = configuration.Translation.ShowOriginalText;
-        if (ImGui.Checkbox("Show original text alongside translation", ref showOriginal))
-        {
-            configuration.Translation.ShowOriginalText = showOriginal;
-            configuration.Save();
-        }
-        
         var retryFailed = configuration.Translation.RetryFailedTranslations;
         if (ImGui.Checkbox("Retry failed translations", ref retryFailed))
         {

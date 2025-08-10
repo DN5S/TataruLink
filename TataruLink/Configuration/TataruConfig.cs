@@ -24,7 +24,7 @@ public class TataruConfig : IPluginConfiguration
     /// <summary>
     /// Enable debug logging for troubleshooting
     /// </summary>
-    public bool DebugMode { get; set; } = false;
+    public bool DebugMode { get; set; }
 
     /// <summary>
     /// Chat-related settings

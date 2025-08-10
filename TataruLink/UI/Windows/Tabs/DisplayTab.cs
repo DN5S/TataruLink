@@ -24,13 +24,6 @@ public class DisplayTab(TataruConfig configuration)
         {
             ImGui.Indent();
             
-            var showTimestamp = configuration.Display.ShowTimestamp;
-            if (ImGui.Checkbox("Show timestamp in chat", ref showTimestamp))
-            {
-                configuration.Display.ShowTimestamp = showTimestamp;
-                configuration.Save();
-            }
-            
             var showSenderName = configuration.Display.ShowSenderName;
             if (ImGui.Checkbox("Show sender name in chat", ref showSenderName))
             {

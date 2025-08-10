@@ -27,6 +27,24 @@ public readonly struct ChatCode(ushort value) : IEquatable<ChatCode>
         type = default;
         return false;
     }
+    
+    public XivChatType ToXivChatType()
+    {
+        // Try to get the exact XivChatType first
+        if (TryGetXivChatType(out var type))
+            return type;
+        
+        // For non-standard types, map to appropriate parent types
+        var rawType = GetRawChatType();
+        var parentType = ChatType.GetParentType(rawType);
+        
+        // If parent is a valid XivChatType, use it
+        if (Enum.IsDefined(typeof(XivChatType), parentType))
+            return (XivChatType)parentType;
+        
+        // Default to Debug for any unmapped types
+        return XivChatType.Debug;
+    }
 
     public ChatSource GetSource()
         => (ChatSource)((Value >> 7) & 0x3);

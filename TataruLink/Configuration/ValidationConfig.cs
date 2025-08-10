@@ -6,9 +6,10 @@ namespace TataruLink.Configuration;
 public class ValidationConfig
 {
     /// <summary>
-    /// Time window for deduplication in milliseconds
+    /// Period in milliseconds to detect and block duplicate messages
+    /// Prevents the same message from being processed multiple times (avoids infinite translation loops)
     /// </summary>
-    public int DeduplicationWindowMs { get; set; } = 500;
+    public int DuplicateDetectionPeriodMs { get; set; } = 1000;  // 1 second
     
     /// <summary>
     /// Preserve auto-translate phrases

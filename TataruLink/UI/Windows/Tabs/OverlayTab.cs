@@ -11,22 +11,11 @@ namespace TataruLink.UI.Windows.Tabs;
 /// <summary>
 /// Overlay management tab for creating, configuring, and removing overlay windows
 /// </summary>
-public class OverlayTab
+public class OverlayTab(TataruConfig configuration, OverlayManager overlayManager)
 {
-    private readonly TataruConfig configuration;
-    private readonly OverlayManager overlayManager;
     private string newOverlayName = "New Overlay";
-    private OverlayWindowConfig? selectedOverlay;
-    
-    public OverlayTab(TataruConfig configuration, OverlayManager overlayManager)
-    {
-        this.configuration = configuration;
-        this.overlayManager = overlayManager;
-        
-        // Select first overlay if exists
-        selectedOverlay = configuration.Display.OverlayWindows.FirstOrDefault();
-    }
-    
+    private OverlayWindowConfig? selectedOverlay = configuration.Display.OverlayWindows.FirstOrDefault();
+
     public void Draw()
     {
         // Left panel - Overlay list

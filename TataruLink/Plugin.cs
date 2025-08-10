@@ -74,7 +74,7 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize translation service
         translationService = new TranslationService(configuration);
         
-        // Initialize UI first to create window system and overlay manager
+        // Initialize UI first to create a window system and overlay manager
         InitializeUI();
         
         // Initialize message processing pipeline
@@ -109,7 +109,7 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     private void InitializeUI()
     {
-        // Create window system
+        // Create a window system
         windowSystem = new WindowSystem("TataruLink");
         
         // Initialize overlay manager
@@ -133,7 +133,7 @@ public sealed class Plugin : IDalamudPlugin
     }
     
     /// <summary>
-    /// Open settings window
+    /// Open the settings window
     /// </summary>
     private void OpenSettings()
     {
@@ -171,7 +171,7 @@ public sealed class Plugin : IDalamudPlugin
         // Step 1: Unregister event handlers (prevents memory leaks)
         UnregisterEventHandlers();
         
-        // Step 2: Dispose the pipeline and stages
+        // Step 2: Dispose of the pipeline and stages
         chatCaptureStage?.Dispose();
         messagePipeline?.Dispose();
         

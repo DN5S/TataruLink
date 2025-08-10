@@ -47,7 +47,7 @@ public class Service
     
     /// <summary>
     /// Client state - information about the player and game state
-    /// Used to check if player is logged in, current zone, etc.
+    /// Used to check if the player is logged in, current zone, etc.
     /// </summary>
     [PluginService] public static IClientState ClientState { get; private set; } = null!;
     

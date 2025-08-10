@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Models;
@@ -233,7 +232,7 @@ public class OverlayManager : IDisposable
             if (config.Name == newName)
                 return;
             
-            // Save current state including position and size
+            // Save the current state including position and size
             var wasOpen = oldOverlay.IsOpen;
             var currentPosition = oldOverlay.Position;
             var currentSize = oldOverlay.Size;
@@ -250,10 +249,10 @@ public class OverlayManager : IDisposable
             // Update name
             config.Name = newName;
             
-            // Save configuration before creating new window
+            // Save configuration before creating a new window
             configuration.Save();
             
-            // Create new window with updated name - it will use the saved position/size from config
+            // Create a new window with an updated name - it will use the saved position/size from config
             var newOverlay = new TranslationOverlay(config);
             overlays[config.Id] = newOverlay;
             windowSystem.AddWindow(newOverlay);

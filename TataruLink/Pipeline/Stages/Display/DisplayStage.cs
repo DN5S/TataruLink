@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Dalamud.Game.Text;
 using TataruLink.Models;
 using TataruLink.Configuration;
 using TataruLink.Overlay;
@@ -79,15 +80,46 @@ public class DisplayStage(TataruConfig configuration, OverlayManager? overlayMan
 
     private void DisplayInGameChat(Message message, TataruConfig config)
     {
+        // Build the message prefix with display options
+        var prefixBuilder = new System.Text.StringBuilder();
+        
+        // Add translation prefix if configured
+        if (!string.IsNullOrEmpty(config.Translation.TranslationPrefix))
+        {
+            prefixBuilder.Append(config.Translation.TranslationPrefix);
+            prefixBuilder.Append(' ');
+        }
+        
+        // Add a chat type if enabled (no timestamp since the game adds it automatically)
+        if (config.Display.ShowChatType)
+        {
+            var chatTypeName = message.GetChannelName();
+            if (!string.IsNullOrEmpty(chatTypeName))
+            {
+                prefixBuilder.Append($"[{chatTypeName}] ");
+            }
+        }
+        
+        // Add sender name if enabled
+        if (config.Display.ShowSenderName && !string.IsNullOrEmpty(message.SenderName))
+        {
+            prefixBuilder.Append($"{message.SenderName}: ");
+        }
+        
         // Use SeStringUtils to create the complete translated message with preserved payloads
         var formattedMessage = SeStringUtils.BuildTranslation(
             message.OriginalContent,
             message.TranslatedContent!,
-            config.Translation.TranslationPrefix
+            prefixBuilder.ToString().TrimEnd()
         );
         
-        // Display the formatted message
-        Service.ChatGui.Print(formattedMessage);
+        var chatEntry = new XivChatEntry
+        {
+            Type = XivChatType.Echo,
+            Message = formattedMessage
+        };
+        
+        Service.ChatGui.Print(chatEntry);
     }
     
     public void Dispose()

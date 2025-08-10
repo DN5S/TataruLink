@@ -15,10 +15,6 @@ namespace TataruLink.UI.Windows;
 /// </summary>
 public class SettingsWindow : Window, IDisposable
 {
-    private readonly TataruConfig configuration;
-    private readonly ITranslationService translationService;
-    private readonly OverlayManager overlayManager;
-    
     // Tab panels
     private readonly GeneralTab generalTab;
     private readonly TranslationTab translationTab;
@@ -31,10 +27,6 @@ public class SettingsWindow : Window, IDisposable
     public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
-        this.configuration = configuration;
-        this.translationService = translationService;
-        this.overlayManager = overlayManager;
-        
         // Window configuration
         Size = new Vector2(600, 400);
         SizeCondition = ImGuiCond.FirstUseEver;

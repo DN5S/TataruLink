@@ -7,15 +7,16 @@ using TataruLink.Services;
 namespace TataruLink.Pipeline.Stages.Validation;
 
 /// <summary>
-/// Validates that messages are not duplicates within a time period.
+/// Validates that messages are not duplicates within a detection period.
+/// Prevents the same message from being processed multiple times.
 /// </summary>
-public class DeduplicationValidator(TimeSpan deduplicationPeriod) : IMessageValidator
+public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessageValidator
 {
     private readonly ConcurrentDictionary<int, DateTime> recentMessageHashes = new();
 
     public void Initialize()
     {
-        Service.PluginLog.Debug($"DeduplicationValidator initialized with {deduplicationPeriod.TotalMilliseconds}ms");
+        Service.PluginLog.Debug($"DeduplicationValidator initialized with {duplicateDetectionPeriod.TotalMilliseconds}ms detection period");
     }
 
     public Task<ValidationResult> ValidateAsync(Message message, PipelineContext context)
@@ -28,7 +29,7 @@ public class DeduplicationValidator(TimeSpan deduplicationPeriod) : IMessageVali
         );
 
         // Clean old entries
-        var cutoff = DateTime.UtcNow - deduplicationPeriod;
+        var cutoff = DateTime.UtcNow - duplicateDetectionPeriod;
         foreach (var kvp in recentMessageHashes)
         {
             if (kvp.Value < cutoff)
