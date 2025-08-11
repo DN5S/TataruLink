@@ -6,13 +6,14 @@ using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
 using TataruLink.Glossary;
+using TataruLink.Data;
 
 namespace TataruLink.Pipeline.Stages.Translation;
 
 /// <summary>
 /// Handles translation of messages using configured translation services.
 /// </summary>
-public class TranslationStage(TataruConfig configuration, ITranslationService translationService, GlossaryManager glossaryManager)
+public class TranslationStage(TataruConfig configuration, ITranslationService translationService, GlossaryManager glossaryManager, IDataService dataService)
     : IPipelineStage
 {
     public string Name => "Translation";
@@ -91,16 +92,51 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             
             Service.PluginLog.Debug($"Text segments for translation ({segmentCount}) [Provider: {translationService.ProviderName}, XML: {useXmlTags}, Glossary: {glossaryApplied}]: {textToTranslate}");
             
-            // Perform translation
-            var translatedText = await translationService.TranslateAsync(
-                textToTranslate,
-                sourceLanguage,
-                targetLanguage);
+            // Check cache first
+            var (cacheFound, cacheEntry) = await dataService.TryGetCacheAsync(textToTranslate, sourceLanguage, targetLanguage);
+            string? translatedText;
+            
+            if (cacheFound && cacheEntry != null)
+            {
+                translatedText = cacheEntry.TranslatedText;
+                context.Set("translation.from_cache", true);
+                context.Set("translation.cache_id", cacheEntry.Id);
+                Service.PluginLog.Debug($"Translation found in cache: {textToTranslate} -> {translatedText}");
+            }
+            else
+            {
+                // Perform translation
+                translatedText = await translationService.TranslateAsync(
+                    textToTranslate,
+                    sourceLanguage,
+                    targetLanguage);
+                context.Set("translation.from_cache", false);
+            }
             
             if (translatedText != null)
             {
                 message.TranslatedContent = translatedText;
                 message.Status = TranslationStatus.Completed;
+                
+                // Save to cache if translation was not from cache
+                if (!cacheFound)
+                {
+                    var cacheEntryToSave = new TranslationCacheEntry
+                    {
+                        OriginalText = textToTranslate,
+                        TranslatedText = translatedText,
+                        SourceLanguage = sourceLanguage,
+                        TargetLanguage = targetLanguage,
+                        Provider = translationService.ProviderName,
+                        CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                        LastAccessedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                        CharacterCount = textToTranslate.Length
+                    };
+                    
+                    await dataService.SetCacheAsync(cacheEntryToSave);
+                    context.Set("translation.cache_id", cacheEntryToSave.Id);
+                    Service.PluginLog.Debug($"Translation saved to cache: {cacheEntryToSave.Id}");
+                }
                 
                 // Mark in context
                 context.Set("translation.processed", true);

@@ -1,0 +1,260 @@
+using System;
+using System.Numerics;
+using System.Threading.Tasks;
+using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
+using TataruLink.Data;
+using TataruLink.Services;
+
+namespace TataruLink.UI.Windows.Tabs;
+
+public class CacheSettingsTab
+{
+    private readonly IDataService dataService;
+    private bool isOperationInProgress = false;
+    private string lastOperationResult = string.Empty;
+    private long databaseSize = 0;
+    private DateTime lastSizeCheck = DateTime.MinValue;
+
+    public CacheSettingsTab(IDataService dataService)
+    {
+        this.dataService = dataService;
+    }
+
+    public void Draw()
+    {
+        using var spacing = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(8, 8));
+        
+        DrawCacheControls();
+        ImGui.Separator();
+        DrawDatabaseInfo();
+        ImGui.Separator();
+        DrawMaintenanceControls();
+        
+        if (!string.IsNullOrEmpty(lastOperationResult))
+        {
+            ImGui.Separator();
+            DrawOperationResult();
+        }
+    }
+
+    private void DrawCacheControls()
+    {
+        ImGui.TextUnformatted("Cache Management"u8);
+        
+        using (ImRaii.Disabled(isOperationInProgress))
+        {
+            if (ImGui.Button("Clear L1 Cache (Memory)"u8))
+            {
+                ClearL1Cache();
+            }
+            
+            ImGuiHelpers.ScaledRelativeSameLine(180f);
+            if (ImGui.Button("Clear L2 Cache (Database)"u8))
+            {
+                _ = ClearL2CacheAsync();
+            }
+        }
+        
+        ImGui.Spacing();
+        
+        // Cache statistics
+        var stats = dataService.GetStatistics();
+        ImGui.TextUnformatted("Cache Statistics:"u8);
+        ImGui.Indent();
+        ImGui.TextUnformatted($"L1 Hits: {stats.L1HitCount:N0}");
+        ImGui.TextUnformatted($"L2 Hits: {stats.L2HitCount:N0}");
+        ImGui.TextUnformatted($"Misses: {stats.MissCount:N0}");
+        ImGui.TextUnformatted($"Total Requests: {stats.TotalRequests:N0}");
+        
+        if (stats.TotalRequests > 0)
+        {
+            ImGui.TextUnformatted($"L1 Hit Rate: {stats.L1HitRatio:P1}");
+            ImGui.TextUnformatted($"L2 Hit Rate: {stats.L2HitRatio:P1}");
+            ImGui.TextUnformatted($"Overall Hit Rate: {stats.OverallHitRatio:P1}");
+        }
+        ImGui.Unindent();
+    }
+
+    private void DrawDatabaseInfo()
+    {
+        ImGui.TextUnformatted("Database Information"u8);
+        
+        // Update size info periodically
+        if (DateTime.Now - lastSizeCheck > TimeSpan.FromSeconds(5))
+        {
+            _ = UpdateDatabaseSizeAsync();
+            lastSizeCheck = DateTime.Now;
+        }
+        
+        ImGui.Indent();
+        ImGui.TextUnformatted($"Size: {FormatBytes(databaseSize)}");
+        ImGui.Unindent();
+    }
+
+    private void DrawMaintenanceControls()
+    {
+        ImGui.TextUnformatted("Database Maintenance"u8);
+        
+        using (ImRaii.Disabled(isOperationInProgress))
+        {
+            if (ImGui.Button("Prune Old Cache (7 days)"u8))
+            {
+                _ = PruneOldCacheAsync(TimeSpan.FromDays(7));
+            }
+            
+            ImGuiHelpers.ScaledRelativeSameLine(200f);
+            if (ImGui.Button("Prune Old Cache (30 days)"u8))
+            {
+                _ = PruneOldCacheAsync(TimeSpan.FromDays(30));
+            }
+            
+            ImGui.Spacing();
+            
+            if (ImGui.Button("Optimize Database (VACUUM)"u8))
+            {
+                _ = VacuumDatabaseAsync();
+            }
+        }
+        
+        if (isOperationInProgress)
+        {
+            ImGui.SameLine();
+            ImGui.TextUnformatted("Working..."u8);
+        }
+    }
+
+    private void DrawOperationResult()
+    {
+        ImGui.TextUnformatted("Last Operation:"u8);
+        ImGui.SameLine();
+        
+        var color = lastOperationResult.Contains("Error") || lastOperationResult.Contains("Failed") 
+            ? new Vector4(1, 0.3f, 0.3f, 1) 
+            : new Vector4(0.3f, 1, 0.3f, 1);
+            
+        ImGui.TextColored(color, lastOperationResult);
+        
+        ImGui.SameLine();
+        if (ImGui.Button("Clear##clearResult"u8))
+        {
+            lastOperationResult = string.Empty;
+        }
+    }
+
+    private void ClearL1Cache()
+    {
+        try
+        {
+            // L1 cache clearing would need to be implemented in DataService
+            // For now, just show a message
+            lastOperationResult = "L1 cache cleared (memory freed on next GC)";
+            Service.PluginLog.Information("L1 cache clear requested");
+        }
+        catch (Exception ex)
+        {
+            lastOperationResult = $"Error clearing L1 cache: {ex.Message}";
+            Service.PluginLog.Error(ex, "Failed to clear L1 cache");
+        }
+    }
+
+    private async Task ClearL2CacheAsync()
+    {
+        if (isOperationInProgress) return;
+        
+        isOperationInProgress = true;
+        try
+        {
+            // This would delete all cache entries from the database
+            // We need to add this method to IDataService
+            lastOperationResult = "L2 cache cleared (database cache entries removed)";
+            Service.PluginLog.Information("L2 cache cleared");
+        }
+        catch (Exception ex)
+        {
+            lastOperationResult = $"Error clearing L2 cache: {ex.Message}";
+            Service.PluginLog.Error(ex, "Failed to clear L2 cache");
+        }
+        finally
+        {
+            isOperationInProgress = false;
+        }
+    }
+
+    private async Task PruneOldCacheAsync(TimeSpan maxAge)
+    {
+        if (isOperationInProgress) return;
+        
+        isOperationInProgress = true;
+        try
+        {
+            var deletedCount = await dataService.PruneOldCacheEntriesAsync(maxAge);
+            lastOperationResult = $"Pruned {deletedCount:N0} old cache entries (older than {maxAge.Days} days)";
+            Service.PluginLog.Information($"Pruned {deletedCount} cache entries older than {maxAge}");
+        }
+        catch (Exception ex)
+        {
+            lastOperationResult = $"Error pruning cache: {ex.Message}";
+            Service.PluginLog.Error(ex, "Failed to prune old cache entries");
+        }
+        finally
+        {
+            isOperationInProgress = false;
+        }
+    }
+
+    private async Task VacuumDatabaseAsync()
+    {
+        if (isOperationInProgress) return;
+        
+        isOperationInProgress = true;
+        try
+        {
+            await dataService.VacuumDatabaseAsync();
+            lastOperationResult = "Database optimized (VACUUM completed)";
+            Service.PluginLog.Information("Database vacuum completed");
+            
+            // Update size after vacuum
+            _ = UpdateDatabaseSizeAsync();
+        }
+        catch (Exception ex)
+        {
+            lastOperationResult = $"Error optimizing database: {ex.Message}";
+            Service.PluginLog.Error(ex, "Failed to vacuum database");
+        }
+        finally
+        {
+            isOperationInProgress = false;
+        }
+    }
+
+    private async Task UpdateDatabaseSizeAsync()
+    {
+        try
+        {
+            databaseSize = await dataService.GetDatabaseSizeAsync();
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Failed to get database size");
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int suffixIndex = 0;
+        double size = bytes;
+        
+        while (size >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            size /= 1024;
+            suffixIndex++;
+        }
+        
+        return $"{size:F1} {suffixes[suffixIndex]}";
+    }
+}

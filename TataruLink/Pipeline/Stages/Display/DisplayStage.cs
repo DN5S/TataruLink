@@ -7,6 +7,7 @@ using TataruLink.Configuration;
 using TataruLink.Overlay;
 using TataruLink.Services;
 using TataruLink.Utils;
+using TataruLink.Data;
 
 namespace TataruLink.Pipeline.Stages.Display;
 
@@ -14,7 +15,7 @@ namespace TataruLink.Pipeline.Stages.Display;
 /// Final stage: Displays translated messages to the user.
 /// Handles both in-game chat display and overlay windows.
 /// </summary>
-public class DisplayStage(TataruConfig configuration, OverlayManager? overlayManager = null) : IPipelineStage
+public class DisplayStage(TataruConfig configuration, IDataService dataService, OverlayManager? overlayManager = null) : IPipelineStage
 {
     public string Name => "Display";
     public bool IsEnabled { get; set; } = true;
@@ -24,22 +25,22 @@ public class DisplayStage(TataruConfig configuration, OverlayManager? overlayMan
         Service.PluginLog.Information($"{Name} stage initialized");
     }
 
-    public Task<Message?> ProcessAsync(Message message, PipelineContext context)
+    public async Task<Message?> ProcessAsync(Message message, PipelineContext context)
     {
-        if (!IsEnabled) return Task.FromResult<Message?>(message);
+        if (!IsEnabled) return await Task.FromResult<Message?>(message);
 
         // Only display if we have a translation
         if (message.Status != TranslationStatus.Completed)
         {
             Service.PluginLog.Debug($"Message translation status is {message.Status}, skipping display");
-            return Task.FromResult<Message?>(message);
+            return await Task.FromResult<Message?>(message);
         }
 
         // Skip if no translated content
         if (string.IsNullOrEmpty(message.TranslatedContent))
         {
             Service.PluginLog.Debug("No translated content available, skipping display");
-            return Task.FromResult<Message?>(message);
+            return await Task.FromResult<Message?>(message);
         }
 
         // Display in game chat
@@ -70,12 +71,36 @@ public class DisplayStage(TataruConfig configuration, OverlayManager? overlayMan
             }
         }
 
+        // Save chat history
+        try
+        {
+            var cacheId = context.Get<string>("translation.cache_id");
+            var historyEntry = new ChatHistoryEntry
+            {
+                MessageId = message.Id,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                ChatType = (ushort)message.ChatType,
+                ChatTypeName = message.GetChannelName(),
+                SenderName = message.SenderName,
+                OriginalContent = message.PlainTextContent,
+                TranslatedContent = message.TranslatedContent,
+                TranslationCacheId = cacheId
+            };
+            
+            await dataService.AddHistoryAsync(historyEntry);
+            Service.PluginLog.Debug($"Chat history saved for message {message.Id}");
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Failed to save chat history");
+        }
+
         // Mark in context
         context.Set("display.completed", true);
         context.Set("display.in_chat", configuration.Display.ShowInChat);
         context.Set("display.in_overlay", overlayManager != null);
 
-        return Task.FromResult<Message?>(message);
+        return await Task.FromResult<Message?>(message);
     }
 
     private void DisplayInGameChat(Message message, TataruConfig config)

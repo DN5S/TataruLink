@@ -1,6 +1,8 @@
+using System.Threading.Tasks;
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
+using TataruLink.Data;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Pipeline;
@@ -32,10 +34,12 @@ public sealed class Plugin : IDalamudPlugin
     private ITranslationService? translationService;
     private OverlayManager? overlayManager;
     private GlossaryManager? glossaryManager;
+    private IDataService? dataService;
     
     // UI components
     private WindowSystem? windowSystem;
     private SettingsWindow? settingsWindow;
+    private HistoryWindow? historyWindow;
     
     // Plugin lifecycle flag
     private bool isDisposed;
@@ -72,6 +76,10 @@ public sealed class Plugin : IDalamudPlugin
         // Configuration is already loaded in Service.Initialize()
         var configuration = Service.Configuration.Data;
         
+        // Initialize data service first (database layer)
+        dataService = new DataService(pluginInterface);
+        _ = Task.Run(async () => await dataService.InitializeAsync());
+        
         // Initialize glossary manager
         glossaryManager = new GlossaryManager(configuration);
         
@@ -90,9 +98,9 @@ public sealed class Plugin : IDalamudPlugin
             // Stage 1: Validation (includes deduplication, chat type, and content validation)
             .AddStage(new MessageValidationStage(configuration))
             // Stage 2: Translate the message using a translation service (with glossary support)
-            .AddStage(new TranslationStage(configuration, translationService, glossaryManager))
+            .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService))
             // Stage 3: Display the translated message (with overlay support)
-            .AddStage(new DisplayStage(configuration, overlayManager));
+            .AddStage(new DisplayStage(configuration, dataService, overlayManager));
         
         // Initialize the pipeline
         messagePipeline.Initialize();
@@ -119,9 +127,13 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize overlay manager
         overlayManager = new OverlayManager(Service.Configuration.Data, windowSystem);
         
-        // Create and add settings window with overlay manager and glossary manager
-        settingsWindow = new SettingsWindow(Service.Configuration.Data, translationService!, overlayManager, glossaryManager!);
+        // Create and add settings window with data service
+        settingsWindow = new SettingsWindow(Service.Configuration.Data, translationService!, overlayManager, glossaryManager!, dataService!);
         windowSystem.AddWindow(settingsWindow);
+        
+        // Create and add history window
+        historyWindow = new HistoryWindow(dataService!);
+        windowSystem.AddWindow(historyWindow);
         
         // Register draw handler
         pluginInterface.UiBuilder.Draw += DrawUI;
@@ -188,6 +200,7 @@ public sealed class Plugin : IDalamudPlugin
             windowSystem.RemoveAllWindows();
         }
         settingsWindow?.Dispose();
+        historyWindow?.Dispose();
         
         // Step 4: Unregister commands
         // Service.CommandManager.RemoveHandler("/tatarulink");
@@ -196,6 +209,7 @@ public sealed class Plugin : IDalamudPlugin
         Service.Configuration?.SaveImmediately();
         
         // Step 6: Dispose services
+        dataService?.Dispose();
         glossaryManager?.Dispose();
         translationService?.Dispose();
         Service.PipelineDebug?.Dispose();

@@ -4,6 +4,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
+using TataruLink.Data;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Translation;
@@ -26,8 +27,9 @@ public class SettingsWindow : Window, IDisposable
     private readonly DisplayTab displayTab;
     private readonly OverlayTab overlayTab;
     private readonly DebugTab debugTab;
+    private readonly CacheSettingsTab cacheSettingsTab;
 
-    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager) 
+    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, IDataService dataService) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
         // Window configuration
@@ -44,6 +46,7 @@ public class SettingsWindow : Window, IDisposable
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);
         debugTab = new DebugTab(configuration, translationService);
+        cacheSettingsTab = new CacheSettingsTab(dataService);
     }
 
     public override void Draw()
@@ -103,6 +106,12 @@ public class SettingsWindow : Window, IDisposable
         {
             if (tab)
                 debugTab.Draw();
+        }
+        
+        using (var tab = ImRaii.TabItem("Cache"u8))
+        {
+            if (tab)
+                cacheSettingsTab.Draw();
         }
     }
 
