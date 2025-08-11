@@ -36,12 +36,29 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             {
                 Service.PluginLog.Warning("Translation service not configured");
                 message.Status = TranslationStatus.Failed;
+                
+                // Get provider status for detailed error info
+                var providerStatus = (translationService as TranslationService)?.GetActiveProviderStatus();
+                if (providerStatus != null)
+                {
+                    context.Set("translation.error", providerStatus.GetStatusMessage());
+                    
+                    // If there's a user-friendly error message, store it for UI display
+                    if (providerStatus.LastError?.UserFriendlyMessage != null)
+                    {
+                        context.Set("translation.user_error", providerStatus.LastError.UserFriendlyMessage);
+                    }
+                }
+                
                 return message;
             }
             
-            // Get language settings
+            // Get language settings from configuration
             var sourceLanguage = configuration.Translation.SourceLanguage;
             var targetLanguage = configuration.Translation.TargetLanguage;
+            
+            // Store current provider info in context
+            context.Set("translation.provider", translationService.ProviderName);
             
             // Mark as in progress
             message.Status = TranslationStatus.InProgress;
@@ -79,14 +96,44 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             {
                 message.Status = TranslationStatus.Failed;
                 context.Set("translation.success", false);
+                
+                // Get provider status for detailed error info
+                var providerStatus = (translationService as TranslationService)?.GetActiveProviderStatus();
+                if (providerStatus?.LastError != null)
+                {
+                    context.Set("translation.error", providerStatus.LastError.Message);
+                    
+                    // Store user-friendly error if available
+                    if (providerStatus.LastError.UserFriendlyMessage != null)
+                    {
+                        context.Set("translation.user_error", providerStatus.LastError.UserFriendlyMessage);
+                    }
+                }
+                
                 Service.PluginLog.Warning($"Translation failed for message: {textToTranslate}");
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Translation was cancelled (timeout or user cancellation)
+            Service.PluginLog.Debug($"Translation cancelled for message {message.Id}");
+            message.Status = TranslationStatus.Failed;
+            context.Set("translation.error", "Translation cancelled or timed out");
+            context.Set("translation.user_error", "Translation took too long. Try increasing the timeout in settings.");
         }
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, $"Error in translation stage for message {message.Id}");
             message.Status = TranslationStatus.Failed;
-            context.Set("translation.error", ex.Message);
+            
+            // Create a translation error for better user feedback
+            var error = TranslationError.FromException(ex, translationService.ProviderName);
+            context.Set("translation.error", error.Message);
+            
+            if (error.UserFriendlyMessage != null)
+            {
+                context.Set("translation.user_error", error.UserFriendlyMessage);
+            }
         }
 
         return message;
