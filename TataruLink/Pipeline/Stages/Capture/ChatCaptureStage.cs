@@ -35,12 +35,9 @@ public class ChatCaptureStage(MessagePipeline pipeline, TataruConfig configurati
 
         try
         {
-            // Convert to our chat code system
-            var chatCode = ChatCode.FromXivChatType(type);
-            
             // Create the message model
             var chatMessage = new Message(
-                code: chatCode,
+                chatType: (ushort)type,
                 sender: sender,
                 content: message
             );

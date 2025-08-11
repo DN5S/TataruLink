@@ -270,7 +270,7 @@ public class TranslationOverlay : Window, IDisposable
             return;
         
         // Get chat type value
-        var chatTypeValue = message.Code.GetRawChatType();
+        var chatTypeValue = message.ChatType;
         
         // Check if this chat type should be displayed
         if (config.EnabledChatTypes.Count > 0 && 

@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using TataruLink.Configuration;
 using TataruLink.Models;
+using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
@@ -17,13 +18,13 @@ public class ChatTypeValidator(TataruConfig configuration) : IMessageValidator
     public Task<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
         // Check if this chat type should be translated
-        if (!message.Code.ShouldTranslate(configuration))
+        if (!ChatTypeUtils.ShouldTranslate(message.ChatType, configuration))
         {
             return Task.FromResult(ValidationResult.Failure(
-                $"Chat type {message.Code.GetChatType()} is not configured for translation"));
+                $"Chat type {ChatTypeUtils.GetChannelName(message.ChatType)} is not configured for translation"));
         }
 
-        context.Set("validation.chat_type", message.Code.GetChatType().ToString());
+        context.Set("validation.chat_type", ChatTypeUtils.GetChannelName(message.ChatType));
         return Task.FromResult(ValidationResult.Success());
     }
 

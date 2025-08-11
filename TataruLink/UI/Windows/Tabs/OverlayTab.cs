@@ -265,42 +265,81 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
         // Chat type filter
         if (ImGui.CollapsingHeader("Chat Type Filter"))
         {
-            ImGui.TextUnformatted("Select which chat types to display:");
-            ImGui.TextUnformatted("(Empty = show all)");
+            ImGui.TextUnformatted("Select which chat types to display in this overlay:");
+            ImGui.TextUnformatted("(Only showing chat types enabled for translation)");
+            ImGui.Spacing();
             
-            // Use the ChatType helper to get all translatable chat types
-            foreach (var (chatType, displayName) in Models.ChatType.GetTranslatableChatTypes())
+            // Only show chat types that are enabled in the main configuration
+            var enabledChatTypes = configuration.Chat.GetEnabledChatTypes().ToList();
+            
+            if (enabledChatTypes.Count == 0)
             {
-                var chatTypeValue = (ushort)chatType;
-                var isEnabled = overlay.EnabledChatTypes.Contains(chatTypeValue);
-                if (ImGui.Checkbox(displayName, ref isEnabled))
+                ImGui.TextDisabled("No chat types are enabled for translation.");
+                ImGui.TextDisabled("Enable chat types in the 'Chat Types' tab first.");
+            }
+            else
+            {
+                ImGui.TextUnformatted($"Available chat types ({enabledChatTypes.Count}):");
+                ImGui.Separator();
+                
+                foreach (var chatTypeValue in enabledChatTypes)
                 {
+                    var displayName = Utils.ChatTypeUtils.GetChannelName(chatTypeValue);
+                    var category = Utils.ChatTypeUtils.GetCategory(chatTypeValue);
+                    var isEnabled = overlay.EnabledChatTypes.Contains(chatTypeValue);
+                    
+                    // Checkbox for enabling this chat type in the overlay
+                    if (ImGui.Checkbox($"{displayName} [{category}]", ref isEnabled))
+                    {
+                        if (isEnabled)
+                        {
+                            overlay.EnabledChatTypes.Add(chatTypeValue);
+                        }
+                        else
+                        {
+                            overlay.EnabledChatTypes.Remove(chatTypeValue);
+                        }
+                        configuration.Save();
+                    }
+                    
+                    // Only show color picker if this chat type is enabled for this overlay
                     if (isEnabled)
                     {
-                        overlay.EnabledChatTypes.Add(chatTypeValue);
+                        // Get color or use default if not set
+                        if (!overlay.ChatTypeColors.TryGetValue(chatTypeValue, out var color))
+                        {
+                            // Use default color if not in dictionary
+                            color = new Vector4(0.8f, 0.8f, 0.8f, 1.0f);
+                            overlay.ChatTypeColors[chatTypeValue] = color;
+                        }
+                        
+                        ImGui.SameLine();
+                        if (ImGui.ColorEdit4($"##Color{chatTypeValue}", ref color, 
+                            ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel | ImGuiColorEditFlags.AlphaPreview))
+                        {
+                            overlay.ChatTypeColors[chatTypeValue] = color;
+                            configuration.Save();  // Save when color changes
+                        }
                     }
-                    else
+                }
+                
+                ImGui.Spacing();
+                ImGui.Separator();
+                
+                // Quick actions
+                if (ImGui.Button("Select All Available"))
+                {
+                    foreach (var chatType in enabledChatTypes)
                     {
-                        overlay.EnabledChatTypes.Remove(chatTypeValue);
+                        overlay.EnabledChatTypes.Add(chatType);
                     }
                     configuration.Save();
                 }
-                
-                // Show the color picker next to checkbox
-                // Get color or use default if not set
-                if (!overlay.ChatTypeColors.TryGetValue(chatTypeValue, out var color))
-                {
-                    // Use default color if not in dictionary
-                    color = new Vector4(0.8f, 0.8f, 0.8f, 1.0f);
-                    overlay.ChatTypeColors[chatTypeValue] = color;
-                }
-                
                 ImGui.SameLine();
-                if (ImGui.ColorEdit4($"##Color{chatTypeValue}", ref color, 
-                    ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel | ImGuiColorEditFlags.AlphaPreview))
+                if (ImGui.Button("Clear All"))
                 {
-                    overlay.ChatTypeColors[chatTypeValue] = color;
-                    configuration.Save();  // Save when color changes
+                    overlay.EnabledChatTypes.Clear();
+                    configuration.Save();
                 }
             }
         }
@@ -338,7 +377,6 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
     private void SendTestMessage(OverlayWindowConfig overlay)
     {
         // Create a test message using a proper constructor
-        var code = Models.ChatCode.FromXivChatType(Dalamud.Game.Text.XivChatType.Say);
         var senderBuilder = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder();
         senderBuilder.AddText("Test Player");
         var senderString = senderBuilder.Build();
@@ -347,7 +385,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
         contentBuilder.AddText("This is a test message");
         var contentString = contentBuilder.Build();
         
-        var testMessage = new Models.Message(code, senderString, contentString)
+        var testMessage = new Models.Message((ushort)Dalamud.Game.Text.XivChatType.Say, senderString, contentString)
         {
             TranslatedContent = "This is a translated test message",
             Status = Models.TranslationStatus.Completed

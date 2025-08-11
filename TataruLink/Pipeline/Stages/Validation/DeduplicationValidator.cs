@@ -23,7 +23,7 @@ public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessag
     {
         // Create hash from message components
         var hash = HashCode.Combine(
-            message.Code.Value,
+            message.ChatType,
             message.SenderName,
             message.PlainTextContent
         );

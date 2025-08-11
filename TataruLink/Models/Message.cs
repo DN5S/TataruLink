@@ -11,7 +11,7 @@ public sealed class Message
     
     public long Id { get; }
     public DateTime Timestamp { get; }
-    public ChatCode Code { get; }
+    public ushort ChatType { get; }
     public string? SenderName { get; }
     public SeString OriginalSender { get; }
     public SeString OriginalContent { get; }
@@ -24,11 +24,11 @@ public sealed class Message
     public string? TranslationEngine { get; set; }
     public TimeSpan? TranslationTime { get; set; }
     
-    public Message(ChatCode code, SeString sender, SeString content)
+    public Message(ushort chatType, SeString sender, SeString content)
     {
         Id = Interlocked.Increment(ref NextId);
         Timestamp = DateTime.Now;
-        Code = code;
+        ChatType = chatType;
         OriginalSender = sender;
         OriginalContent = content;
         
@@ -67,10 +67,10 @@ public sealed class Message
         => IsTranslated() ? TranslatedContent! : PlainTextContent;
 
     public string GetChannelName()
-        => Code.GetChatType().GetChannelName();
+        => ChatTypeUtils.GetChannelName(ChatType);
 
     public ChatCategory GetCategory()
-        => Code.GetChatType().GetCategory();
+        => ChatTypeUtils.GetCategory(ChatType);
 }
 
 public enum TranslationStatus

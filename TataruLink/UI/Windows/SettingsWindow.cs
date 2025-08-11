@@ -19,6 +19,7 @@ public class SettingsWindow : Window, IDisposable
     private readonly GeneralTab generalTab;
     private readonly TranslationTab translationTab;
     private readonly LanguagesTab languagesTab;
+    private readonly ChatTypesTab chatTypesTab;
     private readonly FiltersTab filtersTab;
     private readonly DisplayTab displayTab;
     private readonly OverlayTab overlayTab;
@@ -35,6 +36,7 @@ public class SettingsWindow : Window, IDisposable
         generalTab = new GeneralTab(configuration, translationService);
         translationTab = new TranslationTab(configuration, translationService);
         languagesTab = new LanguagesTab(configuration);
+        chatTypesTab = new ChatTypesTab(configuration);
         filtersTab = new FiltersTab(configuration);
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);
@@ -62,6 +64,12 @@ public class SettingsWindow : Window, IDisposable
         {
             if (tab)
                 languagesTab.Draw();
+        }
+            
+        using (var tab = ImRaii.TabItem("Chat Types"))
+        {
+            if (tab)
+                chatTypesTab.Draw();
         }
             
         using (var tab = ImRaii.TabItem("Filters"))

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Configuration;
+using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
@@ -60,7 +61,7 @@ public class MessageValidationStage : IPipelineStage
 
         // Mark successful validation
         context.Set("validation.passed", true);
-        Service.PluginLog.Debug($"Message passed all validations: [{message.Code.GetChatType()}] {message.SenderName}");
+        Service.PluginLog.Debug($"Message passed all validations: [{ChatTypeUtils.GetChannelName(message.ChatType)}] {message.SenderName}");
         
         return message;
     }
