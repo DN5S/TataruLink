@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
+using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
-using TataruLink.Configuration;
 using TataruLink.Data;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
@@ -112,8 +112,8 @@ public sealed class Plugin : IDalamudPlugin
         // Log pipeline configuration
         Service.PluginLog.Information(messagePipeline.GetPipelineInfo());
         
-        // TODO: Register commands
-        // Service.CommandManager.AddHandler("/tatarulink", new CommandInfo(OnCommand));
+        // Register commands
+        RegisterCommands();
     }
 
     /// <summary>
@@ -155,6 +155,90 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (settingsWindow != null)
             settingsWindow.IsOpen = true;
+    }
+    
+    /// <summary>
+    /// Open the history window
+    /// </summary>
+    private void OpenHistory()
+    {
+        if (historyWindow != null)
+            historyWindow.IsOpen = true;
+    }
+    
+    /// <summary>
+    /// Register plugin commands
+    /// </summary>
+    private void RegisterCommands()
+    {
+        Service.CommandManager.AddHandler("/tatarulink", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Open TataruLink settings window"
+        });
+        
+        Service.CommandManager.AddHandler("/tataruhistory", new CommandInfo(OnHistoryCommand)
+        {
+            HelpMessage = "Open TataruLink translation history window"
+        });
+        
+        Service.CommandManager.AddHandler("/tl", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Open TataruLink settings window (short version)"
+        });
+        
+        Service.PluginLog.Information("Commands registered: /tatarulink, /tataruhistory, /tl");
+    }
+    
+    /// <summary>
+    /// Handle the main command
+    /// </summary>
+    private void OnCommand(string command, string args)
+    {
+        // Parse arguments
+        if (string.IsNullOrEmpty(args))
+        {
+            // No arguments - open settings window
+            OpenSettings();
+        }
+        else
+        {
+            var subCommand = args.ToLower().Trim();
+            switch (subCommand)
+            {
+                case "settings":
+                case "config":
+                    OpenSettings();
+                    break;
+                case "history":
+                    OpenHistory();
+                    break;
+                case "toggle":
+                    // Toggle plugin enabled state
+                    Service.Configuration.Data.IsEnabled = !Service.Configuration.Data.IsEnabled;
+                    Service.Configuration.Save();
+                    Service.ChatGui.Print($"TataruLink {(Service.Configuration.Data.IsEnabled ? "enabled" : "disabled")}");
+                    break;
+                case "help":
+                    Service.ChatGui.Print("TataruLink Commands:");
+                    Service.ChatGui.Print("  /tatarulink or /tl - Open settings window");
+                    Service.ChatGui.Print("  /tatarulink settings - Open settings window");
+                    Service.ChatGui.Print("  /tatarulink history - Open history window");
+                    Service.ChatGui.Print("  /tatarulink toggle - Enable/disable translation");
+                    Service.ChatGui.Print("  /tataruhistory - Open history window");
+                    break;
+                default:
+                    Service.ChatGui.PrintError($"Unknown command: {subCommand}. Use '/tatarulink help' for available commands.");
+                    break;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Handle the history command
+    /// </summary>
+    private void OnHistoryCommand(string command, string args)
+    {
+        OpenHistory();
     }
     
     /// <summary>
@@ -203,16 +287,18 @@ public sealed class Plugin : IDalamudPlugin
         historyWindow?.Dispose();
         
         // Step 4: Unregister commands
-        // Service.CommandManager.RemoveHandler("/tatarulink");
+        Service.CommandManager.RemoveHandler("/tatarulink");
+        Service.CommandManager.RemoveHandler("/tataruhistory");
+        Service.CommandManager.RemoveHandler("/tl");
         
         // Step 5: Save configuration immediately (flush any pending debounced saves)
-        Service.Configuration?.SaveImmediately();
+        Service.Configuration.SaveImmediately();
         
         // Step 6: Dispose services
         dataService?.Dispose();
         glossaryManager?.Dispose();
         translationService?.Dispose();
-        Service.PipelineDebug?.Dispose();
+        Service.PipelineDebug.Dispose();
         
         isDisposed = true;
         Service.PluginLog.Info("TataruLink disposed successfully");

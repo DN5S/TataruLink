@@ -1,5 +1,4 @@
 using Dalamud.Configuration;
-using System.Text.Json.Serialization;
 
 namespace TataruLink.Configuration;
 
@@ -57,4 +56,9 @@ public class TataruConfig : IPluginConfiguration
     /// User glossary settings
     /// </summary>
     public GlossaryConfig Glossary { get; set; } = new();
+    
+    /// <summary>
+    /// Cache system settings
+    /// </summary>
+    public CacheConfig Cache { get; set; } = new();
 }

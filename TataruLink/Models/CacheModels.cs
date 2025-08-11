@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 namespace TataruLink.Models;
 
@@ -43,11 +44,27 @@ public class UIColumnConfig
 
 public class CacheStatistics
 {
-    public long L1HitCount { get; set; }
-    public long L2HitCount { get; set; }
-    public long MissCount { get; set; }
+    private long l1HitCount;
+    private long l2HitCount;
+    private long missCount;
+    
+    public long L1HitCount => Interlocked.Read(ref l1HitCount);
+    public long L2HitCount => Interlocked.Read(ref l2HitCount);
+    public long MissCount => Interlocked.Read(ref missCount);
+    
     public long TotalRequests => L1HitCount + L2HitCount + MissCount;
     public double L1HitRatio => TotalRequests > 0 ? (double)L1HitCount / TotalRequests : 0.0;
     public double L2HitRatio => TotalRequests > 0 ? (double)L2HitCount / TotalRequests : 0.0;
     public double OverallHitRatio => TotalRequests > 0 ? (double)(L1HitCount + L2HitCount) / TotalRequests : 0.0;
+    
+    public void IncrementL1Hit() => Interlocked.Increment(ref l1HitCount);
+    public void IncrementL2Hit() => Interlocked.Increment(ref l2HitCount);
+    public void IncrementMiss() => Interlocked.Increment(ref missCount);
+    
+    public void Reset()
+    {
+        Interlocked.Exchange(ref l1HitCount, 0);
+        Interlocked.Exchange(ref l2HitCount, 0);
+        Interlocked.Exchange(ref missCount, 0);
+    }
 }

@@ -57,8 +57,13 @@ public class MessageValidationStage : IPipelineStage
                 context.Set($"validation.failed_at", validator.GetType().Name);
                 context.Set($"validation.reason", result.Reason);
                 
-                // Record failure to debug service
-                Service.PipelineDebug.RecordValidationFailure(message, validator.GetType().Name, result.Reason);
+                // Only record failure to debug service if it's not an unconfigured/unknown chat type
+                // This prevents spamming the debug log with expected validation failures
+                var chatTypeName = ChatTypeUtils.GetChannelName(message.ChatType);
+                if (chatTypeName != "Unknown" && !result.Reason.Contains("is not configured for translation"))
+                {
+                    Service.PipelineDebug.RecordValidationFailure(message, validator.GetType().Name, result.Reason);
+                }
                 
                 return null; // Stop the pipeline
             }

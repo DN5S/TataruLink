@@ -37,8 +37,8 @@ public class ChatTypesTab(TataruConfig configuration)
         
         ImGui.Separator();
         
-        // Provider settings
-        if (ImGui.CollapsingHeader("Default Provider"u8))
+        // Provider settings - Make it default open so it's more visible
+        if (ImGui.CollapsingHeader("Default Provider"u8, ImGuiTreeNodeFlags.DefaultOpen))
         {
             DrawProviderSettings();
         }
@@ -49,157 +49,236 @@ public class ChatTypesTab(TataruConfig configuration)
         ImGui.TextUnformatted("Enable/disable groups of chat types:"u8);
         ImGui.Spacing();
         
-        // Public chat preset
-        if (ImGui.Button("Public Chat"u8))
+        // Use a table for better layout - 4 columns of buttons
+        if (ImGui.BeginTable("PresetButtons"u8, 4, ImGuiTableFlags.SizingFixedFit))
         {
-            TogglePreset(ChatTypeUtils.Presets.PublicChat, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable Public"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.PublicChat, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Say, Yell, Shout"u8);
-        }
-        
-        // Party preset
-        if (ImGui.Button("Party Chat"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.PartyChat, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable Party"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.PartyChat, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Party, Alliance, Cross-Party"u8);
-        }
-        
-        // Private chat preset
-        if (ImGui.Button("Private Chat"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.PrivateChat, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable Private"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.PrivateChat, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Tell (Incoming/Outgoing)"u8);
-        }
-        
-        // Linkshells preset
-        if (ImGui.Button("Linkshells"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Linkshells, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable LS"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Linkshells, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Linkshells 1-8"u8);
-        }
-        
-        // CWLS preset
-        if (ImGui.Button("Cross-World LS"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable CWLS"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Cross-World Linkshells 1-8"u8);
-        }
-        
-        // Community preset
-        if (ImGui.Button("Community"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Community, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable Community"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Community, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Free Company, Novice Network, PvP Team"u8);
-        }
-        
-        // System messages preset
-        if (ImGui.Button("System Messages"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.System, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable System"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.System, false);
-        }
-        
-        // NPC preset
-        if (ImGui.Button("NPC Dialogue"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Npc, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable NPC"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Npc, false);
-        }
-        
-        // Emotes preset
-        if (ImGui.Button("Emotes"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Emotes, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable Emotes"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Emotes, false);
-        }
-        
-        // Battle preset
-        if (ImGui.Button("Battle"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Battle, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable Battle"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Battle, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Battle messages (damage, healing, buffs/debuffs)"u8);
-        }
-        
-        // GM preset
-        if (ImGui.Button("GM Messages"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Gm, true);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Disable GM"u8))
-        {
-            TogglePreset(ChatTypeUtils.Presets.Gm, false);
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Game Master messages"u8);
+            // Row 1: Public and Party
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Public Chat"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.PublicChat, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Say, Yell, Shout"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] Public"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.PublicChat, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Say, Yell, Shout"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Party Chat"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.PartyChat, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Party, Alliance, Cross-Party"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] Party"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.PartyChat, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Party, Alliance, Cross-Party"u8);
+            }
+            
+            // Row 2: Private and Linkshells
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Private Chat"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.PrivateChat, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Tell (Incoming/Outgoing)"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] Private"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.PrivateChat, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Tell (Incoming/Outgoing)"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Linkshells"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Linkshells, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Linkshells 1-8"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] LS"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Linkshells, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Linkshells 1-8"u8);
+            }
+            
+            // Row 3: CWLS and Community
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Cross-World LS"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Cross-World Linkshells 1-8"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] CWLS"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Cross-World Linkshells 1-8"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Community"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Community, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Free Company, Novice Network, PvP Team"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] Community"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Community, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Free Company, Novice Network, PvP Team"u8);
+            }
+            
+            // Row 4: System and NPC
+            ImGui.TableNextColumn();
+            if (ImGui.Button("System Msgs"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.System, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: System messages"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] System"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.System, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: System messages"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("NPC Dialogue"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Npc, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: NPC dialogue"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] NPC"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Npc, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: NPC dialogue"u8);
+            }
+            
+            // Row 5: Emotes and Battle
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Emotes"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Emotes, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Emote messages"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] Emotes"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Emotes, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Emote messages"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("Battle"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Battle, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Battle messages (damage, healing, buffs/debuffs)"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] Battle"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Battle, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Battle messages"u8);
+            }
+            
+            // Row 6: GM Messages (only 2 buttons)
+            ImGui.TableNextColumn();
+            if (ImGui.Button("GM Messages"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Gm, true);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enable: Game Master messages"u8);
+            }
+            
+            ImGui.TableNextColumn();
+            if (ImGui.Button("[X] GM"u8))
+            {
+                TogglePreset(ChatTypeUtils.Presets.Gm, false);
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Disable: Game Master messages"u8);
+            }
+            
+            ImGui.EndTable();
         }
         
         ImGui.Spacing();
@@ -302,7 +381,14 @@ public class ChatTypesTab(TataruConfig configuration)
         var providers = new List<string> { "None" };
         providers.AddRange(Enum.GetValues<TranslationProviderType>().Select(p => p.ToString()));
         
-        var currentDefault = configuration.Chat.DefaultProvider ?? "None";
+        // Get the current default provider - ensure consistency
+        var currentDefault = string.IsNullOrEmpty(configuration.Chat.DefaultProvider) ? "None" : configuration.Chat.DefaultProvider;
+        
+        // Also check if the current value is a valid provider
+        if (!providers.Contains(currentDefault))
+        {
+            currentDefault = "None";
+        }
 
         ImGui.SetNextItemWidth(200);
         if (ImGui.BeginCombo("Default Provider"u8, currentDefault))
@@ -312,8 +398,20 @@ public class ChatTypesTab(TataruConfig configuration)
                 var isSelected = provider == currentDefault;
                 if (ImGui.Selectable(provider, isSelected))
                 {
-                    configuration.Chat.DefaultProvider = provider == "None" ? null : provider;
+                    // Update the configuration
+                    if (provider == "None")
+                    {
+                        configuration.Chat.DefaultProvider = null;
+                    }
+                    else
+                    {
+                        configuration.Chat.DefaultProvider = provider;
+                    }
+                    
                     Service.Configuration.Save();
+                    
+                    // Log the change for debugging
+                    Service.PluginLog.Debug($"Default provider changed to: {provider} (stored as: {configuration.Chat.DefaultProvider ?? "null"})");
                 }
                 if (isSelected)
                 {
@@ -326,6 +424,12 @@ public class ChatTypesTab(TataruConfig configuration)
         
         ImGui.Spacing();
         ImGui.TextWrapped("Note: Individual chat type provider settings override the default provider."u8);
+        
+        // Show current active provider for debugging
+        if (configuration.DebugMode)
+        {
+            ImGui.TextDisabled($"Debug: Stored value = {configuration.Chat.DefaultProvider ?? "null"}");
+        }
     }
     
     private void TogglePreset(ushort[] chatTypes, bool enable)

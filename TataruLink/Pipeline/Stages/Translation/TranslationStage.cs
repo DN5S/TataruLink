@@ -130,7 +130,8 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                         Provider = translationService.ProviderName,
                         CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                         LastAccessedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                        CharacterCount = textToTranslate.Length
+                        CharacterCount = textToTranslate.Length,
+                        // CacheKey will be generated automatically by DataService
                     };
                     
                     await dataService.SetCacheAsync(cacheEntryToSave);

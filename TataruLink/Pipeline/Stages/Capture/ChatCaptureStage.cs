@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -79,11 +80,18 @@ public class ChatCaptureStage : IPipelineStage
                 content: message
             );
 
+            // Debug log for unknown chat types
+            var channelName = chatMessage.GetChannelName();
+            if (channelName == "Unknown")
+            {
+                Service.PluginLog.Debug($"Unknown chat type captured: {(ushort)type:X4} ({(ushort)type}) - {type}");
+            }
+
             // Try to add to the queue without blocking
             if (!messageChannel.Writer.TryWrite(chatMessage))
             {
                 // Queue is a full-log warning and drop message
-                Service.PluginLog.Warning($"Message queue full, dropping message from {chatMessage.GetChannelName()}");
+                Service.PluginLog.Warning($"Message queue full, dropping message from {channelName}");
             }
         }
         catch (Exception ex)
@@ -102,13 +110,16 @@ public class ChatCaptureStage : IPipelineStage
         
         try
         {
+            // Create tasks list to track concurrent processing
+            var processingTasks = new List<Task>();
+            
             await foreach (var message in messageChannel.Reader.ReadAllAsync(cancellationToken))
             {
-                // Process with throttling to prevent overwhelming the system
+                // Wait for a processing slot
                 await processingThrottle.WaitAsync(cancellationToken);
                 
-                // Fire and forget with proper error handling
-                _ = ProcessMessageAsync(message, cancellationToken).ContinueWith(t =>
+                // Start processing the message
+                var task = ProcessMessageAsync(message, cancellationToken).ContinueWith(t =>
                 {
                     processingThrottle.Release();
                     
@@ -118,6 +129,25 @@ public class ChatCaptureStage : IPipelineStage
                             $"Error processing message from {message.GetChannelName()}");
                     }
                 }, cancellationToken);
+                
+                processingTasks.Add(task);
+                
+                // Clean up completed tasks to prevent list from growing indefinitely
+                processingTasks.RemoveAll(t => t.IsCompleted);
+                
+                // If we have max concurrent tasks, wait for at least one to complete
+                // This ensures messages are processed mostly in order while allowing some concurrency
+                if (processingTasks.Count >= MaxConcurrentProcessing)
+                {
+                    await Task.WhenAny(processingTasks);
+                    processingTasks.RemoveAll(t => t.IsCompleted);
+                }
+            }
+            
+            // Wait for all remaining tasks to complete on shutdown
+            if (processingTasks.Count > 0)
+            {
+                await Task.WhenAll(processingTasks);
             }
         }
         catch (OperationCanceledException)
@@ -139,6 +169,8 @@ public class ChatCaptureStage : IPipelineStage
     {
         try
         {
+            // cancellationToken will be used when pipeline.ProcessAsync supports cancellation
+            _ = cancellationToken;
             await pipeline.ProcessAsync(message);
         }
         catch (OperationCanceledException)

@@ -12,9 +12,9 @@ namespace TataruLink.UI.Windows.Tabs;
 public class CacheSettingsTab
 {
     private readonly IDataService dataService;
-    private bool isOperationInProgress = false;
+    private bool isOperationInProgress;
     private string lastOperationResult = string.Empty;
-    private long databaseSize = 0;
+    private long databaseSize;
     private DateTime lastSizeCheck = DateTime.MinValue;
 
     public CacheSettingsTab(IDataService dataService)
@@ -159,9 +159,9 @@ public class CacheSettingsTab
         }
     }
 
-    private async Task ClearL2CacheAsync()
+    private Task ClearL2CacheAsync()
     {
-        if (isOperationInProgress) return;
+        if (isOperationInProgress) return Task.CompletedTask;
         
         isOperationInProgress = true;
         try
@@ -180,6 +180,8 @@ public class CacheSettingsTab
         {
             isOperationInProgress = false;
         }
+
+        return Task.CompletedTask;
     }
 
     private async Task PruneOldCacheAsync(TimeSpan maxAge)

@@ -79,7 +79,7 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             {
                 MessageId = message.Id,
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                ChatType = (ushort)message.ChatType,
+                ChatType = message.ChatType,
                 ChatTypeName = message.GetChannelName(),
                 SenderName = message.SenderName,
                 OriginalContent = message.PlainTextContent,
