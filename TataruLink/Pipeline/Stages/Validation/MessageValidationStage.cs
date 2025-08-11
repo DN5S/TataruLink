@@ -28,6 +28,7 @@ public class MessageValidationStage : IPipelineStage
         [
             new DeduplicationValidator(TimeSpan.FromMilliseconds(this.configuration.Validation.DuplicateDetectionPeriodMs)),
             new ChatTypeValidator(this.configuration),
+            new KeywordValidator(this.configuration.Filter),
             new ContentValidator()
         ];
     }
