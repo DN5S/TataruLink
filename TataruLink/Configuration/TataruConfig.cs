@@ -1,13 +1,16 @@
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 using System;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 using TataruLink.Services;
 
 namespace TataruLink.Configuration;
 
 /// <summary>
-/// Main configuration class for TataruLink plugin
-/// Aggregates all configuration categories
+/// The main configuration class for TataruLink plugin
+/// Aggregates all configuration categories with debounced saving
 /// </summary>
 public class TataruConfig : IPluginConfiguration
 {
@@ -57,8 +60,20 @@ public class TataruConfig : IPluginConfiguration
     public FilterConfig Filter { get; set; } = new();
 
     // Plugin interface reference (transient - not saved)
-    [NonSerialized]
+    [JsonIgnore]
     private IDalamudPluginInterface? pluginInterface;
+    
+    // Debounced save implementation
+    [JsonIgnore]
+    private CancellationTokenSource? saveDebounceTokenSource;
+    
+    [JsonIgnore]
+    private readonly Lock saveLock = new();
+    
+    [JsonIgnore]
+    private bool isDirty;
+    
+    private const int SaveDebounceDelayMs = 500; // Wait 500 ms after the last change before saving
 
     /// <summary>
     /// Initialize configuration with the plugin interface
@@ -69,12 +84,58 @@ public class TataruConfig : IPluginConfiguration
     }
 
     /// <summary>
-    /// Save configuration to file
+    /// Mark configuration as changed and schedule a debounced save
     /// </summary>
     public void Save()
     {
-        pluginInterface?.SavePluginConfig(this);
-        Service.PluginLog.Debug("Configuration saved");
+        lock (saveLock)
+        {
+            isDirty = true;
+            
+            // Cancel any existing debounced timer
+            saveDebounceTokenSource?.Cancel();
+            saveDebounceTokenSource?.Dispose();
+            
+            // Start a new debounced timer
+            saveDebounceTokenSource = new CancellationTokenSource();
+            var token = saveDebounceTokenSource.Token;
+            
+            Task.Delay(SaveDebounceDelayMs, token).ContinueWith(_ =>
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    SaveImmediately();
+                }
+            }, TaskScheduler.Default);
+        }
+    }
+    
+    /// <summary>
+    /// Save configuration immediately without debouncing
+    /// Use this when the plugin is shutting down or when explicit save is needed
+    /// </summary>
+    public void SaveImmediately()
+    {
+        lock (saveLock)
+        {
+            if (!isDirty) return;
+            
+            try
+            {
+                pluginInterface?.SavePluginConfig(this);
+                isDirty = false;
+                Service.PluginLog.Debug("Configuration saved to disk");
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Error(ex, "Failed to save configuration");
+            }
+            
+            // Cancel any pending saves
+            saveDebounceTokenSource?.Cancel();
+            saveDebounceTokenSource?.Dispose();
+            saveDebounceTokenSource = null;
+        }
     }
 
     /// <summary>

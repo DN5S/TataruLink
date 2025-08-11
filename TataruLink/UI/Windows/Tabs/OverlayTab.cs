@@ -391,8 +391,8 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             Status = Models.TranslationStatus.Completed
         };
         
-        // Send it through the overlay manager
-        overlayManager.SendMessage(testMessage);
+        // Send it only to the selected overlay
+        overlayManager.SendMessageToOverlay(overlay.Id, testMessage);
         Service.PluginLog.Info($"Sent test message to overlay: {overlay.Name}");
     }
 }

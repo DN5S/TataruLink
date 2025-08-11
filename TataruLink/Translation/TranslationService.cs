@@ -9,11 +9,12 @@ using TataruLink.Translation.Providers;
 namespace TataruLink.Translation;
 
 /// <summary>
-/// Main translation service that manages translation providers
+/// Main translation service that manages translation providers with error tracking
 /// </summary>
 public class TranslationService(TataruConfig configuration) : ITranslationService
 {
     private readonly Dictionary<string, ITranslationProvider> providers = new();
+    private readonly Dictionary<string, TranslationProviderStatus> providerStatuses = new();
     private readonly Lock providerLock = new();
     private ITranslationProvider? activeProvider;
 
@@ -27,6 +28,17 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         RegisterProvider(new MockTranslationProvider());
         RegisterProvider(new GoogleTranslateProvider());
         RegisterProvider(new DeepLProvider());
+        
+        // Initialize status tracking for all providers
+        foreach (var provider in providers.Values)
+        {
+            providerStatuses[provider.Name] = new TranslationProviderStatus
+            {
+                ProviderName = provider.Name,
+                IsConfigured = false,
+                IsHealthy = true
+            };
+        }
         
         // Select and initialize the configured provider
         SelectProvider(configuration.Translation.Engine);
@@ -46,13 +58,18 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         {
             if (providers.TryGetValue(providerName, out var provider))
             {
-                // Initialize with the API key if available
-                string? apiKey = null;
-                if (configuration.Translation.ApiKeys.TryGetValue(providerName, out var key))
-                {
-                    apiKey = key;
-                }
+                // Initialize with the decrypted API key if available
+                var apiKey = configuration.Translation.GetApiKey(providerName);
                 provider.Initialize(apiKey);
+                
+                // Update status
+                if (providerStatuses.TryGetValue(providerName, out var status))
+                {
+                    status.IsConfigured = provider.IsConfigured;
+                    status.IsHealthy = provider.IsConfigured;
+                    status.LastError = null;
+                    status.ConsecutiveFailures = 0;
+                }
                 
                 activeProvider = provider;
                 Service.PluginLog.Information($"Selected translation provider: {providerName}");
@@ -66,6 +83,12 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 {
                     activeProvider = mockProvider;
                     activeProvider.Initialize();
+                    
+                    if (providerStatuses.TryGetValue("Mock", out var status))
+                    {
+                        status.IsConfigured = true;
+                        status.IsHealthy = true;
+                    }
                 }
             }
         }
@@ -120,15 +143,30 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     {
                         Service.PluginLog.Debug($"Translation successful: {text[..Math.Min(20, text.Length)]}... -> " +
                                                 $"{response.TranslatedText?[..Math.Min(20, response.TranslatedText.Length)]}...");
+                        
+                        // Update status on success
+                        UpdateProviderStatus(activeProvider.Name, success: true);
                         return response.TranslatedText;
                     }
 
                     Service.PluginLog.Warning($"Translation failed (attempt {retryCount + 1}/{maxRetries + 1}): {response.Error}");
+                    
+                    // Track the error if this is the last attempt
+                    if (retryCount >= maxRetries)
+                    {
+                        UpdateProviderStatus(activeProvider.Name, success: false, errorMessage: response.Error);
+                    }
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     // Timeout occurred (cts was canceled but not the original token)
                     Service.PluginLog.Warning($"Translation timed out after {configuration.Translation.TimeoutMs}ms (attempt {retryCount + 1}/{maxRetries + 1})");
+                    
+                    if (retryCount >= maxRetries)
+                    {
+                        var timeoutError = new TimeoutException($"Translation timed out after {configuration.Translation.TimeoutMs}ms");
+                        UpdateProviderStatus(activeProvider.Name, success: false, exception: timeoutError);
+                    }
                 }
 
                 // Check if we should retry
@@ -155,6 +193,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Translation error");
+            UpdateProviderStatus(activeProvider?.Name ?? "Unknown", success: false, exception: ex);
             return null;
         }
     }
@@ -182,8 +221,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     {
         Service.PluginLog.Information($"Updating API key for provider: {providerName}");
 
-        // Update configuration
-        configuration.Translation.ApiKeys[providerName] = apiKey;
+        // Update configuration with an encrypted key
+        configuration.Translation.SetApiKey(providerName, apiKey);
         configuration.Save();
 
         lock (providerLock)
@@ -202,6 +241,82 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
 
+    /// <summary>
+    /// Update provider status after a translation attempt
+    /// </summary>
+    private void UpdateProviderStatus(string providerName, bool success, string? errorMessage = null, Exception? exception = null)
+    {
+        lock (providerLock)
+        {
+            if (!providerStatuses.TryGetValue(providerName, out var status))
+                return;
+                
+            if (success)
+            {
+                status.IsHealthy = true;
+                status.ConsecutiveFailures = 0;
+                status.LastSuccessfulTranslation = DateTime.Now;
+                status.LastError = null;
+            }
+            else
+            {
+                status.ConsecutiveFailures++;
+                
+                // Mark as unhealthy after 3 consecutive failures
+                if (status.ConsecutiveFailures >= 3)
+                {
+                    status.IsHealthy = false;
+                }
+                
+                // Create an error record
+                if (exception != null)
+                {
+                    status.LastError = TranslationError.FromException(exception, providerName);
+                }
+                else if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    status.LastError = new TranslationError
+                    {
+                        Type = TranslationErrorType.Unknown,
+                        Message = errorMessage,
+                        UserFriendlyMessage = errorMessage,
+                        Provider = providerName
+                    };
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Get the current status of a translation provider
+    /// </summary>
+    public TranslationProviderStatus? GetProviderStatus(string providerName)
+    {
+        lock (providerLock)
+        {
+            return providerStatuses.GetValueOrDefault(providerName);
+        }
+    }
+    
+    /// <summary>
+    /// Get the current status of the active provider
+    /// </summary>
+    public TranslationProviderStatus? GetActiveProviderStatus()
+    {
+        return activeProvider != null ? GetProviderStatus(activeProvider.Name) : null;
+    }
+    
+    /// <summary>
+    /// Get status of all registered providers
+    /// </summary>
+    public IReadOnlyDictionary<string, TranslationProviderStatus> GetAllProviderStatuses()
+    {
+        lock (providerLock)
+        {
+            return new Dictionary<string, TranslationProviderStatus>(providerStatuses);
+        }
+    }
+    
     public void Dispose()
     {
         lock (providerLock)

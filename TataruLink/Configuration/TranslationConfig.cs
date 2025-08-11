@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TataruLink.Utils;
 
 namespace TataruLink.Configuration;
 
@@ -24,10 +25,41 @@ public class TranslationConfig
     public string TargetLanguage { get; set; } = "en";
     
     /// <summary>
-    /// API keys for translation services
+    /// Encrypted API keys for translation services (stored encrypted using DPAPI)
     /// Dictionary allow easy addition of new services
     /// </summary>
     public Dictionary<string, string> ApiKeys { get; set; } = new();
+    
+    /// <summary>
+    /// Get a decrypted API key for a specific provider
+    /// </summary>
+    public string? GetApiKey(string provider)
+    {
+        return ApiKeys.TryGetValue(provider, out var encryptedKey) ? SecureStorage.Unprotect(encryptedKey) : null;
+    }
+    
+    /// <summary>
+    /// Set and encrypt the API key for a specific provider
+    /// </summary>
+    public void SetApiKey(string provider, string? apiKey)
+    {
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            ApiKeys.Remove(provider);
+        }
+        else
+        {
+            // Check if the key is already encrypted to avoid double encryption
+            var encrypted = SecureStorage.IsProtected(apiKey) 
+                ? apiKey 
+                : SecureStorage.Protect(apiKey);
+            
+            if (encrypted != null)
+            {
+                ApiKeys[provider] = encrypted;
+            }
+        }
+    }
     
     /// <summary>
     /// Show original text alongside translation

@@ -39,12 +39,45 @@ public class TranslationTab
     {
         ImGui.TextUnformatted("Translation Engine");
         
-        // Show the current provider status
-        var statusColor = translationService.IsConfigured 
-            ? new Vector4(0, 1, 0, 1)  // Green
-            : new Vector4(1, 1, 0, 1);  // Yellow
-        ImGui.SameLine();
-        ImGui.TextColored(statusColor, translationService.IsConfigured ? "[Configured]" : "[Not Configured]");
+        // Show the current provider status with detailed error information
+        var status = (translationService as TranslationService)?.GetActiveProviderStatus();
+        if (status != null)
+        {
+            ImGui.SameLine();
+            
+            // Choose color based on status
+            Vector4 statusColor;
+            if (!status.IsConfigured)
+                statusColor = new Vector4(0.7f, 0.7f, 0.7f, 1);  // Gray
+            else if (!status.IsHealthy)
+                statusColor = new Vector4(1, 0, 0, 1);  // Red
+            else if (status.ConsecutiveFailures > 0)
+                statusColor = new Vector4(1, 1, 0, 1);  // Yellow
+            else
+                statusColor = new Vector4(0, 1, 0, 1);  // Green
+                
+            ImGui.TextColored(statusColor, status.GetStatusIndicator());
+            ImGui.SameLine();
+            ImGui.TextColored(statusColor, status.GetStatusMessage());
+            
+            // Show detailed error on hover if there's an error
+            if (status.LastError != null && ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                ImGui.TextUnformatted($"Last error: {status.LastError.Timestamp:HH:mm:ss}");
+                ImGui.TextWrapped(status.LastError.UserFriendlyMessage ?? status.LastError.Message);
+                if (status.LastSuccessfulTranslation.HasValue)
+                {
+                    ImGui.TextUnformatted($"Last success: {status.LastSuccessfulTranslation:HH:mm:ss}");
+                }
+                ImGui.EndTooltip();
+            }
+        }
+        else
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "[Status Unknown]");
+        }
         
         if (ImGui.Combo("##Engine", ref selectedEngineIndex, availableEngines, availableEngines.Length))
         {
@@ -73,11 +106,24 @@ public class TranslationTab
                 }
             
                 ImGui.InputText("##ApiKey", ref tempApiKey, 100, ImGuiInputTextFlags.Password);
+                
+                // Show inline validation status
+                if (status != null && status.LastError?.Type == TranslationErrorType.InvalidApiKey)
+                {
+                    ImGui.TextColored(new Vector4(1, 0, 0, 1), "Invalid API key. Please check and re-enter.");
+                }
+                
                 ImGui.SameLine();
                 if (ImGui.Button("Save Key"))
                 {
                     translationService.UpdateApiKey(configuration.Translation.Engine, tempApiKey);
                     Service.PluginLog.Information("API key saved and provider reinitialized");
+                }
+                
+                ImGui.SameLine();
+                if (ImGui.Button("Test Connection"))
+                {
+                    TestProviderConnection();
                 }
 
                 break;
@@ -139,6 +185,31 @@ public class TranslationTab
 
     private void LoadCurrentApiKey()
     {
-        tempApiKey = configuration.Translation.ApiKeys.TryGetValue(configuration.Translation.Engine, out var key) ? key : string.Empty;
+        tempApiKey = configuration.Translation.GetApiKey(configuration.Translation.Engine) ?? string.Empty;
+    }
+    
+    private async void TestProviderConnection()
+    {
+        try
+        {
+            var result = await translationService.TranslateAsync(
+                "Test", 
+                "auto", 
+                configuration.Translation.TargetLanguage
+            );
+            
+            if (!string.IsNullOrEmpty(result))
+            {
+                Service.PluginLog.Information($"Provider test successful: 'Test' -> '{result}'");
+            }
+            else
+            {
+                Service.PluginLog.Warning("Provider test failed: No translation returned");
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Provider test failed");
+        }
     }
 }

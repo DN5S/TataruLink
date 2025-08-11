@@ -83,7 +83,7 @@ public class OverlayWindowConfig
     /// Chat types to display in this overlay (empty = all)
     /// Stores XivChatType enum values as ushort for serialization
     /// </summary>
-    public HashSet<ushort> EnabledChatTypes { get; set; } = new();
+    public HashSet<ushort> EnabledChatTypes { get; set; } = [];
     
     /// <summary>
     /// Custom colors for each chat type (RGBA format)

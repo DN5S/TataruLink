@@ -7,8 +7,17 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 
 namespace TataruLink.Utils;
 
-public static class SeStringUtils
+public static partial class SeStringUtils
 {
+    // Source-generated regex patterns for maximum performance (compile-time generation)
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceNormalizer();
+    
+    [GeneratedRegex(@"<t>(.*?)</t>")]
+    private static partial Regex XmlTagExtractor();
+    
+    [GeneratedRegex(@"</?t>")]
+    private static partial Regex XmlTagRemover();
     public static string ExtractText(this SeString seString, bool includeSymbols = false)
     {
         if (seString.Payloads.Count == 0)
@@ -150,9 +159,8 @@ public static class SeStringUtils
     /// </summary>
     private static string CleanText(string text)
     {
-        // Remove excessive whitespace and normalize
-        text = Regex.Replace(text.Trim(), @"\s+", " ");
-        return text;
+        // Remove excessive whitespace and normalize using source-generated regex
+        return WhitespaceNormalizer().Replace(text.Trim(), " ");
     }
     
     /// <summary>
@@ -193,8 +201,8 @@ public static class SeStringUtils
     /// </summary>
     public static List<string> ExtractFromTranslation(string translatedText, int expectedSegmentCount)
     {
-        // Try to extract from XML tags first
-        var xmlMatches = Regex.Matches(translatedText, @"<t>(.*?)</t>");
+        // Try to extract from XML tags first using source-generated regex
+        var xmlMatches = XmlTagExtractor().Matches(translatedText);
         
         if (xmlMatches.Count > 0)
         {
@@ -217,14 +225,15 @@ public static class SeStringUtils
             }
         }
         
-        // Fallback: remove any XML tags and return as a single segment
-        var sanitized = translatedText.Replace("<t>", "").Replace("</t>", "").Trim();
+        // Fallback: remove any XML tags using source-generated regex and return as a single segment
+        var sanitized = XmlTagRemover().Replace(translatedText, "").Trim();
         return [sanitized];
     }
     
     /// <summary>
     /// Creates a complete translated SeString by reconstructing with the payload template.
     /// This is the main method for creating the final translated message.
+    /// Includes safe fallback when translation corrupts the structure.
     /// </summary>
     public static SeString CreateTranslatedMessage(string translatedText, List<Payload?> payloadTemplate, int originalSegmentCount, string? prefix = null)
     {
@@ -239,27 +248,75 @@ public static class SeStringUtils
         // Extract segments from the translated text
         var translatedSegments = ExtractFromTranslation(translatedText, originalSegmentCount);
         
-        // Reconstruct by placing segments in null slots
-        var segmentIndex = 0;
-        foreach (var payload in payloadTemplate)
+        // Check if the structure was corrupted
+        bool structureIntact = translatedSegments.Count == originalSegmentCount || 
+                              (originalSegmentCount > 1 && translatedSegments.Count == 1);
+        
+        if (!structureIntact)
         {
-            if (payload == null)
+            // Structure corrupted - use safe fallback
+            // Return only translated text without any payloads
+            Services.Service.PluginLog.Warning($"Translation structure corrupted. Expected {originalSegmentCount} segments, got {translatedSegments.Count}. Using fallback.");
+            
+            // Clean the translated text of any remaining XML artifacts using source-generated regex
+            var cleanText = XmlTagRemover().Replace(translatedText, "").Trim();
+            builder.AddText(cleanText);
+            return builder.Build();
+        }
+        
+        // If we only got one segment back but expected multiple, it means translation merged everything
+        if (originalSegmentCount > 1 && translatedSegments.Count == 1)
+        {
+            // Use the single translated segment for all text positions
+            // This preserves payloads but loses segment boundaries
+            var mergedText = translatedSegments[0];
+            var textAdded = false;
+            
+            foreach (var payload in payloadTemplate)
             {
-                // This is a placeholder for translated text
-                if (segmentIndex < translatedSegments.Count)
+                if (payload == null && !textAdded)
                 {
-                    var segment = translatedSegments[segmentIndex];
-                    if (!string.IsNullOrEmpty(segment))
-                    {
-                        builder.AddText(segment);
-                    }
-                    segmentIndex++;
+                    // Add the merged text at the first text position
+                    builder.AddText(mergedText);
+                    textAdded = true;
+                }
+                else if (payload != null)
+                {
+                    // Preserve non-text payloads
+                    builder.Add(payload);
                 }
             }
-            else
+            
+            // If no text position was found, just add the text
+            if (!textAdded)
             {
-                // Preserve non-text payloads (icons, items, etc.)
-                builder.Add(payload);
+                builder.AddText(mergedText);
+            }
+        }
+        else
+        {
+            // Normal reconstruction - structure preserved
+            var segmentIndex = 0;
+            foreach (var payload in payloadTemplate)
+            {
+                if (payload == null)
+                {
+                    // This is a placeholder for translated text
+                    if (segmentIndex < translatedSegments.Count)
+                    {
+                        var segment = translatedSegments[segmentIndex];
+                        if (!string.IsNullOrEmpty(segment))
+                        {
+                            builder.AddText(segment);
+                        }
+                        segmentIndex++;
+                    }
+                }
+                else
+                {
+                    // Preserve non-text payloads (icons, items, etc.)
+                    builder.Add(payload);
+                }
             }
         }
         
@@ -291,7 +348,7 @@ public static class SeStringUtils
         if (string.IsNullOrWhiteSpace(text))
             return false;
         
-        if (text.Length < 2)
+        if (text.Length < 1)
             return false;
         
         if (text.Length > 5000)

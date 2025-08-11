@@ -188,11 +188,8 @@ public sealed class Plugin : IDalamudPlugin
         // Step 4: Unregister commands
         // Service.CommandManager.RemoveHandler("/tatarulink");
         
-        // Step 5: Save configuration
-        if (configuration != null)
-        {
-            pluginInterface.SavePluginConfig(configuration);
-        }
+        // Step 5: Save configuration immediately (flush any pending debounced saves)
+        configuration?.SaveImmediately();
         
         // Step 6: Dispose services
         translationService?.Dispose();

@@ -179,6 +179,27 @@ public class OverlayManager : IDisposable
     }
     
     /// <summary>
+    /// Send a message to a specific overlay window
+    /// </summary>
+    public void SendMessageToOverlay(Guid id, Message message)
+    {
+        if (string.IsNullOrEmpty(message.TranslatedContent))
+            return;
+            
+        if (overlays.TryGetValue(id, out var overlay))
+        {
+            try
+            {
+                overlay.AddMessage(message);
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Error(ex, $"Failed to add message to overlay {overlay.WindowName}");
+            }
+        }
+    }
+    
+    /// <summary>
     /// Clear all messages in a specific overlay
     /// </summary>
     public void ClearOverlay(Guid id)
@@ -221,46 +242,23 @@ public class OverlayManager : IDisposable
     }
     
     /// <summary>
-    /// Rename an overlay window (recreates the window to update the title)
+    /// Rename an overlay window efficiently without recreation
     /// </summary>
     public void RenameOverlay(Guid id, string newName)
     {
         var config = configuration.Display.GetOverlayWindow(id);
-        if (config != null && overlays.TryGetValue(id, out var oldOverlay))
+        if (config != null)
         {
             // Don't change the name if it's the same
             if (config.Name == newName)
                 return;
             
-            // Save the current state including position and size
-            var wasOpen = oldOverlay.IsOpen;
-            var currentPosition = oldOverlay.Position;
-            var currentSize = oldOverlay.Size;
-            
-            // Save position and size to config
-            config.Position = currentPosition;
-            config.Size = currentSize;
-            
-            // Remove old window and dispose it properly
-            windowSystem.RemoveWindow(oldOverlay);
-            overlays.Remove(id);
-            oldOverlay.Dispose();
-            
-            // Update name
+            // Update configuration name
             config.Name = newName;
             
-            // Save configuration before creating a new window
             configuration.Save();
             
-            // Create a new window with an updated name - it will use the saved position/size from config
-            var newOverlay = new TranslationOverlay(config);
-            overlays[config.Id] = newOverlay;
-            windowSystem.AddWindow(newOverlay);
-            
-            // Restore the open state
-            newOverlay.IsOpen = wasOpen;
-            
-            Service.PluginLog.Information($"Renamed overlay window to: {newName} (ID: {id})");
+            Service.PluginLog.Information($"Renamed overlay to: {newName} (ID: {id})");
         }
     }
     
