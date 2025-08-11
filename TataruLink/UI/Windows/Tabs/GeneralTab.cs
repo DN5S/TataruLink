@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
+using TataruLink.Services;
 using TataruLink.Translation;
 
 namespace TataruLink.UI.Windows.Tabs;
@@ -16,7 +17,7 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         if (ImGui.Checkbox("Enable TataruLink"u8, ref enabled))
         {
             configuration.IsEnabled = enabled;
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         ImGui.Separator();

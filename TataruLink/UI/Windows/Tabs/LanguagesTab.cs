@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
+using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -33,7 +34,7 @@ public class LanguagesTab(TataruConfig configuration)
         if (ImGui.Combo("##SourceLang"u8, ref sourceIndex, languageNames, languageNames.Length))
         {
             configuration.Translation.SourceLanguage = languageCodes[sourceIndex];
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         ImGui.TextUnformatted("Target Language"u8);
@@ -41,7 +42,7 @@ public class LanguagesTab(TataruConfig configuration)
         if (ImGui.Combo("##TargetLang"u8, ref targetIndex, languageNamesNoAuto, languageNamesNoAuto.Length))
         {
             configuration.Translation.TargetLanguage = languageCodesNoAuto[targetIndex];
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         ImGui.Separator();

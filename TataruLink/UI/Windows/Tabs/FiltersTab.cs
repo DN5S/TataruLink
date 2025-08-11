@@ -30,7 +30,7 @@ public class FiltersTab(TataruConfig configuration)
         if (ImGui.Checkbox("Enable Keyword Filter"u8, ref enableKeywordFilter))
         {
             configuration.Filter.EnableKeywordFilter = enableKeywordFilter;
-            configuration.Save();
+            Service.Configuration.Save();
             Service.PluginLog.Information($"Keyword filter {(enableKeywordFilter ? "enabled" : "disabled")}");
         }
         
@@ -57,7 +57,7 @@ public class FiltersTab(TataruConfig configuration)
             var trimmedKeyword = newKeyword.Trim();
             if (configuration.Filter.KeywordBlocklist.Add(trimmedKeyword))
             {
-                configuration.Save();
+                Service.Configuration.Save();
                 Service.PluginLog.Information($"Added keyword to blocklist: {trimmedKeyword}");
                 newKeyword = string.Empty;
             }
@@ -106,7 +106,7 @@ public class FiltersTab(TataruConfig configuration)
             if (keywordToRemove != null)
             {
                 configuration.Filter.KeywordBlocklist.Remove(keywordToRemove);
-                configuration.Save();
+                Service.Configuration.Save();
                 Service.PluginLog.Information($"Removed keyword from blocklist: {keywordToRemove}");
                 keywordToRemove = null;
             }

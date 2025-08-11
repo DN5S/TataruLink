@@ -55,4 +55,10 @@ public interface ITranslationService : IDisposable
     /// <param name="providerName">Name of the provider</param>
     /// <param name="apiKey">New API key</param>
     void UpdateApiKey(string providerName, string apiKey);
+    
+    /// <summary>
+    /// Get the current provider's status information
+    /// </summary>
+    /// <returns>Provider status or null if unavailable</returns>
+    TranslationProviderStatus? GetActiveProviderStatus();
 }

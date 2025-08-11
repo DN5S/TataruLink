@@ -40,7 +40,7 @@ public class TranslationTab
         ImGui.TextUnformatted("Translation Engine"u8);
         
         // Show the current provider status with detailed error information
-        var status = (translationService as TranslationService)?.GetActiveProviderStatus();
+        var status = translationService.GetActiveProviderStatus();
         if (status != null)
         {
             ImGui.SameLine();
@@ -130,7 +130,8 @@ public class TranslationTab
             }
             case "Google":
                 ImGui.TextWrapped("Google Translate uses an unofficial API and doesn't require an API key."u8);
-                ImGui.TextColored(new Vector4(1, 1, 0, 1), "Note: This may stop working if Google changes their API."u8);
+                ImGui.TextColored(new Vector4(1, 0.8f, 0, 1), "WARNING: This uses an UNOFFICIAL API that may stop working at any time."u8);
+                ImGui.TextColored(new Vector4(1, 0.5f, 0, 1), "Consider DeepL or another official API for better reliability."u8);
                 break;
         }
         
@@ -152,7 +153,7 @@ public class TranslationTab
         if (ImGui.InputText("##TranslationPrefix"u8, ref prefix, 20))
         {
             configuration.Translation.TranslationPrefix = prefix;
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         ImGui.Spacing();
@@ -162,7 +163,7 @@ public class TranslationTab
         if (ImGui.Checkbox("Retry failed translations"u8, ref retryFailed))
         {
             configuration.Translation.RetryFailedTranslations = retryFailed;
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         if (retryFailed)
@@ -171,7 +172,7 @@ public class TranslationTab
             if (ImGui.SliderInt("Max retry attempts"u8, ref maxRetries, 1, 5))
             {
                 configuration.Translation.MaxRetryAttempts = maxRetries;
-                configuration.Save();
+                Service.Configuration.Save();
             }
         }
         
@@ -179,7 +180,7 @@ public class TranslationTab
         if (ImGui.SliderInt("Timeout (ms)"u8, ref timeout, 1000, 10000))
         {
             configuration.Translation.TimeoutMs = timeout;
-            configuration.Save();
+            Service.Configuration.Save();
         }
     }
 

@@ -8,14 +8,40 @@ namespace TataruLink.Utils;
 
 /// <summary>
 /// Provides secure storage for sensitive data using Windows Data Protection API (DPAPI)
+/// with improved entropy generation for better security.
 /// </summary>
 public static class SecureStorage
 {
-    private static readonly byte[] AdditionalEntropy =
-    [
-        0x54, 0x61, 0x74, 0x61, 0x72, 0x75, 0x4C, 0x69, 0x6E, 0x6B,  // "TataruLink"
-        0x41, 0x50, 0x49, 0x4B, 0x65, 0x79                           // "APIKey"
-    ];
+    /// <summary>
+    /// Generate user and machine-specific entropy for stronger encryption.
+    /// This prevents other processes, from decrypting the data even with decompiled code.
+    /// </summary>
+    private static byte[] GetAdditionalEntropy()
+    {
+        try
+        {
+            // Combine multiple unique identifiers for stronger entropy
+            var pluginInterface = Service.PluginInterface;
+            var configDir = pluginInterface.GetPluginConfigDirectory();
+            var machineId = Environment.MachineName;
+            var userId = Environment.UserName;
+            var processId = Environment.ProcessId.ToString();
+
+            // Create a unique string from multiple sources
+            var uniqueString = $"TataruLink-{configDir}-{machineId}-{userId}-{processId}-APIKey";
+
+            // Generate SHA256 hash as entropy (32 bytes)
+            return SHA256.HashData(Encoding.UTF8.GetBytes(uniqueString));
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Warning(ex, "Failed to generate unique entropy, using fallback");
+            // Fallback to basic entropy if something goes wrong
+            // This is still better than hardcoded values
+            var fallback = $"TataruLink-{Environment.MachineName}-{DateTime.UtcNow.Year}";
+            return SHA256.HashData(Encoding.UTF8.GetBytes(fallback));
+        }
+    }
     
     /// <summary>
     /// Encrypts a string using DPAPI with the current user scope
@@ -35,9 +61,10 @@ public static class SecureStorage
             }
             
             var plainBytes = Encoding.UTF8.GetBytes(plainText);
+            var entropy = GetAdditionalEntropy();
             var encryptedBytes = ProtectedData.Protect(
                 plainBytes, 
-                AdditionalEntropy, 
+                entropy, 
                 DataProtectionScope.CurrentUser
             );
             
@@ -78,9 +105,10 @@ public static class SecureStorage
                 return encryptedText;
             }
             
+            var entropy = GetAdditionalEntropy();
             var plainBytes = ProtectedData.Unprotect(
                 encryptedBytes, 
-                AdditionalEntropy, 
+                entropy, 
                 DataProtectionScope.CurrentUser
             );
             

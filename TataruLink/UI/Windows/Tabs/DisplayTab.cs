@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
+using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -17,7 +18,7 @@ public class DisplayTab(TataruConfig configuration)
         if (ImGui.Checkbox("Show translations in game chat"u8, ref showInChat))
         {
             configuration.Display.ShowInChat = showInChat;
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         if (configuration.Display.ShowInChat)
@@ -28,14 +29,14 @@ public class DisplayTab(TataruConfig configuration)
             if (ImGui.Checkbox("Show sender name in chat"u8, ref showSenderName))
             {
                 configuration.Display.ShowSenderName = showSenderName;
-                configuration.Save();
+                Service.Configuration.Save();
             }
             
             var showChatType = configuration.Display.ShowChatType;
             if (ImGui.Checkbox("Show chat type in chat"u8, ref showChatType))
             {
                 configuration.Display.ShowChatType = showChatType;
-                configuration.Save();
+                Service.Configuration.Save();
             }
             
             ImGui.Unindent();

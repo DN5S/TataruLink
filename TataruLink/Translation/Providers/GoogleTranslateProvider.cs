@@ -11,7 +11,9 @@ namespace TataruLink.Translation.Providers;
 
 /// <summary>
 /// Google Translate provider using the unofficial public API
-/// No API key required, but may change without notice
+/// WARNING: This uses an UNOFFICIAL API that may be changed or blocked by Google at any time.
+/// For production use, consider using official Google Cloud Translation API instead.
+/// No API key required, but stability is not guaranteed.
 /// </summary>
 public class GoogleTranslateProvider : ITranslationProvider
 {
@@ -38,7 +40,8 @@ public class GoogleTranslateProvider : ITranslationProvider
     {
         // Google's unofficial API doesn't need an API key
         IsConfigured = true;
-        Service.PluginLog.Information("Google Translate provider initialized (using unofficial API)");
+        Service.PluginLog.Warning("Google Translate provider initialized using UNOFFICIAL API - stability not guaranteed");
+        Service.PluginLog.Information("Consider using DeepL or another official API for better reliability");
     }
 
     public async Task<TranslationResponse> TranslateAsync(

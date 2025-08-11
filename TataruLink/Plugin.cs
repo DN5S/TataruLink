@@ -27,7 +27,6 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IDalamudPluginInterface pluginInterface;
     
     // Core plugin components
-    private TataruConfig? configuration;
     private MessagePipeline? messagePipeline;
     private ChatCaptureStage? chatCaptureStage;
     private ITranslationService? translationService;
@@ -70,8 +69,8 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     private void InitializeCore()
     {
-        // Initialize configuration
-        configuration = TataruConfig.Load(pluginInterface);
+        // Configuration is already loaded in Service.Initialize()
+        var configuration = Service.Configuration.Data;
         
         // Initialize glossary manager
         glossaryManager = new GlossaryManager(configuration);
@@ -118,10 +117,10 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem = new WindowSystem("TataruLink");
         
         // Initialize overlay manager
-        overlayManager = new OverlayManager(configuration!, windowSystem);
+        overlayManager = new OverlayManager(Service.Configuration.Data, windowSystem);
         
         // Create and add settings window with overlay manager and glossary manager
-        settingsWindow = new SettingsWindow(configuration!, translationService!, overlayManager, glossaryManager!);
+        settingsWindow = new SettingsWindow(Service.Configuration.Data, translationService!, overlayManager, glossaryManager!);
         windowSystem.AddWindow(settingsWindow);
         
         // Register draw handler
@@ -194,7 +193,7 @@ public sealed class Plugin : IDalamudPlugin
         // Service.CommandManager.RemoveHandler("/tatarulink");
         
         // Step 5: Save configuration immediately (flush any pending debounced saves)
-        configuration?.SaveImmediately();
+        Service.Configuration?.SaveImmediately();
         
         // Step 6: Dispose services
         glossaryManager?.Dispose();

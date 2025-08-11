@@ -71,7 +71,11 @@ internal class AhoCorasickTrie
 
     public IEnumerable<(int index, string pattern)> FindAll(string text)
     {
-        if (!isBuilt) Build();
+        // Require explicit Build() call for predictability
+        if (!isBuilt)
+        {
+            yield break;  // Return empty results if not built
+        }
 
         var lowerText = text.ToLowerInvariant(); // Case-insensitive matching
         var node = root;

@@ -39,7 +39,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 message.Status = TranslationStatus.Failed;
                 
                 // Get provider status for detailed error info
-                var providerStatus = (translationService as TranslationService)?.GetActiveProviderStatus();
+                var providerStatus = translationService.GetActiveProviderStatus();
                 if (providerStatus != null)
                 {
                     context.Set("translation.error", providerStatus.GetStatusMessage());
@@ -114,7 +114,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 context.Set("translation.success", false);
                 
                 // Get provider status for detailed error info
-                var providerStatus = (translationService as TranslationService)?.GetActiveProviderStatus();
+                var providerStatus = translationService.GetActiveProviderStatus();
                 if (providerStatus?.LastError != null)
                 {
                     context.Set("translation.error", providerStatus.LastError.Message);

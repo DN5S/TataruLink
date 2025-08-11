@@ -211,7 +211,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         
         // Update configuration
         configuration.Translation.Engine = providerName;
-        configuration.Save();
+        Service.Configuration.Save();
         
         // Select and initialize the new provider
         SelectProvider(providerName);
@@ -223,7 +223,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
         // Update configuration with an encrypted key
         configuration.Translation.SetApiKey(providerName, apiKey);
-        configuration.Save();
+        Service.Configuration.Save();
 
         lock (providerLock)
         {

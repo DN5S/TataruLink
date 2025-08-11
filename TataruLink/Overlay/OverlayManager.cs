@@ -60,7 +60,7 @@ public class OverlayManager : IDisposable
         
         configuration.Display.OverlayWindows.Add(defaultConfig);
         CreateOverlayWindow(defaultConfig);
-        configuration.Save();
+        Service.Configuration.Save();
     }
     
     /// <summary>
@@ -85,7 +85,7 @@ public class OverlayManager : IDisposable
     {
         var config = configuration.Display.AddOverlayWindow(name);
         CreateOverlayWindow(config);
-        configuration.Save();
+        Service.Configuration.Save();
         return overlays[config.Id];
     }
     
@@ -130,7 +130,7 @@ public class OverlayManager : IDisposable
             overlay.Dispose();
             overlays.Remove(id);
             configuration.Display.RemoveOverlayWindow(id);
-            configuration.Save();
+            Service.Configuration.Save();
             
             Service.PluginLog.Information($"Removed overlay window: {overlay.WindowName} (ID: {id})");
             return true;
@@ -152,7 +152,7 @@ public class OverlayManager : IDisposable
             if (config != null)
             {
                 config.IsEnabled = overlay.IsOpen;
-                configuration.Save();
+                Service.Configuration.Save();
             }
         }
     }
@@ -237,7 +237,7 @@ public class OverlayManager : IDisposable
                 overlay.UpdateConfig(config);
             }
             
-            configuration.Save();
+            Service.Configuration.Save();
         }
     }
     
@@ -256,7 +256,7 @@ public class OverlayManager : IDisposable
             // Update configuration name
             config.Name = newName;
             
-            configuration.Save();
+            Service.Configuration.Save();
             
             Service.PluginLog.Information($"Renamed overlay to: {newName} (ID: {id})");
         }

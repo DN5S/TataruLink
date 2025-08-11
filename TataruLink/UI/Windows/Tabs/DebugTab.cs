@@ -19,7 +19,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
         if (ImGui.Checkbox("Enable Debug Mode"u8, ref debugMode))
         {
             configuration.DebugMode = debugMode;
-            configuration.Save();
+            Service.Configuration.Save();
         }
         
         if (configuration.DebugMode)
@@ -52,7 +52,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
                     {
                         // Re-save the key to trigger encryption
                         configuration.Translation.SetApiKey(kvp.Key, kvp.Value);
-                        configuration.Save();
+                        Service.Configuration.Save();
                         Service.PluginLog.Information($"Encrypted API key for {kvp.Key}");
                     }
                 }
@@ -66,8 +66,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             ImGui.Separator();
             if (ImGui.Button("Reset Configuration"u8))
             {
-                configuration.Reset();
-                Service.PluginLog.Information("Configuration reset to defaults");
+                Service.Configuration.Reset();
             }
         }
     }

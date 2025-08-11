@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Models;
+using TataruLink.Services;
 using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
@@ -210,13 +211,13 @@ public class ChatTypesTab(TataruConfig configuration)
             {
                 configuration.Chat.SetChatTypeEnabled(chatType, true);
             }
-            configuration.Save();
+            Service.Configuration.Save();
         }
         ImGui.SameLine();
         if (ImGui.Button("Disable All"u8))
         {
             configuration.Chat.EnabledChatTypes.Clear();
-            configuration.Save();
+            Service.Configuration.Save();
         }
     }
     
@@ -247,7 +248,7 @@ public class ChatTypesTab(TataruConfig configuration)
                 if (ImGui.Checkbox($"##Enabled{chatType}", ref isEnabled))
                 {
                     configuration.Chat.SetChatTypeEnabled(chatType, isEnabled);
-                    configuration.Save();
+                    Service.Configuration.Save();
                 }
                 
                 ImGui.TableNextColumn();
@@ -273,7 +274,7 @@ public class ChatTypesTab(TataruConfig configuration)
                             if (ImGui.Selectable(provider, isSelected))
                             {
                                 configuration.Chat.SetProviderForChatType(chatType, provider == "Default" ? null : provider);
-                                configuration.Save();
+                                Service.Configuration.Save();
                             }
                             if (isSelected)
                             {
@@ -312,7 +313,7 @@ public class ChatTypesTab(TataruConfig configuration)
                 if (ImGui.Selectable(provider, isSelected))
                 {
                     configuration.Chat.DefaultProvider = provider == "None" ? null : provider;
-                    configuration.Save();
+                    Service.Configuration.Save();
                 }
                 if (isSelected)
                 {
@@ -333,6 +334,6 @@ public class ChatTypesTab(TataruConfig configuration)
         {
             configuration.Chat.SetChatTypeEnabled(chatType, enable);
         }
-        configuration.Save();
+        Service.Configuration.Save();
     }
 }

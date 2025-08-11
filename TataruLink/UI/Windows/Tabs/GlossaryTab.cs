@@ -27,7 +27,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
     /// </summary>
     private void SaveAndRebuild()
     {
-        configuration.Save();
+        Service.Configuration.Save();
         glossaryManager.Build();
     }
 

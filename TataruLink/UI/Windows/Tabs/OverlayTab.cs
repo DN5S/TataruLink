@@ -300,7 +300,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                         {
                             overlay.EnabledChatTypes.Remove(chatTypeValue);
                         }
-                        configuration.Save();
+                        Service.Configuration.Save();
                     }
                     
                     // Only show the color picker if this chat type is enabled for this overlay
@@ -319,7 +319,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                             ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel | ImGuiColorEditFlags.AlphaPreview))
                         {
                             overlay.ChatTypeColors[chatTypeValue] = color;
-                            configuration.Save();  // Save when color changes
+                            Service.Configuration.Save();  // Save when color changes
                         }
                     }
                 }
@@ -334,13 +334,13 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                     {
                         overlay.EnabledChatTypes.Add(chatType);
                     }
-                    configuration.Save();
+                    Service.Configuration.Save();
                 }
                 ImGui.SameLine();
                 if (ImGui.Button("Clear All"u8))
                 {
                     overlay.EnabledChatTypes.Clear();
-                    configuration.Save();
+                    Service.Configuration.Save();
                 }
             }
         }
