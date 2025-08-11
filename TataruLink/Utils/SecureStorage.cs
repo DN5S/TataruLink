@@ -56,8 +56,7 @@ public static class SecureStorage
             // Only available on Windows
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Service.PluginLog.Warning("DPAPI encryption is only available on Windows. Storing API key in plain text.");
-                return plainText;
+                throw new PlatformNotSupportedException("DPAPI encryption is only available on Windows.");
             }
             
             var plainBytes = Encoding.UTF8.GetBytes(plainText);
@@ -73,8 +72,8 @@ public static class SecureStorage
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, "Failed to encrypt data. Storing in plain text.");
-            return plainText;
+            Service.PluginLog.Error(ex, "Failed to encrypt data.");
+            throw;
         }
     }
 
@@ -100,9 +99,9 @@ public static class SecureStorage
             }
             catch (FormatException)
             {
-                // Not Base64 encoded - probably plain text from an old version
-                Service.PluginLog.Debug("API key appears to be unencrypted (legacy format).");
-                return encryptedText;
+                // Not Base64 encoded - invalid format
+                Service.PluginLog.Error("Invalid encrypted data format.");
+                return null;
             }
             
             var entropy = GetAdditionalEntropy();
@@ -123,22 +122,6 @@ public static class SecureStorage
         {
             Service.PluginLog.Error(ex, "Unexpected error during decryption.");
             return encryptedText;
-        }
-    }
-    
-    public static bool IsProtected(string? text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return false;
-            
-        try
-        {
-            _ = Convert.FromBase64String(text);
-            return true;
-        }
-        catch
-        {
-            return false;
         }
     }
 }

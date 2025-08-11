@@ -51,6 +51,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                     }
                 }
                 
+                // Record failure to debug service
+                Service.PipelineDebug.RecordFailure(message, context, "Translation", "Service not configured");
+                
                 return message;
             }
             
@@ -127,6 +130,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 }
                 
                 Service.PluginLog.Warning($"Translation failed for message: {textToTranslate}");
+                
+                // Record failure to debug service
+                Service.PipelineDebug.RecordFailure(message, context, "Translation", "Translation returned null");
             }
         }
         catch (OperationCanceledException)
@@ -136,6 +142,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             message.Status = TranslationStatus.Failed;
             context.Set("translation.error", "Translation cancelled or timed out");
             context.Set("translation.user_error", "Translation took too long. Try increasing the timeout in settings.");
+            
+            // Record failure to debug service
+            Service.PipelineDebug.RecordFailure(message, context, "Translation", "Timeout or cancellation");
         }
         catch (Exception ex)
         {
@@ -150,6 +159,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             {
                 context.Set("translation.user_error", error.UserFriendlyMessage);
             }
+            
+            // Record failure to debug service
+            Service.PipelineDebug.RecordFailure(message, context, "Translation", error.Message);
         }
 
         return message;

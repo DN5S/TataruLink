@@ -198,6 +198,7 @@ public sealed class Plugin : IDalamudPlugin
         // Step 6: Dispose services
         glossaryManager?.Dispose();
         translationService?.Dispose();
+        Service.PipelineDebug?.Dispose();
         
         isDisposed = true;
         Service.PluginLog.Info("TataruLink disposed successfully");

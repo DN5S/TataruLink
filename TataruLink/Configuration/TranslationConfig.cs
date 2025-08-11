@@ -49,11 +49,8 @@ public class TranslationConfig
         }
         else
         {
-            // Check if the key is already encrypted to avoid double encryption
-            var encrypted = SecureStorage.IsProtected(apiKey) 
-                ? apiKey 
-                : SecureStorage.Protect(apiKey);
-            
+            // Always encrypt the API key
+            var encrypted = SecureStorage.Protect(apiKey);
             if (encrypted != null)
             {
                 ApiKeys[provider] = encrypted;

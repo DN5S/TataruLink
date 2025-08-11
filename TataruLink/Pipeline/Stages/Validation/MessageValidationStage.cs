@@ -56,6 +56,10 @@ public class MessageValidationStage : IPipelineStage
                 Service.PluginLog.Debug($"Message failed validation: {result.Reason}");
                 context.Set($"validation.failed_at", validator.GetType().Name);
                 context.Set($"validation.reason", result.Reason);
+                
+                // Record failure to debug service
+                Service.PipelineDebug.RecordValidationFailure(message, validator.GetType().Name, result.Reason);
+                
                 return null; // Stop the pipeline
             }
         }
