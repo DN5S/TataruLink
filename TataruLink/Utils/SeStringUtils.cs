@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -339,15 +340,21 @@ public static partial class SeStringUtils
         return (preparedText, textSegments.Count);
     }
 
-    public static (string PreparedText, int SegmentCount) PrepareForProvider(SeString message, bool useXmlTags, string glossaryAppliedText)
+    /// <summary>
+    /// Applies glossary to each text segment individually, preserving SeString structure
+    /// </summary>
+    public static (string PreparedText, int SegmentCount, List<Payload?> PayloadTemplate) PrepareForProviderWithGlossary(
+        SeString message, bool useXmlTags, Func<string, string> applyGlossary)
     {
-        // Extract structure to get the segment count
-        var (textSegments, _) = ExtractStructure(message);
-        var glossarySegments = new List<string> { glossaryAppliedText };
-        var preparedText = PrepareForTranslation(glossarySegments, useXmlTags && textSegments.Count > 1);
+        var (textSegments, payloadTemplate) = ExtractStructure(message);
         
-        // Return the original segment count for reconstruction
-        return (preparedText, textSegments.Count);
+        // Apply glossary to each segment individually
+        var glossaryAppliedSegments = textSegments.Select(applyGlossary).ToList();
+        
+        // Prepare for translation with structure preserved
+        var preparedText = PrepareForTranslation(glossaryAppliedSegments, useXmlTags);
+        
+        return (preparedText, textSegments.Count, payloadTemplate);
     }
 
     public static bool ShouldTranslate(this string text)

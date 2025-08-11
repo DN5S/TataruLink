@@ -40,7 +40,8 @@ public class GlossaryManager : IDisposable
 
         foreach (var entry in enabledEntries)
         {
-            trie.Add(entry.Original);
+            // Add already lowercased pattern to avoid duplicate conversion in trie
+            trie.Add(entry.Original.ToLowerInvariant());
         }
         
         trie.Build();
@@ -49,6 +50,7 @@ public class GlossaryManager : IDisposable
 
     /// <summary>
     /// Apply glossary replacements to the given text.
+    /// Uses reverse iteration to prevent index corruption when replacements change string length.
     /// </summary>
     public string Apply(string text)
     {
@@ -60,43 +62,35 @@ public class GlossaryManager : IDisposable
         var matches = trie.FindAll(text).ToList();
         if (matches.Count == 0) return text;
 
-        // Sort matches by position and length (prefer longer matches at the same position)
-        matches.Sort((a, b) => 
-        {
-            var posCompare = a.index.CompareTo(b.index);
-            return posCompare != 0 ? posCompare : b.pattern.Length.CompareTo(a.pattern.Length); // Longer patterns first
-        });
+        // Sort by index in REVERSE order to process from end to beginning
+        // This prevents index corruption when replacement lengths differ from originals
+        matches.Sort((a, b) => b.index.CompareTo(a.index));
 
-        var result = new StringBuilder(text.Length);
-        var lastIndex = 0;
+        var result = new StringBuilder(text);
+        var processedRanges = new HashSet<(int start, int end)>();
         
-        // Apply non-overlapping matches
         foreach (var (index, pattern) in matches)
         {
-            if (index >= lastIndex)
+            var endIndex = index + pattern.Length;
+            
+            // Check for overlaps with already processed ranges
+            var isOverlapping = processedRanges.Any(range => 
+                                                        (index >= range.start && index < range.end) || 
+                                                        (endIndex > range.start && endIndex <= range.end) ||
+                                                        (index <= range.start && endIndex >= range.end));
+            
+            if (isOverlapping) continue;
+            
+            // Get the replacement (case-insensitive lookup)
+            if (replacementMap.TryGetValue(pattern.ToLowerInvariant(), out var replacement))
             {
-                // Append text before the match
-                result.Append(text, lastIndex, index - lastIndex);
+                // Replace from the end to avoid index shifting
+                result.Remove(index, pattern.Length);
+                result.Insert(index, replacement);
                 
-                // Get the replacement (case-insensitive lookup)
-                if (replacementMap.TryGetValue(pattern.ToLowerInvariant(), out var replacement))
-                {
-                    result.Append(replacement);
-                }
-                else
-                {
-                    // Fallback: keep original text if replacement not found
-                    result.Append(text, index, pattern.Length);
-                }
-                
-                lastIndex = index + pattern.Length;
+                // Mark this range as processed
+                processedRanges.Add((index, endIndex));
             }
-        }
-
-        // Append the remaining text
-        if (lastIndex < text.Length)
-        {
-            result.Append(text, lastIndex, text.Length - lastIndex);
         }
 
         var replacedText = result.ToString();

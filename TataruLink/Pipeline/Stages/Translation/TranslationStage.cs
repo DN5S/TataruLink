@@ -64,25 +64,27 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             // Mark as in progress
             message.Status = TranslationStatus.InProgress;
             
-            // Apply glossary to the plain text content BEFORE translation
-            var textWithGlossary = glossaryManager.Apply(message.PlainTextContent);
-            var glossaryApplied = message.PlainTextContent != textWithGlossary;
-            context.Set("glossary.applied", glossaryApplied);
-            
-            if (glossaryApplied)
-            {
-                Service.PluginLog.Debug($"Glossary applied: '{message.PlainTextContent}' -> '{textWithGlossary}'");
-            }
-            
             // Check if the current provider supports structured translation (XML tags)
             // Google Translate breaks XML structure, so we don't use it for Google
             var useXmlTags = translationService.SupportsStructuredTranslation;
             
-            // Prepare text for translation using SeStringUtils
-            // If glossary was applied, use the modified text; otherwise use the original
-            var (textToTranslate, segmentCount) = glossaryApplied 
-                ? SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags, textWithGlossary)
-                : SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags);
+            // Prepare text for translation with glossary applied to each segment individually
+            // This preserves SeString structure better than applying glossary to entire text
+            var (textToTranslate, segmentCount, payloadTemplate) = SeStringUtils.PrepareForProviderWithGlossary(
+                message.OriginalContent, 
+                useXmlTags, 
+                segment => glossaryManager.Apply(segment));
+            
+            // Check if glossary was applied by comparing with original
+            var originalPrepared = SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags);
+            var glossaryApplied = textToTranslate != originalPrepared.PreparedText;
+            context.Set("glossary.applied", glossaryApplied);
+            context.Set("translation.payloadTemplate", payloadTemplate);
+            
+            if (glossaryApplied)
+            {
+                Service.PluginLog.Debug($"Glossary applied to segments: '{originalPrepared.PreparedText}' -> '{textToTranslate}'");
+            }
             
             Service.PluginLog.Debug($"Text segments for translation ({segmentCount}) [Provider: {translationService.ProviderName}, XML: {useXmlTags}, Glossary: {glossaryApplied}]: {textToTranslate}");
             

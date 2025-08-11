@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Glossary;
@@ -16,6 +19,8 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
     private string newOriginal = string.Empty;
     private string newReplacement = string.Empty;
     private string searchFilter = string.Empty;
+    private string? errorMessage;
+    private DateTime errorMessageTime = DateTime.MinValue;
 
     /// <summary>
     /// Save configuration and rebuild the glossary trie
@@ -82,7 +87,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
             {
                 // Check for duplicates
                 var duplicate = glossaryConfig.Entries.Any(e => 
-                    e.Original.Equals(newOriginal, System.StringComparison.OrdinalIgnoreCase));
+                    e.Original.Equals(newOriginal, StringComparison.OrdinalIgnoreCase));
                 
                 if (!duplicate)
                 {
@@ -95,17 +100,36 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                     SaveAndRebuild();
                     Service.PluginLog.Information($"Added glossary entry: '{newOriginal}' -> '{newReplacement}'");
                     
-                    // Clear inputs
+                    // Clear inputs and error
                     newOriginal = string.Empty;
                     newReplacement = string.Empty;
+                    errorMessage = null;
                 }
                 else
                 {
+                    errorMessage = $"Entry '{newOriginal}' already exists";
+                    errorMessageTime = DateTime.Now;
                     Service.PluginLog.Warning($"Glossary entry '{newOriginal}' already exists");
                 }
             }
             
             if (!canAdd) ImGui.EndDisabled();
+            
+            // Display an error message if present
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                // Auto-clear error message after 3 seconds
+                if ((DateTime.Now - errorMessageTime).TotalSeconds > 3)
+                {
+                    errorMessage = null;
+                }
+                else
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1, 0.3f, 0.3f, 1));
+                    ImGui.TextUnformatted(errorMessage);
+                    ImGui.PopStyleColor();
+                }
+            }
         }
 
         ImGui.Separator();
@@ -194,8 +218,8 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
             var filteredEntries = string.IsNullOrWhiteSpace(searchFilter) 
                 ? glossaryConfig.Entries.ToList()
                 : glossaryConfig.Entries.Where(e => 
-                    e.Original.Contains(searchFilter, System.StringComparison.OrdinalIgnoreCase) ||
-                    e.Replacement.Contains(searchFilter, System.StringComparison.OrdinalIgnoreCase))
+                    e.Original.Contains(searchFilter, StringComparison.OrdinalIgnoreCase) ||
+                    e.Replacement.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
             GlossaryEntry? entryToRemove = null;
@@ -282,14 +306,14 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
     {
         try
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(
+            var json = JsonSerializer.Serialize(
                 configuration.Glossary.Entries,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                new JsonSerializerOptions { WriteIndented = true });
             
             ImGui.SetClipboardText(json);
             Service.PluginLog.Information($"Exported {configuration.Glossary.Entries.Count} glossary entries to clipboard");
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Failed to export glossary to clipboard");
         }
@@ -306,7 +330,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                 return;
             }
 
-            var imported = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<GlossaryEntry>>(json);
+            var imported = JsonSerializer.Deserialize<List<GlossaryEntry>>(json);
             if (imported == null || imported.Count == 0)
             {
                 Service.PluginLog.Warning("No valid glossary entries found in clipboard");
@@ -321,7 +345,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                     continue;
 
                 var exists = configuration.Glossary.Entries.Any(e => 
-                    e.Original.Equals(entry.Original, System.StringComparison.OrdinalIgnoreCase));
+                    e.Original.Equals(entry.Original, StringComparison.OrdinalIgnoreCase));
                 
                 if (!exists)
                 {
@@ -340,7 +364,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                 Service.PluginLog.Information("No new entries imported (all duplicates or invalid)");
             }
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Failed to import glossary from clipboard");
         }

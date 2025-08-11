@@ -23,7 +23,8 @@ internal class AhoCorasickTrie
         if (string.IsNullOrEmpty(pattern)) return;
         
         var node = root;
-        foreach (var c in pattern.ToLowerInvariant()) // Case-insensitive matching
+        // Pattern is already lowercased by GlossaryManager
+        foreach (var c in pattern)
         {
             if (!node.Children.TryGetValue(c, out var child))
             {
@@ -32,7 +33,7 @@ internal class AhoCorasickTrie
             }
             node = child;
         }
-        node.Output = pattern; // Store an original pattern for replacement lookup
+        node.Output = pattern; // Store the lowercased pattern
     }
 
     public void Build()
