@@ -9,7 +9,6 @@ namespace TataruLink.Utils;
 
 public static partial class SeStringUtils
 {
-    // Source-generated regex patterns for maximum performance (compile-time generation)
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceNormalizer();
     
@@ -249,13 +248,12 @@ public static partial class SeStringUtils
         var translatedSegments = ExtractFromTranslation(translatedText, originalSegmentCount);
         
         // Check if the structure was corrupted
-        bool structureIntact = translatedSegments.Count == originalSegmentCount || 
+        var structureIntact = translatedSegments.Count == originalSegmentCount || 
                               (originalSegmentCount > 1 && translatedSegments.Count == 1);
         
         if (!structureIntact)
         {
-            // Structure corrupted - use safe fallback
-            // Return only translated text without any payloads
+            // Structure corrupted - use safe fallback -> Return only translated text without any payloads
             Services.Service.PluginLog.Warning($"Translation structure corrupted. Expected {originalSegmentCount} segments, got {translatedSegments.Count}. Using fallback.");
             
             // Clean the translated text of any remaining XML artifacts using source-generated regex
@@ -267,8 +265,6 @@ public static partial class SeStringUtils
         // If we only got one segment back but expected multiple, it means translation merged everything
         if (originalSegmentCount > 1 && translatedSegments.Count == 1)
         {
-            // Use the single translated segment for all text positions
-            // This preserves payloads but loses segment boundaries
             var mergedText = translatedSegments[0];
             var textAdded = false;
             
@@ -340,6 +336,17 @@ public static partial class SeStringUtils
     {
         var (textSegments, _) = ExtractStructure(message);
         var preparedText = PrepareForTranslation(textSegments, useXmlTags);
+        return (preparedText, textSegments.Count);
+    }
+
+    public static (string PreparedText, int SegmentCount) PrepareForProvider(SeString message, bool useXmlTags, string glossaryAppliedText)
+    {
+        // Extract structure to get the segment count
+        var (textSegments, _) = ExtractStructure(message);
+        var glossarySegments = new List<string> { glossaryAppliedText };
+        var preparedText = PrepareForTranslation(glossarySegments, useXmlTags && textSegments.Count > 1);
+        
+        // Return the original segment count for reconstruction
         return (preparedText, textSegments.Count);
     }
 

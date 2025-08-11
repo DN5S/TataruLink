@@ -5,13 +5,14 @@ using TataruLink.Configuration;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
+using TataruLink.Glossary;
 
 namespace TataruLink.Pipeline.Stages.Translation;
 
 /// <summary>
 /// Handles translation of messages using configured translation services.
 /// </summary>
-public class TranslationStage(TataruConfig configuration, ITranslationService translationService)
+public class TranslationStage(TataruConfig configuration, ITranslationService translationService, GlossaryManager glossaryManager)
     : IPipelineStage
 {
     public string Name => "Translation";
@@ -63,14 +64,27 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             // Mark as in progress
             message.Status = TranslationStatus.InProgress;
             
+            // Apply glossary to the plain text content BEFORE translation
+            var textWithGlossary = glossaryManager.Apply(message.PlainTextContent);
+            var glossaryApplied = message.PlainTextContent != textWithGlossary;
+            context.Set("glossary.applied", glossaryApplied);
+            
+            if (glossaryApplied)
+            {
+                Service.PluginLog.Debug($"Glossary applied: '{message.PlainTextContent}' -> '{textWithGlossary}'");
+            }
+            
             // Check if the current provider supports structured translation (XML tags)
             // Google Translate breaks XML structure, so we don't use it for Google
             var useXmlTags = translationService.SupportsStructuredTranslation;
             
             // Prepare text for translation using SeStringUtils
-            var (textToTranslate, segmentCount) = SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags);
+            // If glossary was applied, use the modified text; otherwise use the original
+            var (textToTranslate, segmentCount) = glossaryApplied 
+                ? SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags, textWithGlossary)
+                : SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags);
             
-            Service.PluginLog.Debug($"Text segments for translation ({segmentCount}) [Provider: {translationService.ProviderName}, XML: {useXmlTags}]: {textToTranslate}");
+            Service.PluginLog.Debug($"Text segments for translation ({segmentCount}) [Provider: {translationService.ProviderName}, XML: {useXmlTags}, Glossary: {glossaryApplied}]: {textToTranslate}");
             
             // Perform translation
             var translatedText = await translationService.TranslateAsync(
@@ -115,7 +129,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
         }
         catch (OperationCanceledException)
         {
-            // Translation was cancelled (timeout or user cancellation)
+            // Translation was canceled (timeout or user cancellation)
             Service.PluginLog.Debug($"Translation cancelled for message {message.Id}");
             message.Status = TranslationStatus.Failed;
             context.Set("translation.error", "Translation cancelled or timed out");

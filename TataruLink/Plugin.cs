@@ -1,6 +1,7 @@
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
+using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Pipeline;
 using TataruLink.Pipeline.Stages.Capture;
@@ -31,6 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     private ChatCaptureStage? chatCaptureStage;
     private ITranslationService? translationService;
     private OverlayManager? overlayManager;
+    private GlossaryManager? glossaryManager;
     
     // UI components
     private WindowSystem? windowSystem;
@@ -71,6 +73,9 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize configuration
         configuration = TataruConfig.Load(pluginInterface);
         
+        // Initialize glossary manager
+        glossaryManager = new GlossaryManager(configuration);
+        
         // Initialize translation service
         translationService = new TranslationService(configuration);
         
@@ -85,8 +90,8 @@ public sealed class Plugin : IDalamudPlugin
         messagePipeline
             // Stage 1: Validation (includes deduplication, chat type, and content validation)
             .AddStage(new MessageValidationStage(configuration))
-            // Stage 2: Translate the message using translation service
-            .AddStage(new TranslationStage(configuration, translationService))
+            // Stage 2: Translate the message using a translation service (with glossary support)
+            .AddStage(new TranslationStage(configuration, translationService, glossaryManager))
             // Stage 3: Display the translated message (with overlay support)
             .AddStage(new DisplayStage(configuration, overlayManager));
         
@@ -115,8 +120,8 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize overlay manager
         overlayManager = new OverlayManager(configuration!, windowSystem);
         
-        // Create and add settings window with overlay manager
-        settingsWindow = new SettingsWindow(configuration!, translationService!, overlayManager);
+        // Create and add settings window with overlay manager and glossary manager
+        settingsWindow = new SettingsWindow(configuration!, translationService!, overlayManager, glossaryManager!);
         windowSystem.AddWindow(settingsWindow);
         
         // Register draw handler
@@ -192,6 +197,7 @@ public sealed class Plugin : IDalamudPlugin
         configuration?.SaveImmediately();
         
         // Step 6: Dispose services
+        glossaryManager?.Dispose();
         translationService?.Dispose();
         
         isDisposed = true;

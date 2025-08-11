@@ -59,6 +59,11 @@ public class TataruConfig : IPluginConfiguration
     /// </summary>
     public FilterConfig Filter { get; set; } = new();
 
+    /// <summary>
+    /// User glossary settings
+    /// </summary>
+    public GlossaryConfig Glossary { get; set; } = new();
+
     // Plugin interface reference (transient - not saved)
     [JsonIgnore]
     private IDalamudPluginInterface? pluginInterface;
@@ -175,6 +180,7 @@ public class TataruConfig : IPluginConfiguration
         Performance = new PerformanceConfig();
         Validation = new ValidationConfig();
         Filter = new FilterConfig();
+        Glossary = new GlossaryConfig();
         
         Save();
         Service.PluginLog.Information("Configuration reset to defaults");

@@ -50,10 +50,7 @@ public static class SecureStorage
             return plainText;
         }
     }
-    
-    /// <summary>
-    /// Decrypts a string encrypted using DPAPI
-    /// </summary>
+
     public static string? Unprotect(string? encryptedText)
     {
         if (string.IsNullOrEmpty(encryptedText))
@@ -101,9 +98,6 @@ public static class SecureStorage
         }
     }
     
-    /// <summary>
-    /// Checks if a string appears to be encrypted (Base64 encoded)
-    /// </summary>
     public static bool IsProtected(string? text)
     {
         if (string.IsNullOrEmpty(text))

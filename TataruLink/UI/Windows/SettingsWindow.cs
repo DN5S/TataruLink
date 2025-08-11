@@ -4,6 +4,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
+using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Translation;
 using TataruLink.UI.Windows.Tabs;
@@ -21,11 +22,12 @@ public class SettingsWindow : Window, IDisposable
     private readonly LanguagesTab languagesTab;
     private readonly ChatTypesTab chatTypesTab;
     private readonly FiltersTab filtersTab;
+    private readonly GlossaryTab glossaryTab;
     private readonly DisplayTab displayTab;
     private readonly OverlayTab overlayTab;
     private readonly DebugTab debugTab;
 
-    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager) 
+    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
         // Window configuration
@@ -38,6 +40,7 @@ public class SettingsWindow : Window, IDisposable
         languagesTab = new LanguagesTab(configuration);
         chatTypesTab = new ChatTypesTab(configuration);
         filtersTab = new FiltersTab(configuration);
+        glossaryTab = new GlossaryTab(configuration, glossaryManager);
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);
         debugTab = new DebugTab(configuration, translationService);
@@ -76,6 +79,12 @@ public class SettingsWindow : Window, IDisposable
         {
             if (tab)
                 filtersTab.Draw();
+        }
+            
+        using (var tab = ImRaii.TabItem("Glossary"u8))
+        {
+            if (tab)
+                glossaryTab.Draw();
         }
             
         using (var tab = ImRaii.TabItem("Display"u8))
