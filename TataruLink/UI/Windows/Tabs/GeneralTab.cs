@@ -13,7 +13,7 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
     public void Draw()
     {
         var enabled = configuration.IsEnabled;
-        if (ImGui.Checkbox("Enable TataruLink", ref enabled))
+        if (ImGui.Checkbox("Enable TataruLink"u8, ref enabled))
         {
             configuration.IsEnabled = enabled;
             configuration.Save();
@@ -21,7 +21,6 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         
         ImGui.Separator();
         
-        // Status display - Using TextUnformatted (v13 change)
         ImGui.TextUnformatted($"Status: {(configuration.IsEnabled ? "Active" : "Disabled")}");
         ImGui.TextUnformatted($"Translation Engine: {translationService.ProviderName}");
         ImGui.TextUnformatted($"Engine Status: {(translationService.IsConfigured ? "Configured" : "Not Configured")}");

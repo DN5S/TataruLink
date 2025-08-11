@@ -28,24 +28,24 @@ public class LanguagesTab(TataruConfig configuration)
 
     public void Draw()
     {
-        ImGui.TextUnformatted("Source Language");
+        ImGui.TextUnformatted("Source Language"u8);
         var sourceIndex = GetLanguageIndex(configuration.Translation.SourceLanguage);
-        if (ImGui.Combo("##SourceLang", ref sourceIndex, languageNames, languageNames.Length))
+        if (ImGui.Combo("##SourceLang"u8, ref sourceIndex, languageNames, languageNames.Length))
         {
             configuration.Translation.SourceLanguage = languageCodes[sourceIndex];
             configuration.Save();
         }
         
-        ImGui.TextUnformatted("Target Language");
+        ImGui.TextUnformatted("Target Language"u8);
         var targetIndex = GetLanguageIndexNoAuto(configuration.Translation.TargetLanguage);
-        if (ImGui.Combo("##TargetLang", ref targetIndex, languageNamesNoAuto, languageNamesNoAuto.Length))
+        if (ImGui.Combo("##TargetLang"u8, ref targetIndex, languageNamesNoAuto, languageNamesNoAuto.Length))
         {
             configuration.Translation.TargetLanguage = languageCodesNoAuto[targetIndex];
             configuration.Save();
         }
         
         ImGui.Separator();
-        ImGui.TextWrapped("Select 'Auto-Detect' as source language to automatically detect the language of incoming messages.");
+        ImGui.TextWrapped("Select 'Auto-Detect' as source language to automatically detect the language of incoming messages."u8);
     }
 
     private int GetLanguageIndex(string code)

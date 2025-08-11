@@ -18,16 +18,16 @@ public class FiltersTab(TataruConfig configuration)
 
     public void Draw()
     {
-        ImGui.TextUnformatted("Chat Filters");
+        ImGui.TextUnformatted("Chat Filters"u8);
         ImGui.Separator();
         
         // Keyword Filter Section
-        ImGui.TextUnformatted("Keyword Filtering");
+        ImGui.TextUnformatted("Keyword Filtering"u8);
         ImGui.Separator();
         
         // Enable/Disable keyword filtering
         var enableKeywordFilter = configuration.Filter.EnableKeywordFilter;
-        if (ImGui.Checkbox("Enable Keyword Filter", ref enableKeywordFilter))
+        if (ImGui.Checkbox("Enable Keyword Filter"u8, ref enableKeywordFilter))
         {
             configuration.Filter.EnableKeywordFilter = enableKeywordFilter;
             configuration.Save();
@@ -36,7 +36,7 @@ public class FiltersTab(TataruConfig configuration)
         
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("When enabled, messages containing blocked keywords or from blocked senders will not be translated.");
+            ImGui.SetTooltip("When enabled, messages containing blocked keywords or from blocked senders will not be translated."u8);
         }
         
         if (!enableKeywordFilter)
@@ -47,12 +47,12 @@ public class FiltersTab(TataruConfig configuration)
         ImGui.Spacing();
         
         // Add a new keyword section
-        ImGui.TextUnformatted("Add Keyword or Character Name:");
+        ImGui.TextUnformatted("Add Keyword or Character Name:"u8);
         ImGui.SetNextItemWidth(300);
-        ImGui.InputText("##NewKeyword", ref newKeyword, 100);
+        ImGui.InputText("##NewKeyword"u8, ref newKeyword, 100);
         
         ImGui.SameLine();
-        if (ImGui.Button("Add") && !string.IsNullOrWhiteSpace(newKeyword))
+        if (ImGui.Button("Add"u8) && !string.IsNullOrWhiteSpace(newKeyword))
         {
             var trimmedKeyword = newKeyword.Trim();
             if (configuration.Filter.KeywordBlocklist.Add(trimmedKeyword))
@@ -72,15 +72,15 @@ public class FiltersTab(TataruConfig configuration)
         
         if (configuration.Filter.KeywordBlocklist.Count == 0)
         {
-            ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f), "No keywords in blocklist");
+            ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f), "No keywords in blocklist"u8);
         }
         else
         {
             // Create a table for better organization
-            if (ImGui.BeginTable("KeywordTable", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            if (ImGui.BeginTable("KeywordTable"u8, 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
             {
-                ImGui.TableSetupColumn("Keyword", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupColumn("Keyword"u8, ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn("Actions"u8, ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableHeadersRow();
                 
                 foreach (var keyword in configuration.Filter.KeywordBlocklist.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
@@ -92,7 +92,7 @@ public class FiltersTab(TataruConfig configuration)
                     
                     ImGui.TableNextColumn();
                     ImGui.PushID(keyword);
-                    if (ImGui.SmallButton("Remove"))
+                    if (ImGui.SmallButton("Remove"u8))
                     {
                         keywordToRemove = keyword;
                     }
@@ -122,9 +122,9 @@ public class FiltersTab(TataruConfig configuration)
         ImGui.Spacing();
         
         // Help text
-        ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Tips:");
-        ImGui.BulletText("Add your character name to block your own messages from being translated");
-        ImGui.BulletText("Keywords are case-insensitive");
-        ImGui.BulletText("Messages are blocked if they contain the keyword or if the sender matches");
+        ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Tips:"u8);
+        ImGui.BulletText("Add your character name to block your own messages from being translated"u8);
+        ImGui.BulletText("Keywords are case-insensitive"u8);
+        ImGui.BulletText("Messages are blocked if they contain the keyword or if the sender matches"u8);
     }
 }

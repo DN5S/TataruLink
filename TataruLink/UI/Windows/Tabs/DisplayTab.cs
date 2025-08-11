@@ -10,11 +10,11 @@ public class DisplayTab(TataruConfig configuration)
 {
     public void Draw()
     {
-        ImGui.TextUnformatted("General Display Options");
+        ImGui.TextUnformatted("General Display Options"u8);
         ImGui.Separator();
         
         var showInChat = configuration.Display.ShowInChat;
-        if (ImGui.Checkbox("Show translations in game chat", ref showInChat))
+        if (ImGui.Checkbox("Show translations in game chat"u8, ref showInChat))
         {
             configuration.Display.ShowInChat = showInChat;
             configuration.Save();
@@ -25,14 +25,14 @@ public class DisplayTab(TataruConfig configuration)
             ImGui.Indent();
             
             var showSenderName = configuration.Display.ShowSenderName;
-            if (ImGui.Checkbox("Show sender name in chat", ref showSenderName))
+            if (ImGui.Checkbox("Show sender name in chat"u8, ref showSenderName))
             {
                 configuration.Display.ShowSenderName = showSenderName;
                 configuration.Save();
             }
             
             var showChatType = configuration.Display.ShowChatType;
-            if (ImGui.Checkbox("Show chat type in chat", ref showChatType))
+            if (ImGui.Checkbox("Show chat type in chat"u8, ref showChatType))
             {
                 configuration.Display.ShowChatType = showChatType;
                 configuration.Save();

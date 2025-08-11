@@ -178,7 +178,7 @@ public class TranslationOverlay : Window, IDisposable
         }
         
         var availableHeight = ImGui.GetContentRegionAvail().Y;
-        using var child = ImRaii.Child("MessageArea", new Vector2(0, availableHeight), false, childFlags);
+        using var child = ImRaii.Child("MessageArea"u8, new Vector2(0, availableHeight), false, childFlags);
         if (!child) return;
         lock (messageLock)
         {

@@ -45,52 +45,52 @@ public class SettingsWindow : Window, IDisposable
 
     public override void Draw()
     {
-        using var tabBar = ImRaii.TabBar("##SettingsTabs");
+        using var tabBar = ImRaii.TabBar("##SettingsTabs"u8);
         
         if (!tabBar) return;
-        using (var tab = ImRaii.TabItem("General"))
+        using (var tab = ImRaii.TabItem("General"u8))
         {
             if (tab)
                 generalTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Translation"))
+        using (var tab = ImRaii.TabItem("Translation"u8))
         {
             if (tab)
                 translationTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Languages"))
+        using (var tab = ImRaii.TabItem("Languages"u8))
         {
             if (tab)
                 languagesTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Chat Types"))
+        using (var tab = ImRaii.TabItem("Chat Types"u8))
         {
             if (tab)
                 chatTypesTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Filters"))
+        using (var tab = ImRaii.TabItem("Filters"u8))
         {
             if (tab)
                 filtersTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Display"))
+        using (var tab = ImRaii.TabItem("Display"u8))
         {
             if (tab)
                 displayTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Overlay"))
+        using (var tab = ImRaii.TabItem("Overlay"u8))
         {
             if (tab)
                 overlayTab.Draw();
         }
             
-        using (var tab = ImRaii.TabItem("Debug"))
+        using (var tab = ImRaii.TabItem("Debug"u8))
         {
             if (tab)
                 debugTab.Draw();

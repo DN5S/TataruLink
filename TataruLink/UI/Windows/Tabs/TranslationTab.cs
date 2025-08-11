@@ -37,7 +37,7 @@ public class TranslationTab
 
     public void Draw()
     {
-        ImGui.TextUnformatted("Translation Engine");
+        ImGui.TextUnformatted("Translation Engine"u8);
         
         // Show the current provider status with detailed error information
         var status = (translationService as TranslationService)?.GetActiveProviderStatus();
@@ -79,7 +79,7 @@ public class TranslationTab
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "[Status Unknown]");
         }
         
-        if (ImGui.Combo("##Engine", ref selectedEngineIndex, availableEngines, availableEngines.Length))
+        if (ImGui.Combo("##Engine"u8, ref selectedEngineIndex, availableEngines, availableEngines.Length))
         {
             var newEngine = availableEngines[selectedEngineIndex];
             translationService.ChangeProvider(newEngine);
@@ -95,33 +95,33 @@ public class TranslationTab
             // API Key configuration (for engines that need it)
             case "DeepL":
             {
-                ImGui.TextUnformatted("DeepL API Key");
+                ImGui.TextUnformatted("DeepL API Key"u8);
                 ImGui.SameLine();
-                ImGui.TextDisabled("(?)");
+                ImGui.TextDisabled("(?)"u8);
                 if (ImGui.IsItemHovered())
                 {
                     ImGui.BeginTooltip();
-                    ImGui.TextUnformatted("Get your API key from https://www.deepl.com/pro-api");
+                    ImGui.TextUnformatted("Get your API key from https://www.deepl.com/pro-api"u8);
                     ImGui.EndTooltip();
                 }
             
-                ImGui.InputText("##ApiKey", ref tempApiKey, 100, ImGuiInputTextFlags.Password);
+                ImGui.InputText("##ApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
                 
                 // Show inline validation status
                 if (status != null && status.LastError?.Type == TranslationErrorType.InvalidApiKey)
                 {
-                    ImGui.TextColored(new Vector4(1, 0, 0, 1), "Invalid API key. Please check and re-enter.");
+                    ImGui.TextColored(new Vector4(1, 0, 0, 1), "Invalid API key. Please check and re-enter."u8);
                 }
                 
                 ImGui.SameLine();
-                if (ImGui.Button("Save Key"))
+                if (ImGui.Button("Save Key"u8))
                 {
                     translationService.UpdateApiKey(configuration.Translation.Engine, tempApiKey);
                     Service.PluginLog.Information("API key saved and provider reinitialized");
                 }
                 
                 ImGui.SameLine();
-                if (ImGui.Button("Test Connection"))
+                if (ImGui.Button("Test Connection"u8))
                 {
                     TestProviderConnection();
                 }
@@ -129,8 +129,8 @@ public class TranslationTab
                 break;
             }
             case "Google":
-                ImGui.TextWrapped("Google Translate uses an unofficial API and doesn't require an API key.");
-                ImGui.TextColored(new Vector4(1, 1, 0, 1), "Note: This may stop working if Google changes their API.");
+                ImGui.TextWrapped("Google Translate uses an unofficial API and doesn't require an API key."u8);
+                ImGui.TextColored(new Vector4(1, 1, 0, 1), "Note: This may stop working if Google changes their API."u8);
                 break;
         }
         
@@ -138,18 +138,18 @@ public class TranslationTab
         ImGui.Spacing();
         
         // Translation prefix
-        ImGui.TextUnformatted("Translation Prefix");
+        ImGui.TextUnformatted("Translation Prefix"u8);
         ImGui.SameLine();
-        ImGui.TextDisabled("(?)");
+        ImGui.TextDisabled("(?)"u8);
         if (ImGui.IsItemHovered())
         {
             ImGui.BeginTooltip();
-            ImGui.TextUnformatted("Prefix added to translated messages (e.g., '[TR]')");
+            ImGui.TextUnformatted("Prefix added to translated messages (e.g., '[TR]')"u8);
             ImGui.EndTooltip();
         }
         
         var prefix = configuration.Translation.TranslationPrefix;
-        if (ImGui.InputText("##TranslationPrefix", ref prefix, 20))
+        if (ImGui.InputText("##TranslationPrefix"u8, ref prefix, 20))
         {
             configuration.Translation.TranslationPrefix = prefix;
             configuration.Save();
@@ -159,7 +159,7 @@ public class TranslationTab
         
         // Translation options
         var retryFailed = configuration.Translation.RetryFailedTranslations;
-        if (ImGui.Checkbox("Retry failed translations", ref retryFailed))
+        if (ImGui.Checkbox("Retry failed translations"u8, ref retryFailed))
         {
             configuration.Translation.RetryFailedTranslations = retryFailed;
             configuration.Save();
@@ -168,7 +168,7 @@ public class TranslationTab
         if (retryFailed)
         {
             var maxRetries = configuration.Translation.MaxRetryAttempts;
-            if (ImGui.SliderInt("Max retry attempts", ref maxRetries, 1, 5))
+            if (ImGui.SliderInt("Max retry attempts"u8, ref maxRetries, 1, 5))
             {
                 configuration.Translation.MaxRetryAttempts = maxRetries;
                 configuration.Save();
@@ -176,7 +176,7 @@ public class TranslationTab
         }
         
         var timeout = configuration.Translation.TimeoutMs;
-        if (ImGui.SliderInt("Timeout (ms)", ref timeout, 1000, 10000))
+        if (ImGui.SliderInt("Timeout (ms)"u8, ref timeout, 1000, 10000))
         {
             configuration.Translation.TimeoutMs = timeout;
             configuration.Save();

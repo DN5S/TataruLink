@@ -16,7 +16,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
     public void Draw()
     {
         var debugMode = configuration.DebugMode;
-        if (ImGui.Checkbox("Enable Debug Mode", ref debugMode))
+        if (ImGui.Checkbox("Enable Debug Mode"u8, ref debugMode))
         {
             configuration.DebugMode = debugMode;
             configuration.Save();
@@ -25,19 +25,19 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
         if (configuration.DebugMode)
         {
             ImGui.Separator();
-            ImGui.TextUnformatted("Debug Information");
+            ImGui.TextUnformatted("Debug Information"u8);
             ImGui.TextUnformatted($"Config Version: {configuration.Version}");
             ImGui.TextUnformatted($"Translation Provider: {translationService.ProviderName}");
             ImGui.TextUnformatted($"Provider Configured: {translationService.IsConfigured}");
             
             // API Key encryption status
             ImGui.Separator();
-            ImGui.TextUnformatted("API Key Security Status:");
+            ImGui.TextUnformatted("API Key Security Status:"u8);
             
             foreach (var kvp in configuration.Translation.ApiKeys)
             {
                 var isProtected = SecureStorage.IsProtected(kvp.Value);
-                var status = isProtected ? "Encrypted" : "Plain Text (Legacy)";
+                var status = isProtected ? "Encrypted"u8 : "Plain Text (Legacy)"u8;
                 var statusColor = isProtected 
                     ? new System.Numerics.Vector4(0, 1, 0, 1)  // Green
                     : new System.Numerics.Vector4(1, 1, 0, 1);  // Yellow
@@ -60,11 +60,11 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             
             if (!configuration.Translation.ApiKeys.Any())
             {
-                ImGui.TextDisabled("  No API keys configured");
+                ImGui.TextDisabled("  No API keys configured"u8);
             }
             
             ImGui.Separator();
-            if (ImGui.Button("Reset Configuration"))
+            if (ImGui.Button("Reset Configuration"u8))
             {
                 configuration.Reset();
                 Service.PluginLog.Information("Configuration reset to defaults");
