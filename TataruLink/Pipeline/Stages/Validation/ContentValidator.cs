@@ -14,23 +14,23 @@ public class ContentValidator : IMessageValidator
         // No initialization needed
     }
 
-    public Task<ValidationResult> ValidateAsync(Message message, PipelineContext context)
+    public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
         // Check if a message has any content
         if (string.IsNullOrWhiteSpace(message.PlainTextContent))
         {
-            return Task.FromResult(ValidationResult.Failure("Message has no text content"));
+            return new ValueTask<ValidationResult>(ValidationResult.Failure("Message has no text content"));
         }
 
         // Check if a message should be translated (not just auto-translate phrases)
         if (!message.PlainTextContent.ShouldTranslate())
         {
-            return Task.FromResult(ValidationResult.Failure(
+            return new ValueTask<ValidationResult>(ValidationResult.Failure(
                 "Message contains only auto-translate or non-translatable content"));
         }
 
         context.Set("validation.content.length", message.PlainTextContent.Length);
-        return Task.FromResult(ValidationResult.Success());
+        return new ValueTask<ValidationResult>(ValidationResult.Success());
     }
 
     public void Dispose()

@@ -9,24 +9,20 @@ using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class CacheSettingsTab
+public class CacheTab(IDataService dataService)
 {
-    private readonly IDataService dataService;
     private bool isOperationInProgress;
     private string lastOperationResult = string.Empty;
     private long databaseSize;
     private DateTime lastSizeCheck = DateTime.MinValue;
-
-    public CacheSettingsTab(IDataService dataService)
-    {
-        this.dataService = dataService;
-    }
 
     public void Draw()
     {
         using var spacing = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, new Vector2(8, 8));
         
         DrawCacheControls();
+        ImGui.Separator();
+        DrawHotCacheInfo();
         ImGui.Separator();
         DrawDatabaseInfo();
         ImGui.Separator();
@@ -66,17 +62,36 @@ public class CacheSettingsTab
         ImGui.TextUnformatted($"L1 Hits: {stats.L1HitCount:N0}");
         ImGui.TextUnformatted($"L2 Hits: {stats.L2HitCount:N0}");
         ImGui.TextUnformatted($"Misses: {stats.MissCount:N0}");
+        ImGui.TextUnformatted($"Hot Cache Hits: {stats.HotCacheHitCount:N0}");
         ImGui.TextUnformatted($"Total Requests: {stats.TotalRequests:N0}");
         
         if (stats.TotalRequests > 0)
         {
             ImGui.TextUnformatted($"L1 Hit Rate: {stats.L1HitRatio:P1}");
             ImGui.TextUnformatted($"L2 Hit Rate: {stats.L2HitRatio:P1}");
+            ImGui.TextUnformatted($"Hot Cache Rate: {stats.HotCacheRatio:P1}");
             ImGui.TextUnformatted($"Overall Hit Rate: {stats.OverallHitRatio:P1}");
         }
         ImGui.Unindent();
     }
 
+    private void DrawHotCacheInfo()
+    {
+        ImGui.TextUnformatted("Hot Cache Information"u8);
+        ImGui.Indent();
+        
+        var config = Service.Configuration.Data.Cache;
+        ImGui.TextUnformatted($"Pre-load Limit: {config.MaxHotCacheEntries} entries");
+        ImGui.TextUnformatted($"Hot Threshold: {config.MinAccessCountForHot} accesses");
+        
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Translations accessed this many times or more are considered 'hot' and get priority caching"u8);
+        }
+        
+        ImGui.Unindent();
+    }
+    
     private void DrawDatabaseInfo()
     {
         ImGui.TextUnformatted("Database Information"u8);
@@ -148,7 +163,7 @@ public class CacheSettingsTab
         try
         {
             // L1 cache clearing would need to be implemented in DataService
-            // For now, just show a message
+            // For now, show a message
             lastOperationResult = "L1 cache cleared (memory freed on next GC)";
             Service.PluginLog.Information("L1 cache clear requested");
         }
@@ -247,8 +262,8 @@ public class CacheSettingsTab
     {
         if (bytes == 0) return "0 B";
         
-        string[] suffixes = { "B", "KB", "MB", "GB" };
-        int suffixIndex = 0;
+        string[] suffixes = ["B", "KB", "MB", "GB"];
+        var suffixIndex = 0;
         double size = bytes;
         
         while (size >= 1024 && suffixIndex < suffixes.Length - 1)

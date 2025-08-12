@@ -27,7 +27,7 @@ public class SettingsWindow : Window, IDisposable
     private readonly DisplayTab displayTab;
     private readonly OverlayTab overlayTab;
     private readonly DebugTab debugTab;
-    private readonly CacheSettingsTab cacheSettingsTab;
+    private readonly CacheTab cacheTab;
 
     public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, IDataService dataService) 
         : base("TataruLink Settings###TataruLinkSettings")
@@ -46,7 +46,7 @@ public class SettingsWindow : Window, IDisposable
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);
         debugTab = new DebugTab(configuration, translationService);
-        cacheSettingsTab = new CacheSettingsTab(dataService);
+        cacheTab = new CacheTab(dataService);
     }
 
     public override void Draw()
@@ -111,7 +111,7 @@ public class SettingsWindow : Window, IDisposable
         using (var tab = ImRaii.TabItem("Cache"u8))
         {
             if (tab)
-                cacheSettingsTab.Draw();
+                cacheTab.Draw();
         }
     }
 

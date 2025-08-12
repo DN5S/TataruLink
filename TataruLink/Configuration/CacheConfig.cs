@@ -71,6 +71,16 @@ public class CacheConfig
     public int ConnectionTimeoutSeconds { get; set; } = 30;
     
     /// <summary>
+    /// Maximum number of hot cache entries to pre-load
+    /// </summary>
+    public int MaxHotCacheEntries { get; set; } = 100;
+    
+    /// <summary>
+    /// Minimum access count for a translation to be considered "hot"
+    /// </summary>
+    public int MinAccessCountForHot { get; set; } = 5;
+    
+    /// <summary>
     /// Maximum input validation limits
     /// </summary>
     public ValidationLimits Validation { get; set; } = new();

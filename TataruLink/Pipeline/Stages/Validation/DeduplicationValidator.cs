@@ -19,7 +19,7 @@ public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessag
         Service.PluginLog.Debug($"DeduplicationValidator initialized with {duplicateDetectionPeriod.TotalMilliseconds}ms detection period");
     }
 
-    public Task<ValidationResult> ValidateAsync(Message message, PipelineContext context)
+    public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
         // Create hash from message components
         var hash = HashCode.Combine(
@@ -44,14 +44,14 @@ public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessag
             var preview = message.PlainTextContent.Length > 30 
                 ? string.Concat(message.PlainTextContent.AsSpan(0, 30), "...")
                 : message.PlainTextContent;
-            return Task.FromResult(ValidationResult.Failure($"Duplicate message: {preview}"));
+            return new ValueTask<ValidationResult>(ValidationResult.Failure($"Duplicate message: {preview}"));
         }
 
         // Mark in context that this message passed deduplication
         context.Set("validation.deduplication.passed", true);
         context.Set("validation.deduplication.hash", hash);
 
-        return Task.FromResult(ValidationResult.Success());
+        return new ValueTask<ValidationResult>(ValidationResult.Success());
     }
 
     public void Dispose()

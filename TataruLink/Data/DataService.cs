@@ -59,7 +59,47 @@ public class DataService : IDataService
     public async Task InitializeAsync()
     {
         await context.InitializeAsync();
+        
+        // Pre-load hot translations into L1 cache for better performance
+        await PreloadHotTranslationsAsync();
+        
         Service.PluginLog.Information("DataService initialized successfully");
+    }
+    
+    private async Task PreloadHotTranslationsAsync()
+    {
+        try
+        {
+            // Load frequently accessed translations into L1 cache
+            var hotTranslations = await unitOfWork.TranslationCache.GetHotTranslationsAsync(
+                limit: config.MaxHotCacheEntries, 
+                minAccessCount: config.MinAccessCountForHot);
+            
+            int loaded = 0;
+            foreach (var entry in hotTranslations)
+            {
+                if (!string.IsNullOrWhiteSpace(entry.CacheKey))
+                {
+                    l1Cache.Set(entry.CacheKey, entry, new MemoryCacheEntryOptions
+                    {
+                        Size = 1,
+                        Priority = CacheItemPriority.High, // Hot items get high priority
+                        SlidingExpiration = TimeSpan.FromMinutes(config.L1CacheSlidingExpirationMinutes * 2), // Longer expiration for hot items
+                        AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes * 2)
+                    });
+                    loaded++;
+                }
+            }
+            
+            if (loaded > 0)
+            {
+                Service.PluginLog.Information($"Pre-loaded {loaded} hot translations into L1 cache");
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Warning(ex, "Failed to pre-load hot translations");
+        }
     }
 
     public async Task<TranslationCacheEntry?> GetCacheAsync(string key)
@@ -68,7 +108,17 @@ public class DataService : IDataService
         if (l1Cache.TryGetValue(key, out TranslationCacheEntry? entry))
         {
             statistics.IncrementL1Hit();
-            Service.PluginLog.Debug($"L1 Cache HIT: {key}");
+            
+            // Check if this is a hot translation
+            if (entry.AccessCount >= config.MinAccessCountForHot)
+            {
+                statistics.IncrementHotCacheHit();
+                Service.PluginLog.Debug($"L1 HOT Cache HIT: {key} (access count: {entry.AccessCount})");
+            }
+            else
+            {
+                Service.PluginLog.Debug($"L1 Cache HIT: {key}");
+            }
             return entry;
         }
 
@@ -78,15 +128,34 @@ public class DataService : IDataService
         if (entry != null)
         {
             statistics.IncrementL2Hit();
-            Service.PluginLog.Debug($"L2 Cache HIT: {key}");
             
-            // Promote to L1
-            l1Cache.Set(key, entry, new MemoryCacheEntryOptions
+            // Check if this is becoming a hot translation
+            if (entry.AccessCount >= config.MinAccessCountForHot)
             {
-                Size = 1,
-                SlidingExpiration = TimeSpan.FromMinutes(config.L1CacheSlidingExpirationMinutes),
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes)
-            });
+                statistics.IncrementHotCacheHit();
+                Service.PluginLog.Debug($"L2 HOT Cache HIT: {key} (access count: {entry.AccessCount})");
+                
+                // Hot items get higher priority in L1
+                l1Cache.Set(key, entry, new MemoryCacheEntryOptions
+                {
+                    Size = 1,
+                    Priority = CacheItemPriority.High,
+                    SlidingExpiration = TimeSpan.FromMinutes(config.L1CacheSlidingExpirationMinutes * 2),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes * 2)
+                });
+            }
+            else
+            {
+                Service.PluginLog.Debug($"L2 Cache HIT: {key}");
+                
+                // Normal priority for regular items
+                l1Cache.Set(key, entry, new MemoryCacheEntryOptions
+                {
+                    Size = 1,
+                    SlidingExpiration = TimeSpan.FromMinutes(config.L1CacheSlidingExpirationMinutes),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes)
+                });
+            }
         }
         else
         {

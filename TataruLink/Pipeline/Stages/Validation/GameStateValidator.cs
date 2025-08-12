@@ -11,21 +11,14 @@ namespace TataruLink.Pipeline.Stages.Validation;
 /// Validates messages based on current game state conditions.
 /// Skips translation when the player is in states where they can't see or won't read chat.
 /// </summary>
-public class GameStateValidator : IMessageValidator
+public class GameStateValidator(FilterConfig config) : IMessageValidator
 {
-    private readonly FilterConfig config;
-
-    public GameStateValidator(FilterConfig config)
-    {
-        this.config = config;
-    }
-
     public void Initialize()
     {
         // No initialization needed for this validator
     }
 
-    public Task<ValidationResult> ValidateAsync(Message message, PipelineContext context)
+    public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
         // Check cutscene conditions
         if (config.SkipInCutscene)
@@ -40,7 +33,7 @@ public class GameStateValidator : IMessageValidator
                 ConditionFlag.OccupiedInQuestEvent))
             {
                 Service.PluginLog.Debug($"GameStateValidator: Skipping non-NPC message during cutscene");
-                return Task.FromResult(ValidationResult.Failure("Player in cutscene (non-NPC message)"));
+                return new ValueTask<ValidationResult>(ValidationResult.Failure("Player in cutscene (non-NPC message)"));
             }
         }
         
@@ -51,7 +44,7 @@ public class GameStateValidator : IMessageValidator
                 ConditionFlag.BetweenAreas51))
         {
             Service.PluginLog.Debug($"GameStateValidator: Skipping message during loading");
-            return Task.FromResult(ValidationResult.Failure("Player loading between areas"));
+            return new ValueTask<ValidationResult>(ValidationResult.Failure("Player loading between areas"));
         }
         
         // Check retainer conditions  
@@ -59,17 +52,17 @@ public class GameStateValidator : IMessageValidator
             Service.Condition[ConditionFlag.OccupiedSummoningBell])
         {
             Service.PluginLog.Debug($"GameStateValidator: Skipping message at retainer bell");
-            return Task.FromResult(ValidationResult.Failure("Player at retainer bell"));
+            return new ValueTask<ValidationResult>(ValidationResult.Failure("Player at retainer bell"));
         }
         
         // Always skip when logging out
         if (Service.Condition[ConditionFlag.LoggingOut])
         {
             Service.PluginLog.Debug($"GameStateValidator: Skipping message during logout");
-            return Task.FromResult(ValidationResult.Failure("Player logging out"));
+            return new ValueTask<ValidationResult>(ValidationResult.Failure("Player logging out"));
         }
         
-        return Task.FromResult(ValidationResult.Success());
+        return new ValueTask<ValidationResult>(ValidationResult.Success());
     }
 
     public void Dispose()

@@ -15,17 +15,17 @@ public class ChatTypeValidator(TataruConfig configuration) : IMessageValidator
         // No initialization needed
     }
 
-    public Task<ValidationResult> ValidateAsync(Message message, PipelineContext context)
+    public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
         // Check if this chat type should be translated
         if (!ChatTypeUtils.ShouldTranslate(message.ChatType, configuration))
         {
-            return Task.FromResult(ValidationResult.Failure(
+            return new ValueTask<ValidationResult>(ValidationResult.Failure(
                 $"Chat type {ChatTypeUtils.GetChannelName(message.ChatType)} is not configured for translation"));
         }
 
         context.Set("validation.chat_type", ChatTypeUtils.GetChannelName(message.ChatType));
-        return Task.FromResult(ValidationResult.Success());
+        return new ValueTask<ValidationResult>(ValidationResult.Success());
     }
 
     public void Dispose()

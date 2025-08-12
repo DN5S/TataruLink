@@ -16,7 +16,7 @@ public interface IMessageValidator
     /// <summary>
     /// Validate a message.
     /// </summary>
-    Task<ValidationResult> ValidateAsync(Message message, PipelineContext context);
+    ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context);
     
     /// <summary>
     /// Clean up resources.
