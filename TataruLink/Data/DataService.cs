@@ -44,7 +44,7 @@ public class DataService : IDataService
             CompactionPercentage = 0.25
         });
         
-        // Initialize write queue with bounded capacity to prevent memory exhaustion
+        // Initialize a writing queue with bounded capacity to prevent memory exhaustion
         writeQueue = Channel.CreateBounded<object>(new BoundedChannelOptions(config.MaxWriteQueueSize)
         {
             FullMode = BoundedChannelFullMode.Wait,
@@ -60,7 +60,7 @@ public class DataService : IDataService
     {
         await context.InitializeAsync();
         
-        // Pre-load hot translations into L1 cache for better performance
+        // Preload hot translations into L1 cache for better performance
         await PreloadHotTranslationsAsync();
         
         Service.PluginLog.Information("DataService initialized successfully");
@@ -75,7 +75,7 @@ public class DataService : IDataService
                 limit: config.MaxHotCacheEntries, 
                 minAccessCount: config.MinAccessCountForHot);
             
-            int loaded = 0;
+            var loaded = 0;
             foreach (var entry in hotTranslations)
             {
                 if (!string.IsNullOrWhiteSpace(entry.CacheKey))
@@ -110,7 +110,7 @@ public class DataService : IDataService
             statistics.IncrementL1Hit();
             
             // Check if this is a hot translation
-            if (entry.AccessCount >= config.MinAccessCountForHot)
+            if (entry != null && entry.AccessCount >= config.MinAccessCountForHot)
             {
                 statistics.IncrementHotCacheHit();
                 Service.PluginLog.Debug($"L1 HOT Cache HIT: {key} (access count: {entry.AccessCount})");
@@ -168,7 +168,7 @@ public class DataService : IDataService
 
     public Task SetCacheAsync(TranslationCacheEntry entry)
     {
-        // Generate cache key if not set
+        // Generate a cache key if not set
         if (string.IsNullOrWhiteSpace(entry.CacheKey))
         {
             entry.CacheKey = TranslationCacheRepository.GenerateCacheKey(
@@ -291,7 +291,7 @@ public class DataService : IDataService
                 // Wait for either delay or new item
                 var completedTask = await Task.WhenAny(delayTask, readTask);
 
-                // Collect items from queue up to batch size
+                // Collect items from the queue up to batch size
                 while (batch.Count < config.BatchWriteSize && writeQueue.Reader.TryRead(out var item))
                 {
                     batch.Add(item);
@@ -347,14 +347,14 @@ public class DataService : IDataService
 
         try
         {
-            // Write cache entries (repository handles its own transaction)
-            if (cacheEntries.Any())
+            // Write cache entries (the repository handles its own transaction)
+            if (cacheEntries.Count != 0)
             {
                 await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries);
             }
             
-            // Write history entries (repository handles its own transaction)
-            if (historyEntries.Any())
+            // Write history entries (a repository handles its own transaction)
+            if (historyEntries.Count != 0)
             {
                 await unitOfWork.ChatHistory.AddBatchAsync(historyEntries);
             }

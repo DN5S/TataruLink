@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,7 +15,7 @@ public static class SecureStorage
 {
     /// <summary>
     /// Generate user and machine-specific entropy for stronger encryption.
-    /// This prevents other processes, from decrypting the data even with decompiled code.
+    /// This prevents other processes from decrypting the data even with decompiled code.
     /// </summary>
     private static byte[] GetAdditionalEntropy()
     {
@@ -29,9 +30,20 @@ public static class SecureStorage
 
             // Create a unique string from multiple sources
             var uniqueString = $"TataruLink-{configDir}-{machineId}-{userId}-{processId}-APIKey";
-
-            // Generate SHA256 hash as entropy (32 bytes)
-            return SHA256.HashData(Encoding.UTF8.GetBytes(uniqueString));
+            
+            // Use ArrayPool for a temporary buffer
+            var byteCount = Encoding.UTF8.GetByteCount(uniqueString);
+            var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
+            try
+            {
+                var actualLength = Encoding.UTF8.GetBytes(uniqueString, 0, uniqueString.Length, buffer, 0);
+                // Generate SHA256 hash as entropy (32 bytes)
+                return SHA256.HashData(buffer.AsSpan(0, actualLength));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            }
         }
         catch (Exception ex)
         {
@@ -39,7 +51,18 @@ public static class SecureStorage
             // Fallback to basic entropy if something goes wrong
             // This is still better than hardcoded values
             var fallback = $"TataruLink-{Environment.MachineName}-{DateTime.UtcNow.Year}";
-            return SHA256.HashData(Encoding.UTF8.GetBytes(fallback));
+            
+            var byteCount = Encoding.UTF8.GetByteCount(fallback);
+            var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
+            try
+            {
+                var actualLength = Encoding.UTF8.GetBytes(fallback, 0, fallback.Length, buffer, 0);
+                return SHA256.HashData(buffer.AsSpan(0, actualLength));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            }
         }
     }
     

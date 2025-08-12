@@ -82,8 +82,8 @@ public class HistoryWindow : Window, IDisposable
         var popupOpen = true;
         if (ImGui.BeginPopupModal("ClearAllConfirm"u8, ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize))
         {
-            ImGui.Text("Are you sure you want to delete all history?"u8);
-            ImGui.Text("This action cannot be undone."u8);
+            ImGui.TextUnformatted("Are you sure you want to delete all history?"u8);
+            ImGui.TextUnformatted("This action cannot be undone."u8);
             ImGui.Separator();
             
             if (ImGui.Button("Yes, Delete All"u8))

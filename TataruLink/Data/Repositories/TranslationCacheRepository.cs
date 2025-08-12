@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -309,7 +310,19 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             throw new ArgumentException("Target language cannot be null or empty", nameof(targetLanguage));
             
         var normalized = $"{originalText.Trim()}|{sourceLanguage.ToLowerInvariant()}|{targetLanguage.ToLowerInvariant()}";
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-        return Convert.ToBase64String(bytes);
+        
+        // Use ArrayPool for a temporary buffer
+        var byteCount = Encoding.UTF8.GetByteCount(normalized);
+        var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
+        try
+        {
+            var actualLength = Encoding.UTF8.GetBytes(normalized, 0, normalized.Length, buffer, 0);
+            var hash = SHA256.HashData(buffer.AsSpan(0, actualLength));
+            return Convert.ToBase64String(hash);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
     }
 }
