@@ -14,7 +14,7 @@ public interface IUnitOfWork : IDisposable
     
     IGlossaryRepository Glossary { get; }
     
-    IBlacklistRepository Blacklist { get; }
+    IBlocklistRepository Blocklist { get; }
     
     Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default);
     

@@ -6,25 +6,17 @@ using TataruLink.Models;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
-public class KeywordValidator : IMessageValidator
+public class KeywordValidator(FilterConfig filterConfig, BlocklistManager? blocklistManager = null)
+    : IMessageValidator
 {
-    private readonly FilterConfig filterConfig;
-    private readonly BlacklistManager? blacklistManager;
-
-    public KeywordValidator(FilterConfig filterConfig, BlacklistManager? blacklistManager = null)
-    {
-        this.filterConfig = filterConfig;
-        this.blacklistManager = blacklistManager;
-    }
-
     public void Initialize() { }
 
     public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
-        // Use BlacklistManager if available, otherwise fallback to config
-        if (blacklistManager != null)
+        // Use BlocklistManager if available, otherwise fallback to config
+        if (blocklistManager != null)
         {
-            if (!blacklistManager.IsEnabled)
+            if (!blocklistManager.IsEnabled)
             {
                 return new ValueTask<ValidationResult>(ValidationResult.Success());
             }
@@ -33,13 +25,13 @@ public class KeywordValidator : IMessageValidator
             var senderName = message.SenderName ?? string.Empty;
 
             // Check sender name
-            if (blacklistManager.ContainsBlockedKeyword(senderName))
+            if (blocklistManager.ContainsBlockedKeyword(senderName))
             {
                 return new ValueTask<ValidationResult>(ValidationResult.Failure($"Message blocked by sender filter"));
             }
 
             // Check message content
-            if (blacklistManager.ContainsBlockedKeyword(plainTextContent))
+            if (blocklistManager.ContainsBlockedKeyword(plainTextContent))
             {
                 return new ValueTask<ValidationResult>(ValidationResult.Failure($"Message blocked by content filter"));
             }

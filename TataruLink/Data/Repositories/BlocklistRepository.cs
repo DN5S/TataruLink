@@ -8,11 +8,11 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
+public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
 
-    public async Task<BlacklistDbEntry> AddAsync(BlacklistDbEntry entry, CancellationToken cancellationToken = default)
+    public async Task<BlocklistDbEntry> AddAsync(BlocklistDbEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         PrepareEntry(entry);
@@ -21,7 +21,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         try
         {
             const string sql = @"
-                INSERT INTO BlacklistKeywords 
+                INSERT INTO BlocklistKeywords 
                 (Keyword, IsEnabled, CreatedAt)
                 VALUES 
                 (@Keyword, @IsEnabled, @CreatedAt)
@@ -44,7 +44,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
         {
-            const string sql = "DELETE FROM BlacklistKeywords WHERE Id = @id";
+            const string sql = "DELETE FROM BlocklistKeywords WHERE Id = @id";
             var affected = await connection.ExecuteAsync(sql, new { id });
             return affected > 0;
         }
@@ -54,7 +54,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         }
     }
 
-    public async Task<BlacklistDbEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    public async Task<BlocklistDbEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
@@ -62,8 +62,8 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
         {
-            const string sql = "SELECT * FROM BlacklistKeywords WHERE Id = @id";
-            return await connection.QuerySingleOrDefaultAsync<BlacklistDbEntry>(sql, new { id });
+            const string sql = "SELECT * FROM BlocklistKeywords WHERE Id = @id";
+            return await connection.QuerySingleOrDefaultAsync<BlocklistDbEntry>(sql, new { id });
         }
         finally
         {
@@ -71,7 +71,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         }
     }
 
-    public async Task<BlacklistDbEntry?> GetByKeywordAsync(string keyword, CancellationToken cancellationToken = default)
+    public async Task<BlocklistDbEntry?> GetByKeywordAsync(string keyword, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(keyword))
             throw new ArgumentException("Keyword cannot be empty", nameof(keyword));
@@ -79,8 +79,8 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
         {
-            const string sql = "SELECT * FROM BlacklistKeywords WHERE Keyword = @keyword COLLATE NOCASE";
-            return await connection.QuerySingleOrDefaultAsync<BlacklistDbEntry>(sql, new { keyword });
+            const string sql = "SELECT * FROM BlocklistKeywords WHERE Keyword = @keyword COLLATE NOCASE";
+            return await connection.QuerySingleOrDefaultAsync<BlocklistDbEntry>(sql, new { keyword });
         }
         finally
         {
@@ -88,16 +88,16 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         }
     }
 
-    public async Task<IEnumerable<BlacklistDbEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<BlocklistDbEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
         {
             var sql = enabledOnly
-                ? "SELECT * FROM BlacklistKeywords WHERE IsEnabled = 1 ORDER BY Keyword"
-                : "SELECT * FROM BlacklistKeywords ORDER BY Keyword";
+                ? "SELECT * FROM BlocklistKeywords WHERE IsEnabled = 1 ORDER BY Keyword"
+                : "SELECT * FROM BlocklistKeywords ORDER BY Keyword";
             
-            return await connection.QueryAsync<BlacklistDbEntry>(sql);
+            return await connection.QueryAsync<BlocklistDbEntry>(sql);
         }
         finally
         {
@@ -111,8 +111,8 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         try
         {
             var sql = enabledOnly
-                ? "SELECT COUNT(*) FROM BlacklistKeywords WHERE IsEnabled = 1"
-                : "SELECT COUNT(*) FROM BlacklistKeywords";
+                ? "SELECT COUNT(*) FROM BlocklistKeywords WHERE IsEnabled = 1"
+                : "SELECT COUNT(*) FROM BlocklistKeywords";
             
             return await connection.ExecuteScalarAsync<int>(sql);
         }
@@ -127,7 +127,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
         {
-            const string sql = "DELETE FROM BlacklistKeywords";
+            const string sql = "DELETE FROM BlocklistKeywords";
             return await connection.ExecuteAsync(sql);
         }
         finally
@@ -136,7 +136,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         }
     }
 
-    public async Task<int> AddBatchAsync(IEnumerable<BlacklistDbEntry> entries, CancellationToken cancellationToken = default)
+    public async Task<int> AddBatchAsync(IEnumerable<BlocklistDbEntry> entries, CancellationToken cancellationToken = default)
     {
         var entriesList = entries.ToList() ?? throw new ArgumentNullException(nameof(entries));
         if (entriesList.Count == 0) return 0;
@@ -153,7 +153,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         try
         {
             const string sql = @"
-                INSERT OR IGNORE INTO BlacklistKeywords 
+                INSERT OR IGNORE INTO BlocklistKeywords 
                 (Keyword, IsEnabled, CreatedAt)
                 VALUES 
                 (@Keyword, @IsEnabled, @CreatedAt)";
@@ -175,7 +175,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         try
         {
             const string sql = @"
-                UPDATE BlacklistKeywords 
+                UPDATE BlocklistKeywords 
                 SET IsEnabled = NOT IsEnabled
                 WHERE Id = @id";
             
@@ -192,7 +192,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
         {
-            const string sql = "SELECT Keyword FROM BlacklistKeywords WHERE IsEnabled = 1";
+            const string sql = "SELECT Keyword FROM BlocklistKeywords WHERE IsEnabled = 1";
             var keywords = await connection.QueryAsync<string>(sql);
             return new HashSet<string>(keywords, StringComparer.OrdinalIgnoreCase);
         }
@@ -202,7 +202,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
         }
     }
 
-    private void ValidateEntry(BlacklistDbEntry entry)
+    private void ValidateEntry(BlocklistDbEntry entry)
     {
         if (entry == null)
             throw new ArgumentNullException(nameof(entry));
@@ -214,7 +214,7 @@ public class BlacklistRepository(DatabaseContext context) : IBlacklistRepository
             throw new ArgumentException("Keyword exceeds maximum length of 100");
     }
 
-    private void PrepareEntry(BlacklistDbEntry entry)
+    private void PrepareEntry(BlocklistDbEntry entry)
     {
         entry.Keyword = entry.Keyword.Trim();
         

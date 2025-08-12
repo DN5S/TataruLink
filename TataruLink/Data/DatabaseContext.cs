@@ -263,8 +263,8 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
                 UNIQUE(Original COLLATE NOCASE)
             );
             
-            -- Blacklist keywords table
-            CREATE TABLE IF NOT EXISTS BlacklistKeywords (
+            -- Blocklist keywords table
+            CREATE TABLE IF NOT EXISTS BlocklistKeywords (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Keyword TEXT NOT NULL,
                 IsEnabled INTEGER DEFAULT 1,
@@ -276,13 +276,16 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
             CREATE INDEX IF NOT EXISTS idx_cache_key ON TranslationCache(CacheKey);
             CREATE INDEX IF NOT EXISTS idx_cache_access ON TranslationCache(LastAccessedAt DESC);
             CREATE INDEX IF NOT EXISTS idx_cache_language ON TranslationCache(SourceLanguage, TargetLanguage);
+            CREATE INDEX IF NOT EXISTS idx_cache_provider ON TranslationCache(Provider);
+            CREATE INDEX IF NOT EXISTS idx_cache_composite ON TranslationCache(Provider, SourceLanguage, TargetLanguage);
             CREATE INDEX IF NOT EXISTS idx_history_timestamp ON ChatHistory(Timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_history_visible ON ChatHistory(IsVisible, Timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_history_message_id ON ChatHistory(MessageId);
+            CREATE INDEX IF NOT EXISTS idx_history_composite ON ChatHistory(ChatType, IsVisible, Timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_glossary_enabled ON GlossaryEntries(IsEnabled);
             CREATE INDEX IF NOT EXISTS idx_glossary_original ON GlossaryEntries(Original COLLATE NOCASE);
-            CREATE INDEX IF NOT EXISTS idx_blacklist_enabled ON BlacklistKeywords(IsEnabled);
-            CREATE INDEX IF NOT EXISTS idx_blacklist_keyword ON BlacklistKeywords(Keyword COLLATE NOCASE);";
+            CREATE INDEX IF NOT EXISTS idx_blocklist_enabled ON BlocklistKeywords(IsEnabled);
+            CREATE INDEX IF NOT EXISTS idx_blocklist_keyword ON BlocklistKeywords(Keyword COLLATE NOCASE);";
 
         await using var command = connection.CreateCommand();
         command.CommandText = createTablesSql;

@@ -76,7 +76,7 @@ public class GlossaryDbEntry
     public long UpdatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 }
 
-public class BlacklistDbEntry
+public class BlocklistDbEntry
 {
     public long Id { get; set; }
     public string Keyword { get; set; } = string.Empty;

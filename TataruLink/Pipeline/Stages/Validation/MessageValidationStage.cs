@@ -16,7 +16,7 @@ public class MessageValidationStage : IPipelineStage
     private readonly TataruConfig configuration;
     private readonly IMessageValidator[] validators;
     
-    public MessageValidationStage(TataruConfig configuration, BlacklistManager? blacklistManager = null)
+    public MessageValidationStage(TataruConfig configuration, BlocklistManager? blocklistManager = null)
     {
         this.configuration = configuration;
         
@@ -26,7 +26,7 @@ public class MessageValidationStage : IPipelineStage
             new GameStateValidator(this.configuration.Filter),
             new DeduplicationValidator(TimeSpan.FromMilliseconds(this.configuration.Validation.DuplicateDetectionPeriodMs)),
             new ChatTypeValidator(this.configuration),
-            new KeywordValidator(this.configuration.Filter, blacklistManager),
+            new KeywordValidator(this.configuration.Filter, blocklistManager),
             new ContentValidator()
         ];
     }

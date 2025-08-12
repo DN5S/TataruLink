@@ -15,7 +15,7 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
     private ITranslationCacheRepository? translationCache;
     private IChatHistoryRepository? chatHistory;
     private IGlossaryRepository? glossary;
-    private IBlacklistRepository? blacklist;
+    private IBlocklistRepository? blocklist;
 
     public ITranslationCacheRepository TranslationCache =>
         translationCache ??= new TranslationCacheRepository(context, config);
@@ -26,8 +26,8 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
     public IGlossaryRepository Glossary =>
         glossary ??= new GlossaryRepository(context);
     
-    public IBlacklistRepository Blacklist =>
-        blacklist ??= new BlacklistRepository(context);
+    public IBlocklistRepository Blocklist =>
+        blocklist ??= new BlocklistRepository(context);
 
     public async Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
     {

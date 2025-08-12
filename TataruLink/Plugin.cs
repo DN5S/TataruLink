@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
     private ITranslationService? translationService;
     private OverlayManager? overlayManager;
     private GlossaryManager? glossaryManager;
-    private BlacklistManager? blacklistManager;
+    private BlocklistManager? blocklistManager;
     private IDataService? dataService;
     private DatabaseContext? databaseContext;
     private IUnitOfWork? unitOfWork;
@@ -63,7 +63,7 @@ public sealed class Plugin : IDalamudPlugin
         
         // Initialize managers with repositories
         glossaryManager = new GlossaryManager(unitOfWork.Glossary);
-        blacklistManager = new BlacklistManager(unitOfWork.Blacklist);
+        blocklistManager = new BlocklistManager(unitOfWork.Blocklist);
         
         // Initialize translation service
         translationService = new TranslationService(configuration);
@@ -72,7 +72,7 @@ public sealed class Plugin : IDalamudPlugin
         messagePipeline = new MessagePipeline();
         // WARNING: Pipeline stage order matters - do not change without careful consideration
         messagePipeline
-            .AddStage(new MessageValidationStage(configuration, blacklistManager))
+            .AddStage(new MessageValidationStage(configuration, blocklistManager))
             .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService, dtrBarManager))
             .AddStage(new DisplayStage(configuration, dataService, overlayManager));
         
@@ -221,7 +221,7 @@ public sealed class Plugin : IDalamudPlugin
         
         dataService?.Dispose();
         glossaryManager?.Dispose();
-        blacklistManager?.Dispose();
+        blocklistManager?.Dispose();
         translationService?.Dispose();
         unitOfWork?.Dispose();
         databaseContext?.Dispose();

@@ -8,14 +8,14 @@ using TataruLink.Services;
 
 namespace TataruLink.Filter;
 
-public class BlacklistManager : IDisposable
+public class BlocklistManager : IDisposable
 {
-    private readonly IBlacklistRepository repository;
+    private readonly IBlocklistRepository repository;
     private HashSet<string> cachedKeywords = new(StringComparer.OrdinalIgnoreCase);
-    private List<BlacklistDbEntry> cachedEntries = new();
+    private List<BlocklistDbEntry> cachedEntries = new();
     private bool isEnabled = true;
 
-    public BlacklistManager(IBlacklistRepository repository)
+    public BlocklistManager(IBlocklistRepository repository)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _ = LoadFromDatabaseAsync();
@@ -29,12 +29,12 @@ public class BlacklistManager : IDisposable
             if (isEnabled != value)
             {
                 isEnabled = value;
-                Service.PluginLog.Debug($"Blacklist filter enabled: {isEnabled}");
+                Service.PluginLog.Debug($"Blocklist filter enabled: {isEnabled}");
             }
         }
     }
 
-    public List<BlacklistDbEntry> GetCachedEntries() => new(cachedEntries);
+    public List<BlocklistDbEntry> GetCachedEntries() => new(cachedEntries);
     public HashSet<string> GetEnabledKeywords() => new(cachedKeywords, StringComparer.OrdinalIgnoreCase);
 
     public async Task LoadFromDatabaseAsync()
@@ -47,7 +47,7 @@ public class BlacklistManager : IDisposable
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, "Failed to load blacklist from database");
+            Service.PluginLog.Error(ex, "Failed to load blocklist from database");
             cachedEntries.Clear();
             cachedKeywords.Clear();
         }
@@ -66,7 +66,7 @@ public class BlacklistManager : IDisposable
             cachedKeywords.Add(keyword);
         }
         
-        Service.PluginLog.Information($"Blacklist cache rebuilt with {cachedKeywords.Count} keywords");
+        Service.PluginLog.Information($"Blocklist cache rebuilt with {cachedKeywords.Count} keywords");
     }
 
     public bool ContainsBlockedKeyword(string text)
@@ -74,16 +74,16 @@ public class BlacklistManager : IDisposable
         if (!isEnabled || cachedKeywords.Count == 0 || string.IsNullOrEmpty(text))
             return false;
 
-        // Check if any blacklisted keyword is contained in the text
+        // Check if any blocklisted keyword is contained in the text
         return cachedKeywords.Any(keyword => 
             text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
-    public async Task<BlacklistDbEntry?> AddKeywordAsync(string keyword)
+    public async Task<BlocklistDbEntry?> AddKeywordAsync(string keyword)
     {
         try
         {
-            var entry = new BlacklistDbEntry
+            var entry = new BlocklistDbEntry
             {
                 Keyword = keyword.Trim(),
                 IsEnabled = true
@@ -95,12 +95,12 @@ public class BlacklistManager : IDisposable
             cachedEntries.Add(added);
             cachedKeywords.Add(added.Keyword);
             
-            Service.PluginLog.Information($"Added blacklist keyword: '{keyword}'");
+            Service.PluginLog.Information($"Added blocklist keyword: '{keyword}'");
             return added;
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, $"Failed to add blacklist keyword: '{keyword}'");
+            Service.PluginLog.Error(ex, $"Failed to add blocklist keyword: '{keyword}'");
             return null;
         }
     }
@@ -119,7 +119,7 @@ public class BlacklistManager : IDisposable
                 cachedEntries.Remove(cached);
                 cachedKeywords.Remove(cached.Keyword);
                 
-                Service.PluginLog.Information($"Deleted blacklist keyword: '{cached.Keyword}'");
+                Service.PluginLog.Information($"Deleted blocklist keyword: '{cached.Keyword}'");
                 return true;
             }
             
@@ -127,7 +127,7 @@ public class BlacklistManager : IDisposable
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, $"Failed to delete blacklist keyword {id}");
+            Service.PluginLog.Error(ex, $"Failed to delete blocklist keyword {id}");
             return false;
         }
     }
@@ -150,7 +150,7 @@ public class BlacklistManager : IDisposable
                 else
                     cachedKeywords.Remove(cached.Keyword);
                 
-                Service.PluginLog.Information($"Toggled blacklist keyword {id}: enabled = {cached.IsEnabled}");
+                Service.PluginLog.Information($"Toggled blocklist keyword {id}: enabled = {cached.IsEnabled}");
                 return true;
             }
             
@@ -158,7 +158,7 @@ public class BlacklistManager : IDisposable
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, $"Failed to toggle blacklist keyword {id}");
+            Service.PluginLog.Error(ex, $"Failed to toggle blocklist keyword {id}");
             return false;
         }
     }
@@ -173,12 +173,12 @@ public class BlacklistManager : IDisposable
             cachedEntries.Clear();
             cachedKeywords.Clear();
             
-            Service.PluginLog.Information($"Cleared all blacklist keywords: {deleted} deleted");
+            Service.PluginLog.Information($"Cleared all blocklist keywords: {deleted} deleted");
             return deleted;
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, "Failed to clear all blacklist keywords");
+            Service.PluginLog.Error(ex, "Failed to clear all blocklist keywords");
             return 0;
         }
     }
@@ -189,7 +189,7 @@ public class BlacklistManager : IDisposable
         {
             var entries = keywords
                 .Where(k => !string.IsNullOrWhiteSpace(k))
-                .Select(k => new BlacklistDbEntry
+                .Select(k => new BlocklistDbEntry
                 {
                     Keyword = k.Trim(),
                     IsEnabled = true
@@ -201,12 +201,12 @@ public class BlacklistManager : IDisposable
             // Reload from database to get all entries with IDs
             await LoadFromDatabaseAsync();
             
-            Service.PluginLog.Information($"Imported {added} blacklist keywords");
+            Service.PluginLog.Information($"Imported {added} blocklist keywords");
             return added;
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, "Failed to import blacklist keywords");
+            Service.PluginLog.Error(ex, "Failed to import blocklist keywords");
             return 0;
         }
     }
