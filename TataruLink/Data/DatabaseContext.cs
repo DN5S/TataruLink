@@ -12,7 +12,7 @@ namespace TataruLink.Data;
 /// <summary>
 /// Database context for managing SQLite connections and initialization
 /// </summary>
-public class DatabaseContext : IDisposable
+public class DatabaseContext : IDisposable, IAsyncDisposable
 {
     private readonly string connectionString;
     private readonly CacheConfig config;
@@ -207,6 +207,29 @@ public class DatabaseContext : IDisposable
         {
             sharedConnection?.Dispose();
             sharedConnection = null;
+        }
+        finally
+        {
+            connectionLock.Release();
+        }
+        
+        connectionLock.Dispose();
+        connectionSemaphore.Dispose();
+        isDisposed = true;
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (isDisposed) return;
+        
+        await connectionLock.WaitAsync();
+        try
+        {
+            if (sharedConnection != null)
+            {
+                await sharedConnection.DisposeAsync();
+                sharedConnection = null;
+            }
         }
         finally
         {

@@ -371,7 +371,45 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             providerLock.Release();
         }
         
-        providerLock?.Dispose();
+        providerLock.Dispose();
         Service.PluginLog.Information("Translation service disposed");
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        await providerLock.WaitAsync();
+        try
+        {
+            // Dispose providers if they implement IAsyncDisposable or IDisposable
+            foreach (var provider in providers.Values)
+            {
+                try
+                {
+                    switch (provider)
+                    {
+                        case IAsyncDisposable asyncDisposable:
+                            await asyncDisposable.DisposeAsync();
+                            break;
+                        case IDisposable disposable:
+                            disposable.Dispose();
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Error(ex, $"Error disposing provider {provider.Name}");
+                }
+            }
+            
+            providers.Clear();
+            activeProvider = null;
+        }
+        finally
+        {
+            providerLock.Release();
+        }
+        
+        providerLock.Dispose();
+        Service.PluginLog.Information("Translation service disposed asynchronously");
     }
 }

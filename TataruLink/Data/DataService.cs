@@ -406,4 +406,53 @@ public class DataService : IDataService
         
         Service.PluginLog.Information("DataService disposed");
     }
+    
+    public async ValueTask DisposeAsync()
+    {
+        // Signal cancellation
+        cts.Cancel();
+        writeQueue.Writer.TryComplete();
+        
+        // Wait for the batch writer to finish
+        try
+        {
+            // Flush remaining items asynchronously
+            var remaining = new List<object>();
+            while (writeQueue.Reader.TryRead(out var item))
+            {
+                remaining.Add(item);
+                if (remaining.Count >= config.BatchWriteSize)
+                {
+                    await WriteBatchAsync(remaining).ConfigureAwait(false);
+                    remaining.Clear();
+                }
+            }
+            
+            if (remaining.Count > 0)
+            {
+                await WriteBatchAsync(remaining).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Error during async disposal flush");
+        }
+        
+        // Dispose resources asynchronously
+        l1Cache.Dispose();
+        unitOfWork.Dispose();
+        
+        if (context is IAsyncDisposable asyncContext)
+        {
+            await asyncContext.DisposeAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            context.Dispose();
+        }
+        
+        cts.Dispose();
+        
+        Service.PluginLog.Information("DataService disposed asynchronously");
+    }
 }

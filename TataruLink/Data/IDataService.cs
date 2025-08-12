@@ -5,7 +5,7 @@ using TataruLink.Models;
 
 namespace TataruLink.Data;
 
-public interface IDataService : IDisposable
+public interface IDataService : IDisposable, IAsyncDisposable
 {
     // Database initialization
     Task InitializeAsync();

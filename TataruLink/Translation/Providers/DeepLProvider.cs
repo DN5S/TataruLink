@@ -11,7 +11,7 @@ namespace TataruLink.Translation.Providers;
 /// DeepL translation provider using the official DeepL.NET library
 /// Requires a valid API key (Free or Pro)
 /// </summary>
-public class DeepLProvider : ITranslationProvider, IDisposable
+public class DeepLProvider : ITranslationProvider, IDisposable, IAsyncDisposable
 {
     private Translator? translator;
     private string? apiKey;
@@ -204,5 +204,15 @@ public class DeepLProvider : ITranslationProvider, IDisposable
         translator = null;
         apiKey = null;
         Service.PluginLog.Debug("DeepL provider disposed");
+    }
+    
+    public ValueTask DisposeAsync()
+    {
+        // DeepL.NET Translator doesn't implement IAsyncDisposable either,
+        // so we just clear our references
+        translator = null;
+        apiKey = null;
+        Service.PluginLog.Debug("DeepL provider disposed asynchronously");
+        return ValueTask.CompletedTask;
     }
 }

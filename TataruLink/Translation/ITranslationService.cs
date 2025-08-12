@@ -7,7 +7,7 @@ namespace TataruLink.Translation;
 /// <summary>
 /// Main translation service interface that manages translation providers and caching
 /// </summary>
-public interface ITranslationService : IDisposable
+public interface ITranslationService : IDisposable, IAsyncDisposable
 {
     /// <summary>
     /// Translate text from source to target language
