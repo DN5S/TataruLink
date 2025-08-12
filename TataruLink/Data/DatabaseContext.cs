@@ -49,14 +49,21 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
         
-        // WARNING: Single connection prevents SQLite locking errors
-        try
+        // If we're in a transaction, skip semaphore acquisition
+        // The transaction already holds the semaphore
+        var skipSemaphore = currentTransaction != null;
+        
+        if (!skipSemaphore)
         {
-            await connectionSemaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw new TimeoutException("Failed to acquire database connection within timeout");
+            // WARNING: Single connection prevents SQLite locking errors
+            try
+            {
+                await connectionSemaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException("Failed to acquire database connection within timeout");
+            }
         }
         
         try
@@ -91,14 +98,20 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         }
         catch
         {
-            connectionSemaphore.Release();
+            if (!skipSemaphore)
+                connectionSemaphore.Release();
             throw;
         }
     }
     
     public void ReleaseConnection()
     {
-        connectionSemaphore.Release();
+        // Don't release if we're in a transaction
+        // The transaction manages the semaphore lifecycle
+        if (currentTransaction == null)
+        {
+            connectionSemaphore.Release();
+        }
     }
 
     public SqliteTransaction? GetCurrentTransaction()
@@ -115,7 +128,8 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
 
         var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         currentTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        
+        // Keep the semaphore held for the duration of the transaction
+        // It will be released when the transaction completes
         return currentTransaction;
     }
 
@@ -134,6 +148,8 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         {
             await currentTransaction.DisposeAsync().ConfigureAwait(false);
             currentTransaction = null;
+            // Release the semaphore now that transaction is complete
+            connectionSemaphore.Release();
         }
     }
 
@@ -152,6 +168,8 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         {
             await currentTransaction.DisposeAsync().ConfigureAwait(false);
             currentTransaction = null;
+            // Release the semaphore now that transaction is complete
+            connectionSemaphore.Release();
         }
     }
     

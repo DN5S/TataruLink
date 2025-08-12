@@ -252,9 +252,17 @@ public class DataService : IDataService
         {
             try
             {
-                // Check if there are items to read with a short timeout
+                // Calculate how long to wait before the next check
+                var timeSinceLastWrite = DateTime.UtcNow - lastWriteTime;
+                var timeToWait = writeInterval - timeSinceLastWrite;
+                
+                // Use a shorter timeout if we have pending items and time is almost up
+                var checkInterval = batch.Count > 0 && timeToWait.TotalMilliseconds <= 100 
+                    ? (int)Math.Max(timeToWait.TotalMilliseconds, 10)
+                    : 100;
+                
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
-                timeoutCts.CancelAfter(100); // 100ms timeout for checking queue
+                timeoutCts.CancelAfter(checkInterval);
                 
                 try
                 {
@@ -282,7 +290,7 @@ public class DataService : IDataService
                 }
                 else if (batch.Count > 0)
                 {
-                    var timeSinceLastWrite = DateTime.UtcNow - lastWriteTime;
+                    timeSinceLastWrite = DateTime.UtcNow - lastWriteTime;
                     if (timeSinceLastWrite >= writeInterval)
                     {
                         // Enough time has passed
@@ -349,7 +357,7 @@ public class DataService : IDataService
         try
         {
             // Use a single transaction with proper timeout handling
-            using var timeoutTask = Task.Delay(Timeout.Infinite, writeTimeoutCts.Token);
+            var timeoutTask = Task.Delay(Timeout.Infinite, writeTimeoutCts.Token);
             
             // Try to begin transaction with timeout
             var transactionTask = unitOfWork.BeginTransactionAsync(cancellationToken: writeTimeoutCts.Token);
