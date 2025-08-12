@@ -5,6 +5,7 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Data;
+using TataruLink.DtrBar;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Translation;
@@ -14,7 +15,7 @@ namespace TataruLink.UI.Windows;
 
 public class SettingsWindow : Window, IDisposable
 {
-    private readonly GeneralTab generalTab;
+    private GeneralTab generalTab;
     private readonly TranslationTab translationTab;
     private readonly LanguagesTab languagesTab;
     private readonly ChatTypesTab chatTypesTab;
@@ -22,16 +23,21 @@ public class SettingsWindow : Window, IDisposable
     private readonly GlossaryTab glossaryTab;
     private readonly DisplayTab displayTab;
     private readonly OverlayTab overlayTab;
-    private readonly DebugTab debugTab;
+    private DebugTab debugTab;
     private readonly CacheTab cacheTab;
+    private readonly TataruConfig configuration;
+    private readonly ITranslationService translationService;
 
     public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, IDataService dataService) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
+        this.configuration = configuration;
+        this.translationService = translationService;
+        
         Size = new Vector2(600, 400);
         SizeCondition = ImGuiCond.FirstUseEver;
         
-        generalTab = new GeneralTab(configuration, translationService);
+        generalTab = new GeneralTab(configuration, translationService, null);
         translationTab = new TranslationTab(configuration, translationService);
         languagesTab = new LanguagesTab(configuration);
         chatTypesTab = new ChatTypesTab(configuration);
@@ -39,8 +45,14 @@ public class SettingsWindow : Window, IDisposable
         glossaryTab = new GlossaryTab(configuration, glossaryManager);
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);
-        debugTab = new DebugTab(configuration, translationService);
+        debugTab = new DebugTab(configuration, translationService, null);
         cacheTab = new CacheTab(dataService);
+    }
+    
+    public void SetDtrBarManager(DtrBarManager? dtrBarManager)
+    {
+        generalTab = new GeneralTab(configuration, translationService, dtrBarManager);
+        debugTab = new DebugTab(configuration, translationService, dtrBarManager);
     }
 
     public override void Draw()

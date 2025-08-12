@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using TataruLink.Models;
 using TataruLink.Configuration;
+using TataruLink.DtrBar;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
@@ -10,7 +11,8 @@ using TataruLink.Data;
 
 namespace TataruLink.Pipeline.Stages.Translation;
 
-public class TranslationStage(TataruConfig configuration, ITranslationService translationService, GlossaryManager glossaryManager, IDataService dataService)
+public class TranslationStage(TataruConfig configuration, ITranslationService translationService, 
+    GlossaryManager glossaryManager, IDataService dataService, DtrBarManager? dtrBarManager)
     : IPipelineStage
 {
     public string Name => "Translation";
@@ -57,6 +59,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             context.Set("translation.provider", translationService.ProviderName);
             
             message.Status = TranslationStatus.InProgress;
+            
+            // Update DTR bar to show translating status
+            dtrBarManager?.UpdateStatus(true);
             
             // WARNING: Google Translate breaks XML structure
             var useXmlTags = translationService.SupportsStructuredTranslation;
@@ -129,6 +134,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 context.Set("translation.target_lang", targetLanguage);
                 context.Set("translation.success", true);
                 
+                dtrBarManager?.IncrementTranslationCount();
+                dtrBarManager?.UpdateStatus(false);
+                
                 Service.PluginLog.Debug($"Translation completed: {textToTranslate} -> {translatedText}");
             }
             else
@@ -151,6 +159,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 
                 Service.PluginLog.Warning($"Translation failed for message: {textToTranslate}");
                 
+                // Reset DTR bar status on failure
+                dtrBarManager?.UpdateStatus(false);
+                
                 Service.PipelineDebug.RecordFailure(message, context, "Translation", "Translation returned null");
             }
         }
@@ -161,6 +172,8 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             message.Status = TranslationStatus.Failed;
             context.Set("translation.error", "Translation cancelled or timed out");
             context.Set("translation.user_error", "Translation took too long. Try increasing the timeout in settings.");
+            
+            dtrBarManager?.UpdateStatus(false);
             
             // Record failure to debug service
             Service.PipelineDebug.RecordFailure(message, context, "Translation", "Timeout or cancellation");
@@ -178,6 +191,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             {
                 context.Set("translation.user_error", error.UserFriendlyMessage);
             }
+            
+            // Reset DTR bar status on error
+            dtrBarManager?.UpdateStatus(false);
             
             // Record failure to debug service
             Service.PipelineDebug.RecordFailure(message, context, "Translation", error.Message);

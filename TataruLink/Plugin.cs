@@ -3,6 +3,7 @@ using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
 using TataruLink.Data;
+using TataruLink.DtrBar;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Pipeline;
@@ -31,7 +32,9 @@ public sealed class Plugin : IDalamudPlugin
     private WindowSystem? windowSystem;
     private SettingsWindow? settingsWindow;
     private HistoryWindow? historyWindow;
+    private DtrBarManager? dtrBarManager;
     private bool isDisposed;
+    
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
         this.pluginInterface = pluginInterface;
@@ -53,7 +56,7 @@ public sealed class Plugin : IDalamudPlugin
         // WARNING: Pipeline stage order matters - do not change without careful consideration
         messagePipeline
             .AddStage(new MessageValidationStage(configuration))
-            .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService))
+            .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService, dtrBarManager))
             .AddStage(new DisplayStage(configuration, dataService, overlayManager));
         
         messagePipeline.Initialize();
@@ -78,6 +81,10 @@ public sealed class Plugin : IDalamudPlugin
         
         pluginInterface.UiBuilder.Draw += DrawUI;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
+        pluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
+        
+        dtrBarManager = new DtrBarManager(Service.Configuration.Data, settingsWindow);
+        settingsWindow.SetDtrBarManager(dtrBarManager);
     }
     
     private void DrawUI()
@@ -92,6 +99,12 @@ public sealed class Plugin : IDalamudPlugin
     }
     
     private void OpenHistory()
+    {
+        if (historyWindow != null)
+            historyWindow.IsOpen = true;
+    }
+    
+    private void OpenMainUi()
     {
         if (historyWindow != null)
             historyWindow.IsOpen = true;
@@ -171,10 +184,13 @@ public sealed class Plugin : IDalamudPlugin
         messagePipeline?.Dispose();
 
         overlayManager?.Dispose();
+        dtrBarManager?.Dispose();
+        
         if (windowSystem != null)
         {
             pluginInterface.UiBuilder.Draw -= DrawUI;
             pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
+            pluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
             windowSystem.RemoveAllWindows();
         }
         settingsWindow?.Dispose();

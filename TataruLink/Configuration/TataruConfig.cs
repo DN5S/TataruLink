@@ -8,6 +8,8 @@ public class TataruConfig : IPluginConfiguration
 
     public bool IsEnabled { get; set; } = true;
     
+    public bool ShowDtrBar { get; set; } = true;
+    
     public bool DebugMode { get; set; }
 
     public ChatConfig Chat { get; set; } = new();

@@ -2,12 +2,13 @@ using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
+using TataruLink.DtrBar;
 using TataruLink.Services;
 using TataruLink.Translation;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class DebugTab(TataruConfig configuration, ITranslationService translationService)
+public class DebugTab(TataruConfig configuration, ITranslationService translationService, DtrBarManager? dtrBarManager)
 {
     public void Draw()
     {
@@ -43,6 +44,21 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             }
             
             ImGui.Separator();
+            
+            // DTR Bar statistics section
+            if (dtrBarManager != null)
+            {
+                ImGui.TextUnformatted("DTR Bar Statistics:"u8);
+                ImGui.TextUnformatted($"  Translation Count: {dtrBarManager.GetTranslationCount()}");
+                
+                if (ImGui.Button("Reset Translation Counter"u8))
+                {
+                    dtrBarManager.ResetTranslationCount();
+                    Service.PluginLog.Debug("Translation counter reset to 0");
+                }
+                
+                ImGui.Separator();
+            }
             
             // Pipeline failure debugging section
             if (ImGui.CollapsingHeader("Pipeline Failures"u8))
