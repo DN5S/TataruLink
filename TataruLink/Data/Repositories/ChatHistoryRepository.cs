@@ -175,6 +175,31 @@ public class ChatHistoryRepository : IChatHistoryRepository
         }
     }
 
+    public async Task<bool> UpdateTranslationAsync(long id, string translatedContent, CancellationToken cancellationToken = default)
+    {
+        if (id <= 0)
+            throw new ArgumentException("ID must be positive", nameof(id));
+            
+        if (translatedContent != null && translatedContent.Length > validation.MaxTextLength)
+            throw new ArgumentException($"Translated content exceeds maximum length of {validation.MaxTextLength}");
+            
+        var connection = await context.GetConnectionAsync(cancellationToken);
+        try
+        {
+            const string sql = @"
+                UPDATE ChatHistory 
+                SET TranslatedContent = @TranslatedContent
+                WHERE Id = @Id";
+            
+            var affected = await connection.ExecuteAsync(sql, new { Id = id, TranslatedContent = translatedContent });
+            return affected > 0;
+        }
+        finally
+        {
+            context.ReleaseConnection();
+        }
+    }
+
     private void ValidateQueryParameters(int limit, int offset)
     {
         if (limit <= 0)

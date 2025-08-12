@@ -4,6 +4,7 @@ using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
 using TataruLink.Data;
 using TataruLink.DtrBar;
+using TataruLink.Filter;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Pipeline;
@@ -28,7 +29,10 @@ public sealed class Plugin : IDalamudPlugin
     private ITranslationService? translationService;
     private OverlayManager? overlayManager;
     private GlossaryManager? glossaryManager;
+    private BlacklistManager? blacklistManager;
     private IDataService? dataService;
+    private DatabaseContext? databaseContext;
+    private IUnitOfWork? unitOfWork;
     private WindowSystem? windowSystem;
     private SettingsWindow? settingsWindow;
     private HistoryWindow? historyWindow;
@@ -47,15 +51,28 @@ public sealed class Plugin : IDalamudPlugin
     private void InitializeCore()
     {
         var configuration = Service.Configuration.Data;
+        
+        // Initialize database and repositories
         dataService = new DataService(pluginInterface);
         _ = Task.Run(async () => await dataService.InitializeAsync());
-        glossaryManager = new GlossaryManager(configuration);
+        
+        // Create database context and unit of work for managers
+        databaseContext = new DatabaseContext(pluginInterface, configuration.Cache);
+        unitOfWork = new UnitOfWork(databaseContext, configuration.Cache);
+        _ = Task.Run(async () => await databaseContext.InitializeAsync());
+        
+        // Initialize managers with repositories
+        glossaryManager = new GlossaryManager(unitOfWork.Glossary);
+        blacklistManager = new BlacklistManager(unitOfWork.Blacklist);
+        
+        // Initialize translation service
         translationService = new TranslationService(configuration);
+        
         InitializeUI();
         messagePipeline = new MessagePipeline();
         // WARNING: Pipeline stage order matters - do not change without careful consideration
         messagePipeline
-            .AddStage(new MessageValidationStage(configuration))
+            .AddStage(new MessageValidationStage(configuration, blacklistManager))
             .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService, dtrBarManager))
             .AddStage(new DisplayStage(configuration, dataService, overlayManager));
         
@@ -204,7 +221,10 @@ public sealed class Plugin : IDalamudPlugin
         
         dataService?.Dispose();
         glossaryManager?.Dispose();
+        blacklistManager?.Dispose();
         translationService?.Dispose();
+        unitOfWork?.Dispose();
+        databaseContext?.Dispose();
         Service.PipelineDebug.Dispose();
         
         isDisposed = true;

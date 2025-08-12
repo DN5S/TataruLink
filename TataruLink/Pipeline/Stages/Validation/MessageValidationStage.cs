@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using TataruLink.Filter;
 using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Configuration;
@@ -15,7 +16,7 @@ public class MessageValidationStage : IPipelineStage
     private readonly TataruConfig configuration;
     private readonly IMessageValidator[] validators;
     
-    public MessageValidationStage(TataruConfig configuration)
+    public MessageValidationStage(TataruConfig configuration, BlacklistManager? blacklistManager = null)
     {
         this.configuration = configuration;
         
@@ -25,7 +26,7 @@ public class MessageValidationStage : IPipelineStage
             new GameStateValidator(this.configuration.Filter),
             new DeduplicationValidator(TimeSpan.FromMilliseconds(this.configuration.Validation.DuplicateDetectionPeriodMs)),
             new ChatTypeValidator(this.configuration),
-            new KeywordValidator(this.configuration.Filter),
+            new KeywordValidator(this.configuration.Filter, blacklistManager),
             new ContentValidator()
         ];
     }

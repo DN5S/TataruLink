@@ -17,6 +17,7 @@ public interface IDataService : IDisposable, IAsyncDisposable
     Task<List<ChatHistoryEntry>> GetHistoryAsync(int limit = 100, int offset = 0);
     Task<int> DeleteHistoryAsync(params long[] ids);
     Task<int> ClearHistoryAsync();
+    Task<bool> UpdateHistoryTranslationAsync(long id, string translatedContent);
     
     
     Task<int> PruneOldCacheEntriesAsync(TimeSpan maxAge);

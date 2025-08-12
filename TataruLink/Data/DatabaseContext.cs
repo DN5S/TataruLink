@@ -252,13 +252,37 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
                 FOREIGN KEY (TranslationCacheId) REFERENCES TranslationCache(Id) ON DELETE SET NULL
             );
             
+            -- Glossary entries table
+            CREATE TABLE IF NOT EXISTS GlossaryEntries (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Original TEXT NOT NULL,
+                Replacement TEXT NOT NULL,
+                IsEnabled INTEGER DEFAULT 1,
+                CreatedAt INTEGER NOT NULL,
+                UpdatedAt INTEGER NOT NULL,
+                UNIQUE(Original COLLATE NOCASE)
+            );
+            
+            -- Blacklist keywords table
+            CREATE TABLE IF NOT EXISTS BlacklistKeywords (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Keyword TEXT NOT NULL,
+                IsEnabled INTEGER DEFAULT 1,
+                CreatedAt INTEGER NOT NULL,
+                UNIQUE(Keyword COLLATE NOCASE)
+            );
+            
             -- Create indexes for better performance
             CREATE INDEX IF NOT EXISTS idx_cache_key ON TranslationCache(CacheKey);
             CREATE INDEX IF NOT EXISTS idx_cache_access ON TranslationCache(LastAccessedAt DESC);
             CREATE INDEX IF NOT EXISTS idx_cache_language ON TranslationCache(SourceLanguage, TargetLanguage);
             CREATE INDEX IF NOT EXISTS idx_history_timestamp ON ChatHistory(Timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_history_visible ON ChatHistory(IsVisible, Timestamp DESC);
-            CREATE INDEX IF NOT EXISTS idx_history_message_id ON ChatHistory(MessageId);";
+            CREATE INDEX IF NOT EXISTS idx_history_message_id ON ChatHistory(MessageId);
+            CREATE INDEX IF NOT EXISTS idx_glossary_enabled ON GlossaryEntries(IsEnabled);
+            CREATE INDEX IF NOT EXISTS idx_glossary_original ON GlossaryEntries(Original COLLATE NOCASE);
+            CREATE INDEX IF NOT EXISTS idx_blacklist_enabled ON BlacklistKeywords(IsEnabled);
+            CREATE INDEX IF NOT EXISTS idx_blacklist_keyword ON BlacklistKeywords(Keyword COLLATE NOCASE);";
 
         await using var command = connection.CreateCommand();
         command.CommandText = createTablesSql;

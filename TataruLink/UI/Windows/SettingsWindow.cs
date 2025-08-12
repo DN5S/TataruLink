@@ -42,7 +42,7 @@ public class SettingsWindow : Window, IDisposable
         languagesTab = new LanguagesTab(configuration);
         chatTypesTab = new ChatTypesTab(configuration);
         filtersTab = new FiltersTab(configuration);
-        glossaryTab = new GlossaryTab(configuration, glossaryManager);
+        glossaryTab = new GlossaryTab(glossaryManager);
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);
         debugTab = new DebugTab(configuration, translationService, null);

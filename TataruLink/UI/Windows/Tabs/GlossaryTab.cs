@@ -4,38 +4,36 @@ using System.Linq;
 using System.Numerics;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
-using TataruLink.Configuration;
 using TataruLink.Glossary;
 using TataruLink.Models;
 using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryManager)
+public class GlossaryTab(GlossaryManager glossaryManager)
 {
+    private readonly GlossaryManager glossaryManager = glossaryManager;
     private string newOriginal = string.Empty;
     private string newReplacement = string.Empty;
     private string searchFilter = string.Empty;
     private string? errorMessage;
     private DateTime errorMessageTime = DateTime.MinValue;
+    private List<GlossaryDbEntry> displayEntries = [];
 
-    // NOTE: Save configuration and rebuild the glossary trie
-    private void SaveAndRebuild()
+    private void RefreshDisplayEntries()
     {
-        Service.Configuration.Save();
-        glossaryManager.Build();
+        displayEntries = glossaryManager.GetCachedEntries();
     }
 
     public void Draw()
     {
-        var glossaryConfig = configuration.Glossary;
-
+        RefreshDisplayEntries();
+        
         // Enable/Disable checkbox
-        var isEnabled = glossaryConfig.IsEnabled;
+        var isEnabled = glossaryManager.IsEnabled;
         if (ImGui.Checkbox("Enable Glossary"u8, ref isEnabled))
         {
-            glossaryConfig.IsEnabled = isEnabled;
-            SaveAndRebuild();
+            glossaryManager.IsEnabled = isEnabled;
         }
         
         if (ImGui.IsItemHovered())
@@ -81,19 +79,12 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
             if (ImGui.Button("Add Entry"u8, new Vector2(-1, 0)))
             {
                 // Check for duplicates
-                var duplicate = glossaryConfig.Entries.Any(e => 
+                var duplicate = displayEntries.Any(e => 
                     e.Original.Equals(newOriginal, StringComparison.OrdinalIgnoreCase));
                 
                 if (!duplicate)
                 {
-                    glossaryConfig.Entries.Add(new GlossaryEntry 
-                    { 
-                        Original = newOriginal.Trim(), 
-                        Replacement = newReplacement.Trim(),
-                        IsEnabled = true
-                    });
-                    SaveAndRebuild();
-                    Service.PluginLog.Information($"Added glossary entry: '{newOriginal}' -> '{newReplacement}'");
+                    _ = glossaryManager.AddEntryAsync(newOriginal, newReplacement);
                     
                     // Clear inputs and error
                     newOriginal = string.Empty;
@@ -145,21 +136,19 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
         
         if (ImGui.Button("Enable All"u8))
         {
-            foreach (var entry in glossaryConfig.Entries)
+            foreach (var entry in displayEntries.Where(e => !e.IsEnabled))
             {
-                entry.IsEnabled = true;
+                _ = glossaryManager.ToggleEntryAsync(entry.Id);
             }
-            SaveAndRebuild();
         }
         
         ImGui.SameLine();
         if (ImGui.Button("Disable All"u8))
         {
-            foreach (var entry in glossaryConfig.Entries)
+            foreach (var entry in displayEntries.Where(e => e.IsEnabled))
             {
-                entry.IsEnabled = false;
+                _ = glossaryManager.ToggleEntryAsync(entry.Id);
             }
-            SaveAndRebuild();
         }
         
         ImGui.SameLine();
@@ -177,8 +166,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
             
             if (ImGui.Button("Yes, Remove All"u8, new Vector2(120, 0)))
             {
-                glossaryConfig.Entries.Clear();
-                SaveAndRebuild();
+                _ = glossaryManager.ClearAllAsync();
                 ImGui.CloseCurrentPopup();
             }
             
@@ -211,13 +199,13 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
 
             // Filter entries
             var filteredEntries = string.IsNullOrWhiteSpace(searchFilter) 
-                ? glossaryConfig.Entries.ToList()
-                : glossaryConfig.Entries.Where(e => 
+                ? displayEntries
+                : displayEntries.Where(e => 
                     e.Original.Contains(searchFilter, StringComparison.OrdinalIgnoreCase) ||
                     e.Replacement.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-            GlossaryEntry? entryToRemove = null;
+            long? entryToRemove = null;
             
             foreach (var entry in filteredEntries)
             {
@@ -229,8 +217,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                 var entryEnabled = entry.IsEnabled;
                 if (ImGui.Checkbox("##Enabled"u8, ref entryEnabled))
                 {
-                    entry.IsEnabled = entryEnabled;
-                    SaveAndRebuild();
+                    _ = glossaryManager.ToggleEntryAsync(entry.Id);
                 }
 
                 // Original text
@@ -243,10 +230,9 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                 ImGui.SetNextItemWidth(-1);
                 if (ImGui.InputText("##Replacement"u8, ref replacement, 200))
                 {
-                    if (!string.IsNullOrWhiteSpace(replacement))
+                    if (!string.IsNullOrWhiteSpace(replacement) && replacement.Trim() != entry.Replacement)
                     {
-                        entry.Replacement = replacement.Trim();
-                        SaveAndRebuild();
+                        _ = glossaryManager.UpdateEntryAsync(entry.Id, replacement);
                     }
                 }
                 
@@ -254,7 +240,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                 ImGui.TableNextColumn();
                 if (ImGui.Button("Delete"u8))
                 {
-                    entryToRemove = entry;
+                    entryToRemove = entry.Id;
                 }
                 
                 ImGui.PopID();
@@ -263,11 +249,9 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
             ImGui.EndTable();
 
             // Remove entry outside iteration
-            if (entryToRemove != null)
+            if (entryToRemove.HasValue)
             {
-                glossaryConfig.Entries.Remove(entryToRemove);
-                SaveAndRebuild();
-                Service.PluginLog.Information($"Removed glossary entry: '{entryToRemove.Original}'");
+                _ = glossaryManager.DeleteEntryAsync(entryToRemove.Value);
             }
         }
 
@@ -301,12 +285,17 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
     {
         try
         {
-            var json = JsonSerializer.Serialize(
-                configuration.Glossary.Entries,
-                new JsonSerializerOptions { WriteIndented = true });
+            var exportData = displayEntries.Select(e => new
+            {
+                e.Original,
+                e.Replacement,
+                e.IsEnabled
+            });
+            
+            var json = JsonSerializer.Serialize(exportData, new JsonSerializerOptions { WriteIndented = true });
             
             ImGui.SetClipboardText(json);
-            Service.PluginLog.Information($"Exported {configuration.Glossary.Entries.Count} glossary entries to clipboard");
+            Service.PluginLog.Information($"Exported {displayEntries.Count} glossary entries to clipboard");
         }
         catch (Exception ex)
         {
@@ -325,38 +314,62 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
                 return;
             }
 
-            var imported = JsonSerializer.Deserialize<List<GlossaryEntry>>(json);
-            if (imported == null || imported.Count == 0)
+            // Support both an old GlossaryEntry format and new format
+            var importedEntries = new List<GlossaryDbEntry>();
+            
+            try
+            {
+                // Try a new format first
+                var newFormat = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json);
+                if (newFormat != null)
+                {
+                    foreach (var item in newFormat)
+                    {
+                        if (item.TryGetValue("Original", out var orig) && 
+                            item.TryGetValue("Replacement", out var repl))
+                        {
+                            var entry = new GlossaryDbEntry
+                            {
+                                Original = orig.GetString() ?? string.Empty,
+                                Replacement = repl.GetString() ?? string.Empty,
+                                IsEnabled = item.TryGetValue("IsEnabled", out var enabled) && enabled.GetBoolean()
+                            };
+                            
+                            if (!string.IsNullOrWhiteSpace(entry.Original) && 
+                                !string.IsNullOrWhiteSpace(entry.Replacement))
+                            {
+                                importedEntries.Add(entry);
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                Service.PluginLog.Warning("Failed to parse glossary import data");
+                return;
+            }
+
+            if (importedEntries.Count == 0)
             {
                 Service.PluginLog.Warning("No valid glossary entries found in clipboard");
                 return;
             }
 
-            // Merge with existing entries (skip duplicates)
-            var added = 0;
-            foreach (var entry in imported)
-            {
-                if (string.IsNullOrWhiteSpace(entry.Original) || string.IsNullOrWhiteSpace(entry.Replacement))
-                    continue;
+            // Filter out duplicates
+            var toImport = importedEntries.Where(e => 
+                !displayEntries.Any(existing => 
+                    existing.Original.Equals(e.Original, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
-                var exists = configuration.Glossary.Entries.Any(e => 
-                    e.Original.Equals(entry.Original, StringComparison.OrdinalIgnoreCase));
-                
-                if (!exists)
-                {
-                    configuration.Glossary.Entries.Add(entry);
-                    added++;
-                }
-            }
-
-            if (added > 0)
+            if (toImport.Count > 0)
             {
-                SaveAndRebuild();
-                Service.PluginLog.Information($"Imported {added} new glossary entries from clipboard");
+                _ = glossaryManager.ImportEntriesAsync(toImport);
+                Service.PluginLog.Information($"Imported {toImport.Count} new glossary entries from clipboard");
             }
             else
             {
-                Service.PluginLog.Information("No new entries imported (all duplicates or invalid)");
+                Service.PluginLog.Information("No new entries imported (all duplicates)");
             }
         }
         catch (Exception ex)

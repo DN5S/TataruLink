@@ -65,3 +65,21 @@ public class CacheStatistics
         Interlocked.Exchange(ref hotCacheHitCount, 0);
     }
 }
+
+public class GlossaryDbEntry
+{
+    public long Id { get; set; }
+    public string Original { get; set; } = string.Empty;
+    public string Replacement { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public long CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    public long UpdatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+}
+
+public class BlacklistDbEntry
+{
+    public long Id { get; set; }
+    public string Keyword { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public long CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+}

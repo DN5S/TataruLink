@@ -12,6 +12,10 @@ public interface IUnitOfWork : IDisposable
     
     IChatHistoryRepository ChatHistory { get; }
     
+    IGlossaryRepository Glossary { get; }
+    
+    IBlacklistRepository Blacklist { get; }
+    
     Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default);
     
     Task CommitAsync(CancellationToken cancellationToken = default);

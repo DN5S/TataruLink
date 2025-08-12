@@ -21,6 +21,8 @@ public class HistoryWindow : Window, IDisposable
     private bool isLoading;
     private int currentOffset;
     private const int PageSize = 100;
+    private long? editingId;
+    private string editingText = string.Empty;
     
     private readonly ImGuiTableFlags tableFlags = 
         ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
@@ -165,13 +167,57 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TextWrapped(item.OriginalContent);
         
         ImGui.TableNextColumn();
-        if (!string.IsNullOrEmpty(item.TranslatedContent))
+        if (editingId == item.Id)
         {
-            ImGui.TextWrapped(item.TranslatedContent);
+            // Edit mode
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.InputTextMultiline($"##edit_{item.Id}", ref editingText, 1000, new Vector2(-1, 60)))
+            {
+                // Text is being edited
+            }
+            
+            if (ImGui.Button($"Save##save_{item.Id}"))
+            {
+                _ = SaveTranslationEditAsync(item.Id, editingText);
+                editingId = null;
+            }
+            
+            ImGui.SameLine();
+            if (ImGui.Button($"Cancel##cancel_{item.Id}"))
+            {
+                editingId = null;
+            }
         }
         else
         {
-            ImGui.TextDisabled("No translation"u8);
+            // Display mode
+            if (!string.IsNullOrEmpty(item.TranslatedContent))
+            {
+                ImGui.TextWrapped(item.TranslatedContent);
+                
+                if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                {
+                    // Start editing on double-click
+                    editingId = item.Id;
+                    editingText = item.TranslatedContent;
+                }
+            }
+            else
+            {
+                ImGui.TextDisabled("No translation"u8);
+                
+                if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                {
+                    // Start editing on double-click
+                    editingId = item.Id;
+                    editingText = string.Empty;
+                }
+            }
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Double-click to edit translation"u8);
+            }
         }
         
         ImGui.TableNextColumn();
@@ -328,6 +374,33 @@ public class HistoryWindow : Window, IDisposable
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Failed to clear all history");
+        }
+    }
+
+    private async Task SaveTranslationEditAsync(long id, string newTranslation)
+    {
+        try
+        {
+            var success = await dataService.UpdateHistoryTranslationAsync(id, newTranslation);
+            if (success)
+            {
+                // Update the local item
+                var item = historyItems.FirstOrDefault(i => i.Id == id);
+                if (item != null)
+                {
+                    item.TranslatedContent = newTranslation;
+                }
+                
+                Service.PluginLog.Information($"Updated translation for history item {id}");
+            }
+            else
+            {
+                Service.PluginLog.Warning($"Failed to update translation for history item {id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, $"Failed to save translation edit for item {id}");
         }
     }
 

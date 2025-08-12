@@ -22,4 +22,7 @@ public interface IChatHistoryRepository
     Task<int> ClearAllAsync(CancellationToken cancellationToken = default);
     
     Task<int> GetCountAsync(bool visibleOnly = true, CancellationToken cancellationToken = default);
+    
+    // Update translated content only
+    Task<bool> UpdateTranslationAsync(long id, string translatedContent, CancellationToken cancellationToken = default);
 }

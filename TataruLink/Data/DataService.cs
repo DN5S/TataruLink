@@ -232,6 +232,11 @@ public class DataService : IDataService
         return await unitOfWork.ChatHistory.ClearAllAsync().ConfigureAwait(false);
     }
 
+    public async Task<bool> UpdateHistoryTranslationAsync(long id, string translatedContent)
+    {
+        return await unitOfWork.ChatHistory.UpdateTranslationAsync(id, translatedContent).ConfigureAwait(false);
+    }
+
     public async Task<int> PruneOldCacheEntriesAsync(TimeSpan maxAge)
     {
         var cutoffTime = DateTimeOffset.UtcNow.Subtract(maxAge);

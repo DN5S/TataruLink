@@ -14,12 +14,20 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
 
     private ITranslationCacheRepository? translationCache;
     private IChatHistoryRepository? chatHistory;
+    private IGlossaryRepository? glossary;
+    private IBlacklistRepository? blacklist;
 
     public ITranslationCacheRepository TranslationCache =>
         translationCache ??= new TranslationCacheRepository(context, config);
 
     public IChatHistoryRepository ChatHistory =>
         chatHistory ??= new ChatHistoryRepository(context, config);
+    
+    public IGlossaryRepository Glossary =>
+        glossary ??= new GlossaryRepository(context);
+    
+    public IBlacklistRepository Blacklist =>
+        blacklist ??= new BlacklistRepository(context);
 
     public async Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
     {
