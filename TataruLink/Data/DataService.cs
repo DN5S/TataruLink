@@ -263,7 +263,7 @@ public class DataService : IDataService
                 var readTask = writeQueue.Reader.WaitToReadAsync(token).AsTask();
                 
                 // Wait for either delay or new item
-                var completedTask = await Task.WhenAny(delayTask, readTask).ConfigureAwait(false);
+                await Task.WhenAny(delayTask, readTask).ConfigureAwait(false);
 
                 // Collect items from the queue up to batch size
                 while (batch.Count < config.BatchWriteSize && writeQueue.Reader.TryRead(out var item))
@@ -319,21 +319,38 @@ public class DataService : IDataService
         var cacheEntries = batch.OfType<TranslationCacheEntry>().ToList();
         var historyEntries = batch.OfType<ChatHistoryEntry>().ToList();
 
+        if (cacheEntries.Count == 0 && historyEntries.Count == 0)
+            return;
+
         try
         {
-            // Write cache entries (the repository handles its own transaction)
-            if (cacheEntries.Count != 0)
+            // Start a single transaction for both operations
+            await unitOfWork.BeginTransactionAsync().ConfigureAwait(false);
+            try
             {
-                await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries).ConfigureAwait(false);
+                // Write cache entries within the transaction
+                if (cacheEntries.Count != 0)
+                {
+                    await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries).ConfigureAwait(false);
+                }
+                
+                // Write history entries within the same transaction
+                if (historyEntries.Count != 0)
+                {
+                    await unitOfWork.ChatHistory.AddBatchAsync(historyEntries).ConfigureAwait(false);
+                }
+                
+                // Commit the transaction if all operations succeed
+                await unitOfWork.CommitAsync().ConfigureAwait(false);
+                
+                Service.PluginLog.Debug($"Batch write committed: {cacheEntries.Count} cache, {historyEntries.Count} history");
             }
-            
-            // Write history entries (a repository handles its own transaction)
-            if (historyEntries.Count != 0)
+            catch
             {
-                await unitOfWork.ChatHistory.AddBatchAsync(historyEntries).ConfigureAwait(false);
+                // Rollback on any failure
+                await unitOfWork.RollbackAsync().ConfigureAwait(false);
+                throw;
             }
-            
-            Service.PluginLog.Debug($"Batch write completed: {cacheEntries.Count} cache, {historyEntries.Count} history");
         }
         catch (Exception ex)
         {

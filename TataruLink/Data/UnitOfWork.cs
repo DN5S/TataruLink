@@ -2,7 +2,6 @@ using System;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
 using TataruLink.Configuration;
 using TataruLink.Data.Repositories;
 
@@ -15,9 +14,6 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
     private readonly CacheConfig config = config ?? throw new ArgumentNullException(nameof(config));
-    private IDbConnection? currentConnection;
-    private IDbTransaction? currentTransaction;
-    private bool isDisposed;
 
     private ITranslationCacheRepository? translationCache;
     private IChatHistoryRepository? chatHistory;
@@ -30,57 +26,24 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
 
     public async Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        
-        if (currentTransaction != null)
-            throw new InvalidOperationException("A transaction is already in progress");
-
-        currentConnection = await context.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
-        currentTransaction = await ((SqliteConnection)currentConnection).BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
-        
-        return currentTransaction;
+        var transaction = await context.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        return transaction;
     }
 
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        
-        if (currentTransaction == null)
-            throw new InvalidOperationException("No transaction is in progress");
-
-        try
-        {
-            await ((SqliteTransaction)currentTransaction).CommitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            CleanupTransaction();
-        }
+        await context.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RollbackAsync(CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        
-        if (currentTransaction == null)
-            throw new InvalidOperationException("No transaction is in progress");
-
-        try
-        {
-            await ((SqliteTransaction)currentTransaction).RollbackAsync(cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            CleanupTransaction();
-        }
+    { 
+        await context.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfDisposed();
-        
         // If there's an active transaction, commit it
-        if (currentTransaction != null)
+        if (context.GetCurrentTransaction() != null)
         {
             await CommitAsync(cancellationToken).ConfigureAwait(false);
             return 1; // Return 1 to indicate success
@@ -89,43 +52,8 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
         return 0;
     }
 
-    private void CleanupTransaction()
-    {
-        if (currentTransaction != null)
-        {
-            currentTransaction.Dispose();
-            currentTransaction = null;
-        }
-
-        if (currentConnection != null)
-        {
-            currentConnection.Dispose();
-            currentConnection = null;
-        }
-    }
-
-    private void ThrowIfDisposed()
-    {
-        if (isDisposed)
-            throw new ObjectDisposedException(nameof(UnitOfWork));
-    }
-
     public void Dispose()
     {
-        Dispose(true);
         GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (isDisposed) return;
-
-        if (disposing)
-        {
-            currentTransaction?.Dispose();
-            currentConnection?.Dispose();
-        }
-
-        isDisposed = true;
     }
 }

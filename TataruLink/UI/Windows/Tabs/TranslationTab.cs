@@ -16,7 +16,6 @@ public class TranslationTab
     private readonly ITranslationService translationService;
     
     private string tempApiKey = string.Empty;
-    private int selectedEngineIndex;
     private readonly string[] availableEngines =
     [
         "Mock", "Google", "DeepL"
@@ -26,10 +25,6 @@ public class TranslationTab
     {
         this.configuration = configuration;
         this.translationService = translationService;
-        
-        // Initialize the selected engine index
-        selectedEngineIndex = Array.IndexOf(availableEngines, configuration.Translation.Engine);
-        if (selectedEngineIndex < 0) selectedEngineIndex = 0;
         
         // Load API key for the current engine
         LoadCurrentApiKey();
@@ -79,11 +74,18 @@ public class TranslationTab
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "[Status Unknown]");
         }
         
+        // Calculate index based on current configuration
+        var currentEngine = configuration.Translation.Engine;
+        int selectedEngineIndex = Array.IndexOf(availableEngines, currentEngine);
+        if (selectedEngineIndex < 0) selectedEngineIndex = 0;
+        
         if (ImGui.Combo("##Engine"u8, ref selectedEngineIndex, availableEngines, availableEngines.Length))
         {
             var newEngine = availableEngines[selectedEngineIndex];
+            configuration.Translation.Engine = newEngine;
             translationService.ChangeProvider(newEngine);
             LoadCurrentApiKey();
+            Service.Configuration.Save();
             
             Service.PluginLog.Information($"Translation engine changed to: {newEngine}");
         }

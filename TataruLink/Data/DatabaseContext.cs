@@ -19,6 +19,7 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     private readonly SemaphoreSlim connectionSemaphore;
     private SqliteConnection? sharedConnection;
     private readonly SemaphoreSlim connectionLock = new(1, 1);
+    private SqliteTransaction? currentTransaction;
     private bool isDisposed;
 
     public DatabaseContext(IDalamudPluginInterface pluginInterface, CacheConfig config)
@@ -57,7 +58,7 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
             connectionLock.Wait(cancellationToken);
             try
             {
-                if (sharedConnection == null || sharedConnection.State != System.Data.ConnectionState.Open)
+                if (sharedConnection is not { State: System.Data.ConnectionState.Open })
                 {
                     sharedConnection?.Dispose();
                     sharedConnection = new SqliteConnection(connectionString);
@@ -88,6 +89,60 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     public void ReleaseConnection()
     {
         connectionSemaphore.Release();
+    }
+
+    public SqliteTransaction? GetCurrentTransaction()
+    {
+        return currentTransaction;
+    }
+
+    public async Task<SqliteTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        
+        if (currentTransaction != null)
+            throw new InvalidOperationException("A transaction is already in progress");
+
+        var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+        currentTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        
+        return currentTransaction;
+    }
+
+    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        
+        if (currentTransaction == null)
+            throw new InvalidOperationException("No transaction is in progress");
+
+        try
+        {
+            await currentTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await currentTransaction.DisposeAsync().ConfigureAwait(false);
+            currentTransaction = null;
+        }
+    }
+
+    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        
+        if (currentTransaction == null)
+            throw new InvalidOperationException("No transaction is in progress");
+
+        try
+        {
+            await currentTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await currentTransaction.DisposeAsync().ConfigureAwait(false);
+            currentTransaction = null;
+        }
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -194,8 +249,8 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
 
     private void ThrowIfDisposed()
     {
-        if (isDisposed)
-            throw new ObjectDisposedException(nameof(DatabaseContext));
+        if (!isDisposed) return;
+        throw new ObjectDisposedException(nameof(DatabaseContext));
     }
 
     public void Dispose()
@@ -205,6 +260,8 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         connectionLock.Wait();
         try
         {
+            currentTransaction?.Dispose();
+            currentTransaction = null;
             sharedConnection?.Dispose();
             sharedConnection = null;
         }
@@ -225,6 +282,11 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         await connectionLock.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (currentTransaction != null)
+            {
+                await currentTransaction.DisposeAsync().ConfigureAwait(false);
+                currentTransaction = null;
+            }
             if (sharedConnection != null)
             {
                 await sharedConnection.DisposeAsync().ConfigureAwait(false);

@@ -97,7 +97,7 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         }
 
         var connection = await context.GetConnectionAsync(cancellationToken);
-        await using var transaction = connection.BeginTransaction();
+        var transaction = context.GetCurrentTransaction();
         
         try
         {
@@ -112,13 +112,7 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
                  @CharacterCount, @TimeTakenMs, @CacheKey)";
             
             var count = await connection.ExecuteAsync(sql, entriesList, transaction);
-            transaction.Commit();
             return count;
-        }
-        catch
-        {
-            transaction.Rollback();
-            throw;
         }
         finally
         {

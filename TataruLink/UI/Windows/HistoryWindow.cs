@@ -268,12 +268,12 @@ public class HistoryWindow : Window, IDisposable
         if (string.IsNullOrWhiteSpace(searchText))
             return historyItems;
         
-        var search = searchText.ToLowerInvariant();
+        // Use StringComparison for all comparisons to avoid unnecessary ToLowerInvariant calls
         return historyItems.Where(item =>
-            item.OriginalContent.Contains(search, StringComparison.InvariantCultureIgnoreCase) ||
-            (item.TranslatedContent?.ToLowerInvariant().Contains(search, StringComparison.InvariantCultureIgnoreCase) == true) ||
-            (item.SenderName?.ToLowerInvariant().Contains(search, StringComparison.InvariantCultureIgnoreCase) == true) ||
-            (item.ChatTypeName?.ToLowerInvariant().Contains(search, StringComparison.InvariantCultureIgnoreCase) == true)
+            item.OriginalContent.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) ||
+            (item.TranslatedContent?.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) == true) ||
+            (item.SenderName?.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) == true) ||
+            (item.ChatTypeName?.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) == true)
         ).ToList();
     }
 

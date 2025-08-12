@@ -66,10 +66,10 @@ public class ChatHistoryRepository : IChatHistoryRepository
         }
         
         var connection = await context.GetConnectionAsync(cancellationToken);
+        var transaction = context.GetCurrentTransaction();
+        
         try
         {
-            using var transaction = connection.BeginTransaction();
-            
             const string sql = @"
                 INSERT OR IGNORE INTO ChatHistory 
                 (MessageId, Timestamp, ChatType, ChatTypeName, SenderName, 
@@ -79,9 +79,9 @@ public class ChatHistoryRepository : IChatHistoryRepository
                  @OriginalContent, @TranslatedContent, @TranslationCacheId, @IsVisible)";
             
             var count = await connection.ExecuteAsync(sql, entriesList, transaction);
-            transaction.Commit();
             return count;
-        } finally
+        } 
+        finally
         {
             context.ReleaseConnection();
         }

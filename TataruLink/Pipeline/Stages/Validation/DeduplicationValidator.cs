@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks;
 using TataruLink.Models;
 using TataruLink.Services;
@@ -10,13 +11,56 @@ namespace TataruLink.Pipeline.Stages.Validation;
 /// Validates that messages are not duplicates within a detection period.
 /// Prevents the same message from being processed multiple times.
 /// </summary>
-public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessageValidator
+public class DeduplicationValidator : IMessageValidator, IDisposable
 {
+    private readonly TimeSpan duplicateDetectionPeriod;
     private readonly ConcurrentDictionary<int, DateTime> recentMessageHashes = new();
+    private readonly Timer cleanupTimer;
+    private bool isDisposed;
+
+    public DeduplicationValidator(TimeSpan duplicateDetectionPeriod)
+    {
+        this.duplicateDetectionPeriod = duplicateDetectionPeriod;
+        
+        // Start a background timer to clean up old entries every 5 seconds
+        cleanupTimer = new Timer(
+            CleanupOldEntries,
+            null,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(5)
+        );
+    }
 
     public void Initialize()
     {
-        Service.PluginLog.Debug($"DeduplicationValidator initialized with {duplicateDetectionPeriod.TotalMilliseconds}ms detection period");
+        Service.PluginLog.Debug($"DeduplicationValidator initialized with {duplicateDetectionPeriod.TotalMilliseconds}ms detection period and background cleanup");
+    }
+
+    private void CleanupOldEntries(object? state)
+    {
+        try
+        {
+            var cutoff = DateTime.UtcNow - duplicateDetectionPeriod;
+            var removedCount = 0;
+            
+            foreach (var kvp in recentMessageHashes)
+            {
+                if (kvp.Value < cutoff)
+                {
+                    if (recentMessageHashes.TryRemove(kvp.Key, out _))
+                        removedCount++;
+                }
+            }
+            
+            if (removedCount > 0)
+            {
+                Service.PluginLog.Debug($"DeduplicationValidator cleanup: removed {removedCount} old entries");
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Error during deduplication cleanup");
+        }
     }
 
     public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
@@ -28,17 +72,7 @@ public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessag
             message.PlainTextContent
         );
 
-        // Clean old entries
-        var cutoff = DateTime.UtcNow - duplicateDetectionPeriod;
-        foreach (var kvp in recentMessageHashes)
-        {
-            if (kvp.Value < cutoff)
-            {
-                recentMessageHashes.TryRemove(kvp.Key, out _);
-            }
-        }
-
-        // Check if duplicate
+        // Check if duplicate (no inline cleanup needed, handled by timer)
         if (!recentMessageHashes.TryAdd(hash, DateTime.UtcNow))
         {
             var preview = message.PlainTextContent.Length > 30 
@@ -56,6 +90,10 @@ public class DeduplicationValidator(TimeSpan duplicateDetectionPeriod) : IMessag
 
     public void Dispose()
     {
+        if (isDisposed) return;
+        
+        cleanupTimer.Dispose();
         recentMessageHashes.Clear();
+        isDisposed = true;
     }
 }
