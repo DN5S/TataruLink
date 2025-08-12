@@ -45,4 +45,6 @@ public class TranslationConfig
     public bool RetryFailedTranslations { get; set; }
     
     public int MaxRetryAttempts { get; set; } = 2;
+    
+    public GeminiConfig Gemini { get; set; } = new();
 }

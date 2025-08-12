@@ -4,5 +4,6 @@ public enum TranslationProviderType
 {
     Mock,
     Google,
-    DeepL
+    DeepL,
+    Gemini
 }

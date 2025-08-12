@@ -24,6 +24,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         RegisterProvider(new MockTranslationProvider());
         RegisterProvider(new GoogleTranslateProvider());
         RegisterProvider(new DeepLProvider());
+        RegisterProvider(new GeminiProvider(configuration.Translation.Gemini));
         
         foreach (var provider in providers.Values)
         {

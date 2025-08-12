@@ -1,9 +1,13 @@
 using System;
+using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
+using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Translation;
+using TataruLink.Translation.Providers;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -13,10 +17,9 @@ public class TranslationTab
     private readonly ITranslationService translationService;
     
     private string tempApiKey = string.Empty;
-    private readonly string[] availableEngines =
-    [
-        "Mock", "Google", "DeepL"
-    ];
+    private string tempGeminiModel = string.Empty;
+    private GeminiProvider.ModelInfo[] geminiModels = [];
+    private bool isLoadingModels = false;
 
     public TranslationTab(TataruConfig configuration, ITranslationService translationService)
     {
@@ -25,6 +28,12 @@ public class TranslationTab
         
         // Load API key for the current engine
         LoadCurrentApiKey();
+        
+        // Load Gemini models if Gemini is selected
+        if (configuration.Translation.Engine == "Gemini")
+        {
+            LoadGeminiModels();
+        }
     }
 
     public void Draw()
@@ -71,14 +80,21 @@ public class TranslationTab
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "[Status Unknown]");
         }
         
+        // Get available provider types
+        var providerTypes = Enum.GetValues<TranslationProviderType>();
+        var providerNames = providerTypes.Select(p => p.ToString()).ToArray();
+        
         // Calculate index based on current configuration
         var currentEngine = configuration.Translation.Engine;
-        int selectedEngineIndex = Array.IndexOf(availableEngines, currentEngine);
-        if (selectedEngineIndex < 0) selectedEngineIndex = 0;
+        var currentProviderType = Enum.TryParse<TranslationProviderType>(currentEngine, out var type) 
+            ? type 
+            : TranslationProviderType.Mock;
+        var selectedEngineIndex = (int)currentProviderType;
         
-        if (ImGui.Combo("##Engine"u8, ref selectedEngineIndex, availableEngines, availableEngines.Length))
+        if (ImGui.Combo("##Engine"u8, ref selectedEngineIndex, providerNames, providerNames.Length))
         {
-            var newEngine = availableEngines[selectedEngineIndex];
+            var newProviderType = (TranslationProviderType)selectedEngineIndex;
+            var newEngine = newProviderType.ToString();
             configuration.Translation.Engine = newEngine;
             translationService.ChangeProvider(newEngine);
             LoadCurrentApiKey();
@@ -89,10 +105,13 @@ public class TranslationTab
         
         ImGui.Spacing();
 
-        switch (configuration.Translation.Engine)
+        var engineType = Enum.TryParse<TranslationProviderType>(configuration.Translation.Engine, out var providerType) 
+            ? providerType 
+            : TranslationProviderType.Mock;
+            
+        switch (engineType)
         {
-            // API Key configuration (for engines that need it)
-            case "DeepL":
+            case TranslationProviderType.DeepL:
             {
                 ImGui.TextUnformatted("DeepL API Key"u8);
                 ImGui.SameLine();
@@ -127,10 +146,14 @@ public class TranslationTab
 
                 break;
             }
-            case "Google":
+            case TranslationProviderType.Google:
                 ImGui.TextWrapped("Google Translate uses an unofficial API and doesn't require an API key."u8);
                 ImGui.TextColored(new Vector4(1, 0.8f, 0, 1), "WARNING: This uses an UNOFFICIAL API that may stop working at any time."u8);
                 ImGui.TextColored(new Vector4(1, 0.5f, 0, 1), "Consider DeepL or another official API for better reliability."u8);
+                break;
+                
+            case TranslationProviderType.Gemini:
+                DrawGeminiSettings();
                 break;
         }
         
@@ -210,6 +233,130 @@ public class TranslationTab
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Provider test failed");
+        }
+    }
+    
+    private void DrawGeminiSettings()
+    {
+        ImGui.TextUnformatted("Gemini API Key"u8);
+        ImGui.SameLine();
+        ImGui.TextDisabled("(?)"u8);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.BeginTooltip();
+            ImGui.TextUnformatted("Get your API key from https://aistudio.google.com/app/apikey"u8);
+            ImGui.EndTooltip();
+        }
+        
+        ImGui.InputText("##GeminiApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
+        
+        ImGui.SameLine();
+        if (ImGui.Button("Save Key"u8))
+        {
+            translationService.UpdateApiKey("Gemini", tempApiKey);
+            Service.PluginLog.Information("Gemini API key saved and provider reinitialized");
+            LoadGeminiModels();
+        }
+        
+        ImGui.SameLine();
+        if (ImGui.Button("Test Connection"u8))
+        {
+            TestProviderConnection();
+        }
+        
+        ImGui.Separator();
+        ImGui.TextUnformatted("Model Selection"u8);
+        
+        if (isLoadingModels)
+        {
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Loading available models..."u8);
+        }
+        else if (geminiModels.Length == 0)
+        {
+            ImGui.TextWrapped("No models loaded. Save your API key to fetch available models."u8);
+        }
+        else
+        {
+            var currentModel = configuration.Translation.Gemini.SelectedModel;
+            var selectedIndex = Array.FindIndex(geminiModels, m => m.Name == currentModel);
+            if (selectedIndex < 0) selectedIndex = 0;
+            
+            var modelNames = geminiModels.Select(m => 
+            {
+                var name = m.DisplayName;
+                if (m.IsRecommended) name += " (Recommended)";
+                return name;
+            }).ToArray();
+            
+            if (ImGui.Combo("##GeminiModel"u8, ref selectedIndex, modelNames, modelNames.Length))
+            {
+                configuration.Translation.Gemini.SelectedModel = geminiModels[selectedIndex].Name;
+                Service.Configuration.Save();
+                Service.PluginLog.Information($"Gemini model changed to: {geminiModels[selectedIndex].Name}");
+            }
+            
+            if (selectedIndex >= 0 && selectedIndex < geminiModels.Length)
+            {
+                var model = geminiModels[selectedIndex];
+                ImGui.TextDisabled($"Tokens: {model.InputTokenLimit:N0} input / {model.OutputTokenLimit:N0} output");
+                if (!string.IsNullOrEmpty(model.Description))
+                {
+                    ImGui.TextWrapped(model.Description);
+                }
+            }
+        }
+        
+        ImGui.Separator();
+        ImGui.TextUnformatted("Advanced Settings"u8);
+        
+        var temperature = configuration.Translation.Gemini.Temperature;
+        if (ImGui.SliderFloat("Temperature"u8, ref temperature, 0.0f, 2.0f, "%.2f"))
+        {
+            configuration.Translation.Gemini.Temperature = temperature;
+            Service.Configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.BeginTooltip();
+            ImGui.TextUnformatted("Controls randomness in responses. Lower = more focused, higher = more creative"u8);
+            ImGui.EndTooltip();
+        }
+        
+        var maxTokens = configuration.Translation.Gemini.MaxOutputTokens;
+        if (ImGui.SliderInt("Max Output Tokens"u8, ref maxTokens, 50, 1024))
+        {
+            configuration.Translation.Gemini.MaxOutputTokens = maxTokens;
+            Service.Configuration.Save();
+        }
+        
+        if (ImGui.Button("Refresh Models"u8))
+        {
+            LoadGeminiModels();
+        }
+    }
+    
+    private async void LoadGeminiModels()
+    {
+        if (isLoadingModels) return;
+        
+        var apiKey = configuration.Translation.GetApiKey("Gemini");
+        if (string.IsNullOrEmpty(apiKey)) return;
+        
+        isLoadingModels = true;
+        try
+        {
+            var models = await GeminiProvider.GetAvailableModelsAsync(apiKey);
+            geminiModels = models.ToArray();
+            Service.PluginLog.Information($"Loaded {geminiModels.Length} Gemini models");
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Failed to load Gemini models");
+            geminiModels = [];
+        }
+        finally
+        {
+            isLoadingModels = false;
         }
     }
 }
