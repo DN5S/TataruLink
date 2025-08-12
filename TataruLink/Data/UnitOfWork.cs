@@ -11,22 +11,16 @@ namespace TataruLink.Data;
 /// <summary>
 /// Unit of Work implementation for coordinating repositories and transactions
 /// </summary>
-public class UnitOfWork : IUnitOfWork
+public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWork
 {
-    private readonly DatabaseContext context;
-    private readonly CacheConfig config;
+    private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly CacheConfig config = config ?? throw new ArgumentNullException(nameof(config));
     private IDbConnection? currentConnection;
     private IDbTransaction? currentTransaction;
     private bool isDisposed;
 
     private ITranslationCacheRepository? translationCache;
     private IChatHistoryRepository? chatHistory;
-
-    public UnitOfWork(DatabaseContext context, CacheConfig config)
-    {
-        this.context = context ?? throw new ArgumentNullException(nameof(context));
-        this.config = config ?? throw new ArgumentNullException(nameof(config));
-    }
 
     public ITranslationCacheRepository TranslationCache =>
         translationCache ??= new TranslationCacheRepository(context, config);
@@ -41,8 +35,8 @@ public class UnitOfWork : IUnitOfWork
         if (currentTransaction != null)
             throw new InvalidOperationException("A transaction is already in progress");
 
-        currentConnection = await context.GetConnectionAsync(cancellationToken);
-        currentTransaction = await ((SqliteConnection)currentConnection).BeginTransactionAsync(isolationLevel, cancellationToken);
+        currentConnection = await context.GetConnectionAsync(cancellationToken).ConfigureAwait(false);
+        currentTransaction = await ((SqliteConnection)currentConnection).BeginTransactionAsync(isolationLevel, cancellationToken).ConfigureAwait(false);
         
         return currentTransaction;
     }
@@ -56,7 +50,7 @@ public class UnitOfWork : IUnitOfWork
 
         try
         {
-            await ((SqliteTransaction)currentTransaction).CommitAsync(cancellationToken);
+            await ((SqliteTransaction)currentTransaction).CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -73,7 +67,7 @@ public class UnitOfWork : IUnitOfWork
 
         try
         {
-            await ((SqliteTransaction)currentTransaction).RollbackAsync(cancellationToken);
+            await ((SqliteTransaction)currentTransaction).RollbackAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -88,7 +82,7 @@ public class UnitOfWork : IUnitOfWork
         // If there's an active transaction, commit it
         if (currentTransaction != null)
         {
-            await CommitAsync(cancellationToken);
+            await CommitAsync(cancellationToken).ConfigureAwait(false);
             return 1; // Return 1 to indicate success
         }
         

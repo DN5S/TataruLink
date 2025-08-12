@@ -58,10 +58,10 @@ public class DataService : IDataService
 
     public async Task InitializeAsync()
     {
-        await context.InitializeAsync();
+        await context.InitializeAsync().ConfigureAwait(false);
         
         // Preload hot translations into L1 cache for better performance
-        await PreloadHotTranslationsAsync();
+        await PreloadHotTranslationsAsync().ConfigureAwait(false);
         
         Service.PluginLog.Information("DataService initialized successfully");
     }
@@ -123,7 +123,7 @@ public class DataService : IDataService
         }
 
         // L2 cache check via repository
-        entry = await unitOfWork.TranslationCache.GetAndUpdateAccessAsync(key);
+        entry = await unitOfWork.TranslationCache.GetAndUpdateAccessAsync(key).ConfigureAwait(false);
         
         if (entry != null)
         {
@@ -200,7 +200,7 @@ public class DataService : IDataService
         string targetLanguage)
     {
         var key = TranslationCacheRepository.GenerateCacheKey(originalText, sourceLanguage, targetLanguage);
-        var entry = await GetCacheAsync(key);
+        var entry = await GetCacheAsync(key).ConfigureAwait(false);
         return (entry != null, entry);
     }
 
@@ -215,7 +215,7 @@ public class DataService : IDataService
 
     public async Task<List<ChatHistoryEntry>> GetHistoryAsync(int limit = 100, int offset = 0)
     {
-        var entries = await unitOfWork.ChatHistory.GetVisibleAsync(limit, offset);
+        var entries = await unitOfWork.ChatHistory.GetVisibleAsync(limit, offset).ConfigureAwait(false);
         return entries.ToList();
     }
 
@@ -223,12 +223,12 @@ public class DataService : IDataService
     {
         if (ids.Length == 0) return 0;
         
-        return await unitOfWork.ChatHistory.HideAsync(ids);
+        return await unitOfWork.ChatHistory.HideAsync(ids).ConfigureAwait(false);
     }
 
     public async Task<int> ClearHistoryAsync()
     {
-        return await unitOfWork.ChatHistory.ClearAllAsync();
+        return await unitOfWork.ChatHistory.ClearAllAsync().ConfigureAwait(false);
     }
 
     public Task<List<UIColumnConfig>> GetColumnSettingsAsync()
@@ -260,17 +260,17 @@ public class DataService : IDataService
     public async Task<int> PruneOldCacheEntriesAsync(TimeSpan maxAge)
     {
         var cutoffTime = DateTimeOffset.UtcNow.Subtract(maxAge);
-        return await unitOfWork.TranslationCache.PruneOldEntriesAsync(cutoffTime);
+        return await unitOfWork.TranslationCache.PruneOldEntriesAsync(cutoffTime).ConfigureAwait(false);
     }
 
     public async Task VacuumDatabaseAsync()
     {
-        await context.VacuumAsync();
+        await context.VacuumAsync().ConfigureAwait(false);
     }
 
     public async Task<long> GetDatabaseSizeAsync()
     {
-        return await context.GetDatabaseSizeAsync();
+        return await context.GetDatabaseSizeAsync().ConfigureAwait(false);
     }
 
     public CacheStatistics GetStatistics() => statistics;
@@ -289,7 +289,7 @@ public class DataService : IDataService
                 var readTask = writeQueue.Reader.WaitToReadAsync(token).AsTask();
                 
                 // Wait for either delay or new item
-                var completedTask = await Task.WhenAny(delayTask, readTask);
+                var completedTask = await Task.WhenAny(delayTask, readTask).ConfigureAwait(false);
 
                 // Collect items from the queue up to batch size
                 while (batch.Count < config.BatchWriteSize && writeQueue.Reader.TryRead(out var item))
@@ -300,7 +300,7 @@ public class DataService : IDataService
                 // Write batch if we have items
                 if (batch.Count > 0)
                 {
-                    await WriteBatchAsync(batch);
+                    await WriteBatchAsync(batch).ConfigureAwait(false);
                     batch.Clear();
                 }
             }
@@ -317,7 +317,7 @@ public class DataService : IDataService
                 // Add a small delay before retrying to prevent tight loop on persistent errors
                 try
                 {
-                    await Task.Delay(1000, token);
+                    await Task.Delay(1000, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -350,13 +350,13 @@ public class DataService : IDataService
             // Write cache entries (the repository handles its own transaction)
             if (cacheEntries.Count != 0)
             {
-                await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries);
+                await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries).ConfigureAwait(false);
             }
             
             // Write history entries (a repository handles its own transaction)
             if (historyEntries.Count != 0)
             {
-                await unitOfWork.ChatHistory.AddBatchAsync(historyEntries);
+                await unitOfWork.ChatHistory.AddBatchAsync(historyEntries).ConfigureAwait(false);
             }
             
             Service.PluginLog.Debug($"Batch write completed: {cacheEntries.Count} cache, {historyEntries.Count} history");

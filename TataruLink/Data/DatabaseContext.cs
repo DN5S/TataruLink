@@ -50,7 +50,7 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         
         // For SQLite, it's better to use a single connection with proper locking
         // This prevents "database is locked" errors
-        await connectionSemaphore.WaitAsync(cancellationToken);
+        await connectionSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         
         try
         {
@@ -94,10 +94,10 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     {
         ThrowIfDisposed();
         
-        var connection = await GetConnectionAsync(cancellationToken);
+        var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await CreateTablesAsync(connection, cancellationToken);
+            await CreateTablesAsync(connection, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -152,19 +152,19 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
 
         await using var command = connection.CreateCommand();
         command.CommandText = createTablesSql;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task VacuumAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         
-        var connection = await GetConnectionAsync(cancellationToken);
+        var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var command = connection.CreateCommand();
             command.CommandText = "VACUUM;";
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             
             Service.PluginLog.Information("Database vacuum completed");
         }
@@ -178,12 +178,12 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     {
         ThrowIfDisposed();
 
-        var connection = await GetConnectionAsync(cancellationToken);
+        var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size();";
-            var result = await command.ExecuteScalarAsync(cancellationToken);
+            var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             return Convert.ToInt64(result);
         }
         finally
@@ -222,12 +222,12 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     {
         if (isDisposed) return;
         
-        await connectionLock.WaitAsync();
+        await connectionLock.WaitAsync().ConfigureAwait(false);
         try
         {
             if (sharedConnection != null)
             {
-                await sharedConnection.DisposeAsync();
+                await sharedConnection.DisposeAsync().ConfigureAwait(false);
                 sharedConnection = null;
             }
         }

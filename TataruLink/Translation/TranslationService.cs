@@ -142,7 +142,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                         text, 
                         sourceLanguage, 
                         targetLanguage, 
-                        cts.Token);
+                        cts.Token).ConfigureAwait(false);
 
                     if (response.Success)
                     {
@@ -180,7 +180,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     retryCount++;
                     // Wait before retry with exponential backoff
                     // This is outside the `cts` scope, so use the original token
-                    await Task.Delay(TimeSpan.FromMilliseconds(500 * Math.Pow(2, retryCount - 1)), cancellationToken);
+                    await Task.Delay(TimeSpan.FromMilliseconds(500 * Math.Pow(2, retryCount - 1)), cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -377,7 +377,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public async ValueTask DisposeAsync()
     {
-        await providerLock.WaitAsync();
+        await providerLock.WaitAsync().ConfigureAwait(false);
         try
         {
             // Dispose providers if they implement IAsyncDisposable or IDisposable
@@ -388,7 +388,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     switch (provider)
                     {
                         case IAsyncDisposable asyncDisposable:
-                            await asyncDisposable.DisposeAsync();
+                            await asyncDisposable.DisposeAsync().ConfigureAwait(false);
                             break;
                         case IDisposable disposable:
                             disposable.Dispose();

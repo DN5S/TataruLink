@@ -70,7 +70,7 @@ public class GoogleTranslateProvider : ITranslationProvider
                 Uri.EscapeDataString(text));
 
             // Make the HTTP request
-            var response = await HttpClient.GetAsync(url, cancellationToken);
+            var response = await HttpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -83,7 +83,7 @@ public class GoogleTranslateProvider : ITranslationProvider
             }
 
             // Parse the response
-            var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
+            var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var (translatedText, detectedLanguage) = ParseGoogleResponse(jsonResponse);
             
             stopwatch.Stop();
@@ -142,7 +142,7 @@ public class GoogleTranslateProvider : ITranslationProvider
         CancellationToken cancellationToken = default)
     {
         // Use the translation API with source="auto" and parse the detected language
-        var response = await TranslateAsync(text, "auto", "en", cancellationToken);
+        var response = await TranslateAsync(text, "auto", "en", cancellationToken).ConfigureAwait(false);
         return response.DetectedSourceLanguage;
     }
 

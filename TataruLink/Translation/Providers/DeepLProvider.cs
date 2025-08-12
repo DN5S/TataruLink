@@ -101,7 +101,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable, IAsyncDisposable
                 sourceLang,  // null for auto-detection
                 targetLang,
                 options,
-                cancellationToken);
+                cancellationToken).ConfigureAwait(false);
             
             stopwatch.Stop();
 
@@ -186,7 +186,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable, IAsyncDisposable
                 text,
                 null,  // Auto-detect source
                 "EN-US",
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken).ConfigureAwait(false);
             
             return result.DetectedSourceLanguageCode.ToLowerInvariant();
         }
