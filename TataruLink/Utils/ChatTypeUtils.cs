@@ -55,12 +55,12 @@ public static class ChatTypeUtils
     // Additional chat types that are translatable (numeric values)
     private static readonly HashSet<ushort> AdditionalTranslatableChannels =
     [
-        ChatType.CrossParty,  // 32
-        ChatType.GmTell, ChatType.GmSay, ChatType.GmShout, ChatType.GmYell,  // 80-83
-        ChatType.GmParty, ChatType.GmFreeCompany,  // 84-85
-        ChatType.GmLs1, ChatType.GmLs2, ChatType.GmLs3, ChatType.GmLs4,  // 86-89
-        ChatType.GmLs5, ChatType.GmLs6, ChatType.GmLs7, ChatType.GmLs8,  // 90-93
-        ChatType.GmNoviceNetwork  // 94
+        ChatType.CrossParty,                                                    // 32
+        ChatType.GmTell, ChatType.GmSay, ChatType.GmShout, ChatType.GmYell,     // 80-83
+        ChatType.GmParty, ChatType.GmFreeCompany,                               // 84-85
+        ChatType.GmLs1, ChatType.GmLs2, ChatType.GmLs3, ChatType.GmLs4,         // 86-89
+        ChatType.GmLs5, ChatType.GmLs6, ChatType.GmLs7, ChatType.GmLs8,         // 90-93
+        ChatType.GmNoviceNetwork                                                // 94
     ];
     
     private static readonly HashSet<XivChatType> NpcChannels =
@@ -87,27 +87,11 @@ public static class ChatTypeUtils
         ChatType.Alarm,           // 55
         ChatType.Echo,            // 56
         ChatType.System,          // 57
-        ChatType.BattleSystem,    // 58
         ChatType.GatheringSystem, // 59
         ChatType.Error,           // 60
         ChatType.NpcDialogue,     // 61
         ChatType.NpcAnnouncement, // 68
         ChatType.RetainerSale     // 71
-    ];
-    
-    // Battle types (numeric values only)
-    private static readonly HashSet<ushort> BattleChannels =
-    [
-        ChatType.Damage,       // 41
-        ChatType.Miss,         // 42
-        ChatType.Action,       // 43
-        ChatType.Item,         // 44
-        ChatType.Healing,      // 45
-        ChatType.GainBuff,     // 46
-        ChatType.GainDebuff,   // 47
-        ChatType.LoseBuff,     // 48
-        ChatType.LoseDebuff,   // 49
-        ChatType.BattleSystem  // 58
     ];
     
     /// <summary>
@@ -183,8 +167,6 @@ public static class ChatTypeUtils
             ChatType.System, ChatType.GatheringSystem, ChatType.Error, ChatType.RetainerSale
         ];
         
-        public static readonly ushort[] Battle = BattleChannels.ToArray();
-        
         public static readonly ushort[] Gm = Enumerable.Range(80, 15).Select(i => (ushort)i).ToArray();
     }
     
@@ -248,7 +230,7 @@ public static class ChatTypeUtils
                or 80;  // ChatType.GmTell
     
     public static bool IsBattle(ushort typeValue)
-        => BattleChannels.Contains(typeValue);
+        => false;  // Battle types are obsolete and not used for translation
     
     public static bool IsGm(ushort typeValue)
         => typeValue is >= 80 and <= 94;  // ChatType.GmTell to ChatType.GmNoviceNetwork
@@ -291,18 +273,14 @@ public static class ChatTypeUtils
             ChatType.GmParty => (ushort)XivChatType.Party,
             ChatType.GmFreeCompany => (ushort)XivChatType.FreeCompany,
             ChatType.GmLs1 => (ushort)XivChatType.Ls1,
-            87 => (ushort)XivChatType.Ls2,
-            88 => (ushort)XivChatType.Ls3,
-            89 => (ushort)XivChatType.Ls4,
-            90 => (ushort)XivChatType.Ls5,
-            91 => (ushort)XivChatType.Ls6,
-            92 => (ushort)XivChatType.Ls7,
+            ChatType.GmLs2 => (ushort)XivChatType.Ls2,
+            ChatType.GmLs3 => (ushort)XivChatType.Ls3,
+            ChatType.GmLs4 => (ushort)XivChatType.Ls4,
+            ChatType.GmLs5 => (ushort)XivChatType.Ls5,
+            ChatType.GmLs6 => (ushort)XivChatType.Ls6,
+            ChatType.GmLs7 => (ushort)XivChatType.Ls7,
             ChatType.GmLs8 => (ushort)XivChatType.Ls8,
             ChatType.GmNoviceNetwork => (ushort)XivChatType.NoviceNetwork,
-            
-            // Battle buff/debuff types have parent relationships
-            ChatType.LoseBuff => ChatType.GainBuff,
-            ChatType.LoseDebuff => ChatType.GainDebuff,
             
             // System messages
             ChatType.Alarm or ChatType.RetainerSale => (ushort)XivChatType.SystemMessage,
@@ -371,10 +349,6 @@ public static class ChatTypeUtils
             >= ChatType.GmLs1 and <= ChatType.GmLs8 => $"GM-Linkshell{typeValue - ChatType.GmLs1 + 1}",
             ChatType.GmNoviceNetwork => "GM-Novice Network",
             
-            // Battle types
-            >= ChatType.Damage and <= ChatType.LoseDebuff => "Battle",
-            ChatType.BattleSystem => "Battle",
-            
             // System types
             ChatType.Debug => "Debug",
             ChatType.Urgent => "Urgent",
@@ -407,7 +381,6 @@ public static class ChatTypeUtils
     public static ChatCategory GetCategory(ushort typeValue)
     {
         if (IsGm(typeValue)) return ChatCategory.Gm;
-        if (IsBattle(typeValue)) return ChatCategory.Battle;
         
         // Try standard XivChatType
         if (Enum.IsDefined(typeof(XivChatType), typeValue))
@@ -430,7 +403,7 @@ public static class ChatTypeUtils
         var types = new HashSet<ushort>();
         
         // Add all XivChatType values that are translatable
-        foreach (XivChatType type in Enum.GetValues<XivChatType>())
+        foreach (var type in Enum.GetValues<XivChatType>())
         {
             if (IsTranslatable(type))
             {

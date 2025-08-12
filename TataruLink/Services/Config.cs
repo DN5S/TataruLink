@@ -13,11 +13,11 @@ namespace TataruLink.Services;
 public class Config : IDisposable
 {
     private readonly IDalamudPluginInterface pluginInterface;
-    private readonly Lock saveLock = new();
+    private readonly SemaphoreSlim saveLock = new(1, 1);
     private CancellationTokenSource? saveDebounceTokenSource;
     private bool isDirty;
     
-    private const int SaveDebounceDelayMs = 500; // Wait 500ms after the last change before saving
+    private const int SaveDebounceDelayMs = 500; // Wait 500 ms after the last change before saving
     
     /// <summary>
     /// The current configuration data
@@ -34,7 +34,7 @@ public class Config : IDisposable
     }
     
     /// <summary>
-    /// Load configuration from file or create new if it doesn't exist
+    /// Load configuration from a file or create new if it doesn't exist
     /// </summary>
     public static Config Load(IDalamudPluginInterface pluginInterface)
     {
@@ -57,7 +57,8 @@ public class Config : IDisposable
     /// </summary>
     public void Save()
     {
-        lock (saveLock)
+        saveLock.Wait();
+        try
         {
             isDirty = true;
             
@@ -77,6 +78,10 @@ public class Config : IDisposable
                 }
             }, TaskScheduler.Default);
         }
+        finally
+        {
+            saveLock.Release();
+        }
     }
     
     /// <summary>
@@ -85,7 +90,8 @@ public class Config : IDisposable
     /// </summary>
     public void SaveImmediately()
     {
-        lock (saveLock)
+        saveLock.Wait();
+        try
         {
             if (!isDirty) return;
             
@@ -105,6 +111,10 @@ public class Config : IDisposable
             saveDebounceTokenSource?.Dispose();
             saveDebounceTokenSource = null;
         }
+        finally
+        {
+            saveLock.Release();
+        }
     }
     
     /// <summary>
@@ -115,7 +125,7 @@ public class Config : IDisposable
         // Keep API keys when resetting
         var apiKeys = Data.Translation.ApiKeys;
         
-        // Create new configuration with defaults
+        // Create a new configuration with defaults
         Data = new TataruConfig
         {
             Translation = new TranslationConfig { ApiKeys = apiKeys }
@@ -132,8 +142,7 @@ public class Config : IDisposable
     {
         try
         {
-            var newData = pluginInterface.GetPluginConfig() as TataruConfig;
-            if (newData != null)
+            if (pluginInterface.GetPluginConfig() is TataruConfig newData)
             {
                 Data = newData;
                 isDirty = false;
@@ -153,5 +162,6 @@ public class Config : IDisposable
         
         saveDebounceTokenSource?.Cancel();
         saveDebounceTokenSource?.Dispose();
+        saveLock.Dispose();
     }
 }

@@ -15,7 +15,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 {
     private readonly Dictionary<string, ITranslationProvider> providers = new();
     private readonly Dictionary<string, TranslationProviderStatus> providerStatuses = new();
-    private readonly Lock providerLock = new();
+    private readonly SemaphoreSlim providerLock = new(1, 1);
     private ITranslationProvider? activeProvider;
 
     public bool IsConfigured => activeProvider?.IsConfigured ?? false;
@@ -54,7 +54,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
     private void SelectProvider(string providerName)
     {
-        lock (providerLock)
+        providerLock.Wait();
+        try
         {
             if (providers.TryGetValue(providerName, out var provider))
             {
@@ -91,6 +92,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     }
                 }
             }
+        }
+        finally
+        {
+            providerLock.Release();
         }
     }
 
@@ -225,7 +230,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         configuration.Translation.SetApiKey(providerName, apiKey);
         Service.Configuration.Save();
 
-        lock (providerLock)
+        providerLock.Wait();
+        try
         {
             // If this is the active provider, reinitialize it
             if (activeProvider?.Name == providerName)
@@ -239,6 +245,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 provider.Initialize(apiKey);
             }
         }
+        finally
+        {
+            providerLock.Release();
+        }
     }
 
     /// <summary>
@@ -246,7 +256,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     /// </summary>
     private void UpdateProviderStatus(string providerName, bool success, string? errorMessage = null, Exception? exception = null)
     {
-        lock (providerLock)
+        providerLock.Wait();
+        try
         {
             if (!providerStatuses.TryGetValue(providerName, out var status))
                 return;
@@ -285,6 +296,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 }
             }
         }
+        finally
+        {
+            providerLock.Release();
+        }
     }
     
     /// <summary>
@@ -292,9 +307,14 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     /// </summary>
     public TranslationProviderStatus? GetProviderStatus(string providerName)
     {
-        lock (providerLock)
+        providerLock.Wait();
+        try
         {
             return providerStatuses.GetValueOrDefault(providerName);
+        }
+        finally
+        {
+            providerLock.Release();
         }
     }
     
@@ -311,15 +331,21 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     /// </summary>
     public IReadOnlyDictionary<string, TranslationProviderStatus> GetAllProviderStatuses()
     {
-        lock (providerLock)
+        providerLock.Wait();
+        try
         {
             return new Dictionary<string, TranslationProviderStatus>(providerStatuses);
+        }
+        finally
+        {
+            providerLock.Release();
         }
     }
     
     public void Dispose()
     {
-        lock (providerLock)
+        providerLock.Wait();
+        try
         {
             // Dispose providers if they implement IDisposable
             foreach (var provider in providers.Values)
@@ -340,7 +366,12 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             providers.Clear();
             activeProvider = null;
         }
+        finally
+        {
+            providerLock.Release();
+        }
         
+        providerLock?.Dispose();
         Service.PluginLog.Information("Translation service disposed");
     }
 }

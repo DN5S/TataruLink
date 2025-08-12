@@ -15,7 +15,7 @@ namespace TataruLink.Pipeline;
 public class MessagePipeline : IDisposable
 {
     private readonly List<IPipelineStage> stages = [];
-    private readonly Lock @lock = new();
+    private readonly SemaphoreSlim @lock = new(1, 1);
     private bool isInitialized;
 
     /// <summary>
@@ -23,7 +23,8 @@ public class MessagePipeline : IDisposable
     /// </summary>
     public MessagePipeline AddStage(IPipelineStage stage)
     {
-        lock (@lock)
+        @lock.Wait();
+        try
         {
             stages.Add(stage);
             if (isInitialized)
@@ -33,6 +34,10 @@ public class MessagePipeline : IDisposable
             
             Service.PluginLog.Information($"Added pipeline stage: {stage.Name}");
         }
+        finally
+        {
+            @lock.Release();
+        }
         return this;
     }
 
@@ -41,13 +46,18 @@ public class MessagePipeline : IDisposable
     /// </summary>
     public MessagePipeline RemoveStage(IPipelineStage stage)
     {
-        lock (@lock)
+        @lock.Wait();
+        try
         {
             if (stages.Remove(stage))
             {
                 stage.Dispose();
                 Service.PluginLog.Information($"Removed pipeline stage: {stage.Name}");
             }
+        }
+        finally
+        {
+            @lock.Release();
         }
         return this;
     }
@@ -57,7 +67,8 @@ public class MessagePipeline : IDisposable
     /// </summary>
     public void Initialize()
     {
-        lock (@lock)
+        @lock.Wait();
+        try
         {
             if (isInitialized) return;
             
@@ -76,6 +87,10 @@ public class MessagePipeline : IDisposable
             
             isInitialized = true;
             Service.PluginLog.Information($"Pipeline initialized with {stages.Count} stages");
+        }
+        finally
+        {
+            @lock.Release();
         }
     }
 
@@ -145,7 +160,7 @@ public class MessagePipeline : IDisposable
     public string GetPipelineInfo()
     {
         var info = new List<string> { "Pipeline Stages:" };
-        for (int i = 0; i < stages.Count; i++)
+        for (var i = 0; i < stages.Count; i++)
         {
             var stage = stages[i];
             var status = stage.IsEnabled ? "✓" : "✗";
@@ -159,7 +174,8 @@ public class MessagePipeline : IDisposable
     /// </summary>
     public void Clear()
     {
-        lock (@lock)
+        @lock.Wait();
+        try
         {
             foreach (var stage in stages)
             {
@@ -168,11 +184,16 @@ public class MessagePipeline : IDisposable
             stages.Clear();
             Service.PluginLog.Information("Pipeline cleared");
         }
+        finally
+        {
+            @lock.Release();
+        }
     }
 
     public void Dispose()
     {
         Clear();
         isInitialized = false;
+        @lock.Dispose();
     }
 }

@@ -7,6 +7,7 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Models;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows;
 
@@ -18,7 +19,7 @@ public class TranslationOverlay : Window, IDisposable
 {
     private readonly OverlayWindowConfig config;
     private readonly List<OverlayMessage> messages = new();
-    private readonly Lock messageLock = new();
+    private readonly SemaphoreSlim messageLock = new(1, 1);
     private bool autoScroll;
     
     public Guid WindowId => config.Id;
@@ -180,12 +181,17 @@ public class TranslationOverlay : Window, IDisposable
         var availableHeight = ImGui.GetContentRegionAvail().Y;
         using var child = ImRaii.Child("MessageArea"u8, new Vector2(0, availableHeight), false, childFlags);
         if (!child) return;
-        lock (messageLock)
+        messageLock.Wait();
+        try
         {
             foreach (var message in messages)
             {
                 DrawMessage(message);
             }
+        }
+        finally
+        {
+            messageLock.Release();
         }
             
         // Auto-scroll
@@ -198,10 +204,15 @@ public class TranslationOverlay : Window, IDisposable
     private void DrawMessage(OverlayMessage message)
     {
         // Check if this chat type should be displayed
-        if (config.EnabledChatTypes.Count > 0 && 
-            !config.EnabledChatTypes.Contains(message.ChatTypeValue))
+        if (config.EnabledChatTypes.Count > 0)
         {
-            return;
+            // Check both the exact type and parent type (for GM messages)
+            var parentType = ChatTypeUtils.GetParentType(message.ChatTypeValue);
+            if (!config.EnabledChatTypes.Contains(message.ChatTypeValue) &&
+                !config.EnabledChatTypes.Contains(parentType))
+            {
+                return;
+            }
         }
         
         // Get color for this chat type
@@ -260,6 +271,11 @@ public class TranslationOverlay : Window, IDisposable
         if (config.ChatTypeColors.TryGetValue(chatType, out var color))
             return color;
         
+        // For GM types, use the parent type's color
+        var parentType = ChatTypeUtils.GetParentType(chatType);
+        if (parentType != chatType && config.ChatTypeColors.TryGetValue(parentType, out color))
+            return color;
+        
         // Return default color for unknown types
         return config.ChatTypeColors.GetValueOrDefault((ushort)0, new Vector4(0.8f, 0.8f, 0.8f, 1.0f));
     }
@@ -273,10 +289,15 @@ public class TranslationOverlay : Window, IDisposable
         var chatTypeValue = message.ChatType;
         
         // Check if this chat type should be displayed
-        if (config.EnabledChatTypes.Count > 0 && 
-            !config.EnabledChatTypes.Contains(chatTypeValue))
+        if (config.EnabledChatTypes.Count > 0)
         {
-            return;
+            // Check both the exact type and parent type (for GM messages)
+            var parentType = ChatTypeUtils.GetParentType(chatTypeValue);
+            if (!config.EnabledChatTypes.Contains(chatTypeValue) &&
+                !config.EnabledChatTypes.Contains(parentType))
+            {
+                return;
+            }
         }
         
         var overlayMessage = new OverlayMessage
@@ -289,7 +310,8 @@ public class TranslationOverlay : Window, IDisposable
             TranslatedText = message.TranslatedContent
         };
         
-        lock (messageLock)
+        messageLock.Wait();
+        try
         {
             messages.Add(overlayMessage);
             
@@ -298,6 +320,10 @@ public class TranslationOverlay : Window, IDisposable
             {
                 messages.RemoveAt(0);
             }
+        }
+        finally
+        {
+            messageLock.Release();
         }
         
         // Enable auto-scroll for new messages
@@ -309,9 +335,14 @@ public class TranslationOverlay : Window, IDisposable
     
     public void ClearMessages()
     {
-        lock (messageLock)
+        messageLock.Wait();
+        try
         {
             messages.Clear();
+        }
+        finally
+        {
+            messageLock.Release();
         }
     }
     
@@ -326,6 +357,7 @@ public class TranslationOverlay : Window, IDisposable
         // Save the final position and size
         config.Position = Position;
         config.Size = Size;
+        messageLock.Dispose();
     }
     
     private class OverlayMessage

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using TataruLink.Utils;
 
 namespace TataruLink.Configuration;
 
@@ -30,7 +31,18 @@ public class ChatConfig
     /// </summary>
     public bool IsChatTypeEnabled(ushort chatTypeId)
     {
-        return EnabledChatTypes.GetValueOrDefault(chatTypeId, false);
+        // First check if the exact type is enabled
+        if (EnabledChatTypes.GetValueOrDefault(chatTypeId, false))
+            return true;
+            
+        // For GM types, check if the parent type is enabled
+        var parentType = ChatTypeUtils.GetParentType(chatTypeId);
+        if (parentType != chatTypeId)
+        {
+            return EnabledChatTypes.GetValueOrDefault(parentType, false);
+        }
+        
+        return false;
     }
     
     /// <summary>
@@ -46,7 +58,21 @@ public class ChatConfig
     /// </summary>
     public string? GetProviderForChatType(ushort chatTypeId)
     {
-        return ChatTypeProviders.GetValueOrDefault(chatTypeId) ?? DefaultProvider;
+        // First check if there's a specific provider for this exact type
+        var provider = ChatTypeProviders.GetValueOrDefault(chatTypeId);
+        if (provider != null)
+            return provider;
+            
+        // For GM types, check if the parent type has a provider
+        var parentType = ChatTypeUtils.GetParentType(chatTypeId);
+        if (parentType != chatTypeId)
+        {
+            provider = ChatTypeProviders.GetValueOrDefault(parentType);
+            if (provider != null)
+                return provider;
+        }
+        
+        return DefaultProvider;
     }
     
     /// <summary>

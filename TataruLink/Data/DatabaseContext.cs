@@ -18,7 +18,7 @@ public class DatabaseContext : IDisposable
     private readonly CacheConfig config;
     private readonly SemaphoreSlim connectionSemaphore;
     private SqliteConnection? sharedConnection;
-    private readonly object connectionLock = new();
+    private readonly SemaphoreSlim connectionLock = new(1, 1);
     private bool isDisposed;
 
     public DatabaseContext(IDalamudPluginInterface pluginInterface, CacheConfig config)
@@ -39,7 +39,7 @@ public class DatabaseContext : IDisposable
         
         connectionString = builder.ConnectionString;
         
-        // Use a semaphore to limit concurrent database access
+        // Use semaphore to limit concurrent database access
         // SQLite can handle multiple readers but only one writer
         connectionSemaphore = new SemaphoreSlim(1, 1);
     }
@@ -54,7 +54,8 @@ public class DatabaseContext : IDisposable
         
         try
         {
-            lock (connectionLock)
+            connectionLock.Wait(cancellationToken);
+            try
             {
                 if (sharedConnection == null || sharedConnection.State != System.Data.ConnectionState.Open)
                 {
@@ -64,13 +65,17 @@ public class DatabaseContext : IDisposable
                     
                     if (config.EnableWal)
                     {
-                        using var cmd = sharedConnection.CreateCommand();
+                        await using var cmd = sharedConnection.CreateCommand();
                         cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;";
                         cmd.ExecuteNonQuery();
                     }
                 }
                 
                 return sharedConnection;
+            }
+            finally
+            {
+                connectionLock.Release();
             }
         }
         catch
@@ -197,12 +202,18 @@ public class DatabaseContext : IDisposable
     {
         if (isDisposed) return;
         
-        lock (connectionLock)
+        connectionLock.Wait();
+        try
         {
             sharedConnection?.Dispose();
             sharedConnection = null;
         }
+        finally
+        {
+            connectionLock.Release();
+        }
         
+        connectionLock.Dispose();
         connectionSemaphore.Dispose();
         isDisposed = true;
     }

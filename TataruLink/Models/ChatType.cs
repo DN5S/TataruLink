@@ -1,3 +1,5 @@
+using System;
+
 namespace TataruLink.Models;
 
 /// <summary>
@@ -23,15 +25,25 @@ public static class ChatType
     public const ushort GmNoviceNetwork = 94;
     
     // Battle Types (41-49, 58)
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort Damage = 41;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort Miss = 42;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort Action = 43;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort Item = 44;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort Healing = 45;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort GainBuff = 46;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort GainDebuff = 47;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort LoseBuff = 48;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort LoseDebuff = 49;
+    [Obsolete("Battle chat types are not typically used for translation")]
     public const ushort BattleSystem = 58;
     
     // Cross-world Types  

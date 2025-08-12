@@ -216,7 +216,7 @@ public class ChatTypesTab(TataruConfig configuration)
                 ImGui.SetTooltip("Disable: NPC dialogue"u8);
             }
             
-            // Row 5: Emotes and Battle
+            // Row 5: Emotes and GM Messages
             ImGui.TableNextColumn();
             if (ImGui.Button("Emotes"u8))
             {
@@ -237,27 +237,6 @@ public class ChatTypesTab(TataruConfig configuration)
                 ImGui.SetTooltip("Disable: Emote messages"u8);
             }
             
-            ImGui.TableNextColumn();
-            if (ImGui.Button("Battle"u8))
-            {
-                TogglePreset(ChatTypeUtils.Presets.Battle, true);
-            }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Enable: Battle messages (damage, healing, buffs/debuffs)"u8);
-            }
-            
-            ImGui.TableNextColumn();
-            if (ImGui.Button("[X] Battle"u8))
-            {
-                TogglePreset(ChatTypeUtils.Presets.Battle, false);
-            }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Disable: Battle messages"u8);
-            }
-            
-            // Row 6: GM Messages (only 2 buttons)
             ImGui.TableNextColumn();
             if (ImGui.Button("GM Messages"u8))
             {
@@ -399,14 +378,7 @@ public class ChatTypesTab(TataruConfig configuration)
                 if (ImGui.Selectable(provider, isSelected))
                 {
                     // Update the configuration
-                    if (provider == "None")
-                    {
-                        configuration.Chat.DefaultProvider = null;
-                    }
-                    else
-                    {
-                        configuration.Chat.DefaultProvider = provider;
-                    }
+                    configuration.Chat.DefaultProvider = provider == "None" ? null : provider;
                     
                     Service.Configuration.Save();
                     
@@ -425,7 +397,7 @@ public class ChatTypesTab(TataruConfig configuration)
         ImGui.Spacing();
         ImGui.TextWrapped("Note: Individual chat type provider settings override the default provider."u8);
         
-        // Show current active provider for debugging
+        // Show the current active provider for debugging
         if (configuration.DebugMode)
         {
             ImGui.TextDisabled($"Debug: Stored value = {configuration.Chat.DefaultProvider ?? "null"}");
