@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Services;
@@ -9,6 +10,7 @@ namespace TataruLink.UI.Windows.Tabs;
 public class FiltersTab(TataruConfig configuration)
 {
     private string newKeyword = string.Empty;
+    private string searchFilter = string.Empty;
     private string? keywordToRemove;
 
     public void Draw()
@@ -17,99 +19,145 @@ public class FiltersTab(TataruConfig configuration)
         ImGui.Separator();
         
         // Keyword Filter Section
-        ImGui.TextUnformatted("Keyword Filtering"u8);
-        ImGui.Separator();
-        
-        // Enable/Disable keyword filtering
-        var enableKeywordFilter = configuration.Filter.EnableKeywordFilter;
-        if (ImGui.Checkbox("Enable Keyword Filter"u8, ref enableKeywordFilter))
+        if (ImGui.CollapsingHeader("Keyword Filtering"u8, ImGuiTreeNodeFlags.DefaultOpen))
         {
-            configuration.Filter.EnableKeywordFilter = enableKeywordFilter;
-            Service.Configuration.Save();
-            Service.PluginLog.Information($"Keyword filter {(enableKeywordFilter ? "enabled" : "disabled")}");
-        }
-        
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("When enabled, messages containing blocked keywords or from blocked senders will not be translated."u8);
-        }
-        
-        if (!enableKeywordFilter)
-        {
-            ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-        }
-        
-        ImGui.Spacing();
-        
-        // Add a new keyword section
-        ImGui.TextUnformatted("Add Keyword or Character Name:"u8);
-        ImGui.SetNextItemWidth(300);
-        ImGui.InputText("##NewKeyword"u8, ref newKeyword, 100);
-        
-        ImGui.SameLine();
-        if (ImGui.Button("Add"u8) && !string.IsNullOrWhiteSpace(newKeyword))
-        {
-            var trimmedKeyword = newKeyword.Trim();
-            if (configuration.Filter.KeywordBlocklist.Add(trimmedKeyword))
+            // Enable/Disable keyword filtering
+            var enableKeywordFilter = configuration.Filter.EnableKeywordFilter;
+            if (ImGui.Checkbox("Enable Keyword Filter"u8, ref enableKeywordFilter))
             {
+                configuration.Filter.EnableKeywordFilter = enableKeywordFilter;
                 Service.Configuration.Save();
-                Service.PluginLog.Information($"Added keyword to blocklist: {trimmedKeyword}");
-                newKeyword = string.Empty;
             }
-        }
-        
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
-        
-        // Display the current blocklist
-        ImGui.TextUnformatted($"Blocked Keywords ({configuration.Filter.KeywordBlocklist.Count}):");
-        
-        if (configuration.Filter.KeywordBlocklist.Count == 0)
-        {
-            ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f), "No keywords in blocklist"u8);
-        }
-        else
-        {
-            // Create a table for better organization
-            if (ImGui.BeginTable("KeywordTable"u8, 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("When enabled, messages containing blocked keywords or from blocked senders will not be translated."u8);
+            }
+            
+            ImGui.Separator();
+            
+            // Add a new keyword section
+            ImGui.TextUnformatted("Add Keyword"u8);
+            ImGui.Spacing();
+            
+            ImGui.SetNextItemWidth(-100);
+            ImGui.InputText("##NewKeyword"u8, ref newKeyword, 100);
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Enter a keyword to block"u8);
+            }
+            
+            ImGui.SameLine();
+            var canAdd = !string.IsNullOrWhiteSpace(newKeyword);
+            if (!canAdd) ImGui.BeginDisabled();
+            if (ImGui.Button("Add Entry"u8, new Vector2(-1, 0)))
+            {
+                var trimmedKeyword = newKeyword.Trim();
+                if (configuration.Filter.KeywordBlocklist.Add(trimmedKeyword))
+                {
+                    Service.Configuration.Save();
+                    Service.PluginLog.Information($"Added keyword to blocklist: {trimmedKeyword}");
+                    newKeyword = string.Empty;
+                    searchFilter = string.Empty; // Clear search when adding
+                }
+            }
+            if (!canAdd) ImGui.EndDisabled();
+            
+            ImGui.Separator();
+            
+            // Search filter
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputText("Search"u8, ref searchFilter, 100);
+            ImGui.SameLine();
+            if (ImGui.Button("Clear"u8))
+            {
+                searchFilter = string.Empty;
+            }
+            
+            // Quick actions
+            ImGui.SameLine();
+            ImGui.Dummy(new Vector2(20, 0));
+            ImGui.SameLine();
+            
+            if (ImGui.Button("Remove All"u8))
+            {
+                ImGui.OpenPopup("ConfirmRemoveAllKeywords"u8);
+            }
+            
+            // Confirmation popup for Remove All
+            if (ImGui.BeginPopupModal("ConfirmRemoveAllKeywords"u8, ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                ImGui.TextUnformatted("Are you sure you want to remove all keywords?"u8);
+                ImGui.TextUnformatted("This action cannot be undone."u8);
+                ImGui.Separator();
+                
+                if (ImGui.Button("Yes, Remove All"u8, new Vector2(120, 0)))
+                {
+                    configuration.Filter.KeywordBlocklist.Clear();
+                    Service.Configuration.Save();
+                    ImGui.CloseCurrentPopup();
+                }
+                
+                ImGui.SameLine();
+                
+                if (ImGui.Button("Cancel"u8, new Vector2(120, 0)))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+                
+                ImGui.EndPopup();
+            }
+            
+            ImGui.Separator();
+            
+            // Keywords table
+            ImGui.TextUnformatted($"Blocked Keywords ({configuration.Filter.KeywordBlocklist.Count})");
+            
+            if (ImGui.BeginTable("KeywordTable"u8, 2,
+                ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable |
+                ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp,
+                new Vector2(0, 300)))
             {
                 ImGui.TableSetupColumn("Keyword"u8, ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableSetupColumn("Actions"u8, ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
                 
-                foreach (var keyword in configuration.Filter.KeywordBlocklist.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+                // Filter keywords
+                var filteredKeywords = string.IsNullOrWhiteSpace(searchFilter)
+                    ? configuration.Filter.KeywordBlocklist.ToList()
+                    : configuration.Filter.KeywordBlocklist
+                        .Where(k => k.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                
+                foreach (var keyword in filteredKeywords.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
                 {
+                    ImGui.PushID(keyword.GetHashCode());
                     ImGui.TableNextRow();
                     
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(keyword);
                     
                     ImGui.TableNextColumn();
-                    ImGui.PushID(keyword);
-                    if (ImGui.SmallButton("Remove"u8))
+                    if (ImGui.Button("Delete"u8))
                     {
                         keywordToRemove = keyword;
                     }
+                    
                     ImGui.PopID();
                 }
                 
                 ImGui.EndTable();
+                
+                // Remove keyword after iteration to avoid collection modification
+                if (keywordToRemove != null)
+                {
+                    configuration.Filter.KeywordBlocklist.Remove(keywordToRemove);
+                    Service.Configuration.Save();
+                    Service.PluginLog.Information($"Removed keyword from blocklist: {keywordToRemove}");
+                    keywordToRemove = null;
+                }
             }
-            
-            // Remove keyword after iteration to avoid collection modification
-            if (keywordToRemove != null)
-            {
-                configuration.Filter.KeywordBlocklist.Remove(keywordToRemove);
-                Service.Configuration.Save();
-                Service.PluginLog.Information($"Removed keyword from blocklist: {keywordToRemove}");
-                keywordToRemove = null;
-            }
-        }
-        
-        if (!enableKeywordFilter)
-        {
-            ImGui.PopStyleVar();
         }
         
         ImGui.Spacing();
@@ -119,7 +167,7 @@ public class FiltersTab(TataruConfig configuration)
         // Game State Filters Section
         ImGui.TextUnformatted("Game State Filters"u8);
         ImGui.Separator();
-        ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), 
+        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), 
             "Skip translation during certain game states to improve performance"u8);
         ImGui.Spacing();
         
@@ -166,8 +214,28 @@ public class FiltersTab(TataruConfig configuration)
         ImGui.Separator();
         ImGui.Spacing();
         
+        // Validation Settings Section
+        ImGui.TextUnformatted("Validation Settings"u8);
+        ImGui.Separator();
+        
+        // Duplicate detection period
+        var dupePeriod = configuration.Validation.DuplicateDetectionPeriodMs;
+        if (ImGui.SliderInt("Duplicate Detection Period (ms)"u8, ref dupePeriod, 100, 5000))
+        {
+            configuration.Validation.DuplicateDetectionPeriodMs = dupePeriod;
+            Service.Configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Messages identical to recent ones within this time period will not be translated again."u8);
+        }
+        
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        
         // Help text
-        ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Tips:"u8);
+        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Tips:"u8);
         ImGui.BulletText("Add your character name to block your own messages from being translated"u8);
         ImGui.BulletText("Keywords are case-insensitive"u8);
         ImGui.BulletText("Messages are blocked if they contain the keyword or if the sender matches"u8);

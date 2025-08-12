@@ -1,4 +1,7 @@
+using System.Linq;
+using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.DtrBar;
 using TataruLink.Services;
@@ -10,46 +13,166 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
 {
     public void Draw()
     {
-        var enabled = configuration.IsEnabled;
-        if (ImGui.Checkbox("Enable TataruLink"u8, ref enabled))
+        // Quick Controls Section
+        using (var table = ImRaii.Table("QuickControls"u8, 2, ImGuiTableFlags.SizingStretchProp))
         {
-            configuration.IsEnabled = enabled;
-            Service.Configuration.Save();
+            if (table)
+            {
+                ImGui.TableNextColumn();
+                
+                // Main Enable/Disable
+                var enabled = configuration.IsEnabled;
+                if (ImGui.Checkbox("Enable TataruLink"u8, ref enabled))
+                {
+                    configuration.IsEnabled = enabled;
+                    Service.Configuration.Save();
+                }
+                
+                // DTR Bar toggle
+                var showDtrBar = configuration.ShowDtrBar;
+                if (ImGui.Checkbox("Show DTR Bar"u8, ref showDtrBar))
+                {
+                    configuration.ShowDtrBar = showDtrBar;
+                    dtrBarManager?.SetVisible(showDtrBar);
+                    Service.Configuration.Save();
+                }
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)"u8);
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Shows translation count in server info bar"u8);
+                }
+                
+                ImGui.TableNextColumn();
+                
+                // Quick Actions
+                if (ImGui.Button("Open Translation History"u8))
+                {
+                    Service.CommandManager.ProcessCommand("/tataruhistory");
+                }
+            }
         }
         
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        
+        // Status Overview Section
+        ImGui.TextUnformatted("System Status"u8);
         ImGui.Separator();
         
-        // DTR Bar visibility toggle
-        var showDtrBar = configuration.ShowDtrBar;
-        if (ImGui.Checkbox("Show DTR Bar"u8, ref showDtrBar))
+        using (var table = ImRaii.Table("StatusTable"u8, 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
         {
-            configuration.ShowDtrBar = showDtrBar;
-            dtrBarManager?.SetVisible(showDtrBar);
-            Service.Configuration.Save();
+            if (table)
+            {
+                ImGui.TableSetupColumn("Component"u8, ImGuiTableColumnFlags.WidthFixed, 150);
+                ImGui.TableSetupColumn("Status"u8);
+                
+                // Plugin Status
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Plugin"u8);
+                ImGui.TableNextColumn();
+                var pluginStatusColor = configuration.IsEnabled ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
+                ImGui.TextColored(pluginStatusColor, configuration.IsEnabled ? "Active"u8 : "Disabled"u8);
+                
+                // Translation Engine
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Translation Engine"u8);
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted($"{translationService.ProviderName}");
+                
+                // Engine Configuration
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Engine Configuration"u8);
+                ImGui.TableNextColumn();
+                var configuredColor = translationService.IsConfigured ? new Vector4(0, 1, 0, 1) : new Vector4(1, 1, 0, 1);
+                ImGui.TextColored(configuredColor, translationService.IsConfigured ? "Configured"u8 : "Not Configured"u8);
+                
+                // Translation Count
+                if (dtrBarManager != null)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted("Translations Today"u8);
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted($"{dtrBarManager.GetTranslationCount():N0}");
+                }
+                
+                // Chat Display
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Chat Display"u8);
+                ImGui.TableNextColumn();
+                var chatColor = configuration.Display.ShowInChat ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
+                ImGui.TextColored(chatColor, configuration.Display.ShowInChat ? "Enabled"u8 : "Disabled"u8);
+                
+                // Overlay Windows
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Overlay Windows"u8);
+                ImGui.TableNextColumn();
+                var activeOverlays = configuration.Display.GetActiveOverlays().Count();
+                var totalOverlays = configuration.Display.OverlayWindows.Count;
+                if (totalOverlays > 0)
+                {
+                    var overlayColor = activeOverlays > 0 ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
+                    ImGui.TextColored(overlayColor, $"{activeOverlays}/{totalOverlays} Active");
+                }
+                else
+                {
+                    ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1), "None Configured"u8);
+                }
+                
+                // Cache Status
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Translation Cache"u8);
+                ImGui.TableNextColumn();
+                var cacheColor = configuration.Performance.EnableCache ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
+                ImGui.TextColored(cacheColor, configuration.Performance.EnableCache ? "Enabled"u8 : "Disabled"u8);
+            }
         }
         
-        ImGui.SameLine();
-        ImGui.TextDisabled("(Shows translation status in server info bar)"u8);
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
         
+        // Configuration Summary
+        ImGui.TextUnformatted("Configuration Summary"u8);
         ImGui.Separator();
         
-        ImGui.TextUnformatted($"Status: {(configuration.IsEnabled ? "Active" : "Disabled")}");
-        ImGui.TextUnformatted($"Translation Engine: {translationService.ProviderName}");
-        ImGui.TextUnformatted($"Engine Status: {(translationService.IsConfigured ? "Configured" : "Not Configured")}");
+        // Languages
+        ImGui.TextUnformatted($"Languages: {configuration.Translation.SourceLanguage} -> {configuration.Translation.TargetLanguage}");
         
-        if (dtrBarManager != null)
-        {
-            ImGui.TextUnformatted($"Translations Count: {dtrBarManager.GetTranslationCount()}");
-        }
+        // Enabled Chat Types
+        var enabledChatTypes = configuration.Chat.GetEnabledChatTypes().Count();
+        ImGui.TextUnformatted($"Enabled Chat Types: {enabledChatTypes}");
         
+        // Filters
+        var filterCount = configuration.Filter.KeywordBlocklist.Count;
+        ImGui.TextUnformatted($"Keyword Filters: {filterCount}");
+        
+        // Performance
+        ImGui.TextUnformatted($"Translation Rate: {configuration.Performance.TranslationsPerSecond}/sec");
+        ImGui.TextUnformatted($"Max Queue Size: {configuration.Performance.MaxQueueSize}");
+        
+        ImGui.Spacing();
         ImGui.Separator();
+        ImGui.Spacing();
         
-        if (ImGui.Button("Open Translation History"u8))
+        // Tips
+        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "Tips:"u8);
+        ImGui.BulletText("Use /tatarulink to open settings"u8);
+        ImGui.BulletText("Use /tataruhistory to view translation history"u8);
+        ImGui.BulletText("Configure overlay windows for custom translation displays"u8);
+        
+        if (!translationService.IsConfigured)
         {
-            Service.CommandManager.ProcessCommand("/tataruhistory");
+            ImGui.Spacing();
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Note: Translation engine needs configuration. Go to Translation tab."u8);
         }
-        
-        ImGui.SameLine();
-        ImGui.TextDisabled("(or use /tataruhistory command)"u8);
     }
 }

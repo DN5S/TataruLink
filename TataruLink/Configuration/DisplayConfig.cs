@@ -10,8 +10,6 @@ public class DisplayConfig
     
     public List<OverlayWindowConfig> OverlayWindows { get; set; } = new();
     
-    public bool ShowTimestamp { get; set; } = true;
-    
     public bool ShowSenderName { get; set; } = true;
     
     public bool ShowChatType { get; set; }

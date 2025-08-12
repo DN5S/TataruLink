@@ -12,11 +12,21 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
 {
     public void Draw()
     {
+        // Debug Mode Section
+        ImGui.TextUnformatted("Debug Settings"u8);
+        ImGui.Separator();
+        
         var debugMode = configuration.DebugMode;
         if (ImGui.Checkbox("Enable Debug Mode"u8, ref debugMode))
         {
             configuration.DebugMode = debugMode;
             Service.Configuration.Save();
+        }
+        ImGui.SameLine();
+        ImGui.TextDisabled("(?)"u8);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Enables detailed logging and debug features"u8);
         }
         
         if (configuration.DebugMode)
@@ -41,6 +51,44 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             else
             {
                 ImGui.TextDisabled("  No API keys configured"u8);
+            }
+            
+            ImGui.Separator();
+            
+            // Performance Settings Section
+            ImGui.TextUnformatted("Performance Settings"u8);
+            ImGui.Separator();
+            
+            var enableCache = configuration.Performance.EnableCache;
+            if (ImGui.Checkbox("Enable Translation Cache"u8, ref enableCache))
+            {
+                configuration.Performance.EnableCache = enableCache;
+                Service.Configuration.Save();
+            }
+            
+            var translationsPerSecond = configuration.Performance.TranslationsPerSecond;
+            if (ImGui.SliderInt("Translations Per Second"u8, ref translationsPerSecond, 1, 20))
+            {
+                configuration.Performance.TranslationsPerSecond = translationsPerSecond;
+                Service.Configuration.Save();
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Rate limit to avoid overwhelming translation APIs"u8);
+            }
+            
+            var maxQueueSize = configuration.Performance.MaxQueueSize;
+            if (ImGui.SliderInt("Max Queue Size"u8, ref maxQueueSize, 100, 5000))
+            {
+                configuration.Performance.MaxQueueSize = maxQueueSize;
+                Service.Configuration.Save();
+            }
+            
+            var maxHistory = configuration.Performance.MaxMessageHistory;
+            if (ImGui.SliderInt("Max Message History"u8, ref maxHistory, 50, 2000))
+            {
+                configuration.Performance.MaxMessageHistory = maxHistory;
+                Service.Configuration.Save();
             }
             
             ImGui.Separator();

@@ -213,7 +213,7 @@ public class ChatTypesTab(TataruConfig configuration)
                 ImGui.SetTooltip("Disable: NPC dialogue"u8);
             }
             
-            // Row 5: Emotes and GM Messages
+            // Row 5: Emotes only
             ImGui.TableNextColumn();
             if (ImGui.Button("Emotes"u8))
             {
@@ -235,24 +235,8 @@ public class ChatTypesTab(TataruConfig configuration)
             }
             
             ImGui.TableNextColumn();
-            if (ImGui.Button("GM Messages"u8))
-            {
-                TogglePreset(ChatTypeUtils.Presets.Gm, true);
-            }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Enable: Game Master messages"u8);
-            }
-            
+            // Empty cells for alignment
             ImGui.TableNextColumn();
-            if (ImGui.Button("[X] GM"u8))
-            {
-                TogglePreset(ChatTypeUtils.Presets.Gm, false);
-            }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Disable: Game Master messages"u8);
-            }
             
             ImGui.EndTable();
         }

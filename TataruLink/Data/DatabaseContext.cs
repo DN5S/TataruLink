@@ -240,7 +240,7 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
             -- Chat history table
             CREATE TABLE IF NOT EXISTS ChatHistory (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                MessageId INTEGER NOT NULL UNIQUE,
+                MessageId TEXT NOT NULL UNIQUE,
                 Timestamp INTEGER NOT NULL,
                 ChatType INTEGER NOT NULL,
                 ChatTypeName TEXT,

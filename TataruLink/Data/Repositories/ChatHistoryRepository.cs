@@ -105,10 +105,10 @@ public class ChatHistoryRepository : IChatHistoryRepository
         }
     }
 
-    public async Task<ChatHistoryEntry?> GetByMessageIdAsync(long messageId, CancellationToken cancellationToken = default)
+    public async Task<ChatHistoryEntry?> GetByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default)
     {
-        if (messageId <= 0)
-            throw new ArgumentException("Message ID must be positive", nameof(messageId));
+        if (messageId == Guid.Empty)
+            throw new ArgumentException("Message ID must not be empty", nameof(messageId));
             
         var connection = await context.GetConnectionAsync(cancellationToken);
         try
@@ -190,8 +190,8 @@ public class ChatHistoryRepository : IChatHistoryRepository
         if (entry == null)
             throw new ArgumentNullException(nameof(entry));
             
-        if (entry.MessageId <= 0)
-            throw new ArgumentException("Message ID must be positive");
+        if (entry.MessageId == Guid.Empty)
+            throw new ArgumentException("Message ID must not be empty");
             
         if (string.IsNullOrWhiteSpace(entry.OriginalContent))
             throw new ArgumentException("Original content cannot be null or empty");

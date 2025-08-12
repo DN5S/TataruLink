@@ -124,7 +124,6 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                     };
                     
                     await dataService.SetCacheAsync(cacheEntryToSave);
-                    context.Set("translation.cache_id", cacheEntryToSave.Id);
                     Service.PluginLog.Debug($"Translation saved to cache: {cacheEntryToSave.Id}");
                 }
                 

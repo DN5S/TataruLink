@@ -23,7 +23,7 @@ public class TranslationCacheEntry
 public class ChatHistoryEntry
 {
     public long Id { get; set; }
-    public long MessageId { get; set; }
+    public Guid MessageId { get; set; }
     public long Timestamp { get; set; }
     public ushort ChatType { get; set; }
     public string? ChatTypeName { get; set; }
@@ -32,14 +32,6 @@ public class ChatHistoryEntry
     public string? TranslatedContent { get; set; }
     public string? TranslationCacheId { get; set; }
     public bool IsVisible { get; set; } = true;
-}
-
-public class UIColumnConfig
-{
-    public string ColumnName { get; set; } = string.Empty;
-    public bool IsVisible { get; set; } = true;
-    public int DisplayOrder { get; set; }
-    public float Width { get; set; }
 }
 
 public class CacheStatistics
