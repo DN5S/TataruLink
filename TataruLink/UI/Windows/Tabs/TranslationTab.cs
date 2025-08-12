@@ -17,9 +17,8 @@ public class TranslationTab
     private readonly ITranslationService translationService;
     
     private string tempApiKey = string.Empty;
-    private string tempGeminiModel = string.Empty;
     private GeminiProvider.ModelInfo[] geminiModels = [];
-    private bool isLoadingModels = false;
+    private bool isLoadingModels;
 
     public TranslationTab(TataruConfig configuration, ITranslationService translationService)
     {
@@ -32,7 +31,7 @@ public class TranslationTab
         // Load Gemini models if Gemini is selected
         if (configuration.Translation.Engine == "Gemini")
         {
-            LoadGeminiModels();
+            _ = LoadGeminiModelsAsync();
         }
     }
 
@@ -42,11 +41,10 @@ public class TranslationTab
         
         // Show the current provider status with detailed error information
         var status = translationService.GetActiveProviderStatus();
+        ImGui.SameLine();
         if (status != null)
         {
-            ImGui.SameLine();
-            
-            // Choose color based on status
+            // Choose a color based on status
             Vector4 statusColor;
             if (!status.IsConfigured)
                 statusColor = new Vector4(0.7f, 0.7f, 0.7f, 1);  // Gray
@@ -61,7 +59,7 @@ public class TranslationTab
             ImGui.SameLine();
             ImGui.TextColored(statusColor, status.GetStatusMessage());
             
-            // Show detailed error on hover if there's an error
+            // Show a detailed error on hover if there's an error
             if (status.LastError != null && ImGui.IsItemHovered())
             {
                 ImGui.BeginTooltip();
@@ -76,7 +74,6 @@ public class TranslationTab
         }
         else
         {
-            ImGui.SameLine();
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "[Status Unknown]");
         }
         
@@ -84,7 +81,7 @@ public class TranslationTab
         var providerTypes = Enum.GetValues<TranslationProviderType>();
         var providerNames = providerTypes.Select(p => p.ToString()).ToArray();
         
-        // Calculate index based on current configuration
+        // Calculate index based on the current configuration
         var currentEngine = configuration.Translation.Engine;
         var currentProviderType = Enum.TryParse<TranslationProviderType>(currentEngine, out var type) 
             ? type 
@@ -126,7 +123,7 @@ public class TranslationTab
                 ImGui.InputText("##ApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
                 
                 // Show inline validation status
-                if (status != null && status.LastError?.Type == TranslationErrorType.InvalidApiKey)
+                if (status is { LastError.Type: TranslationErrorType.InvalidApiKey })
                 {
                     ImGui.TextColored(new Vector4(1, 0, 0, 1), "Invalid API key. Please check and re-enter."u8);
                 }
@@ -255,7 +252,7 @@ public class TranslationTab
         {
             translationService.UpdateApiKey("Gemini", tempApiKey);
             Service.PluginLog.Information("Gemini API key saved and provider reinitialized");
-            LoadGeminiModels();
+            _ = LoadGeminiModelsAsync();
         }
         
         ImGui.SameLine();
@@ -283,9 +280,7 @@ public class TranslationTab
             
             var modelNames = geminiModels.Select(m => 
             {
-                var name = m.DisplayName;
-                if (m.IsRecommended) name += " (Recommended)";
-                return name;
+                return m.DisplayName;
             }).ToArray();
             
             if (ImGui.Combo("##GeminiModel"u8, ref selectedIndex, modelNames, modelNames.Length))
@@ -331,11 +326,11 @@ public class TranslationTab
         
         if (ImGui.Button("Refresh Models"u8))
         {
-            LoadGeminiModels();
+            _ = LoadGeminiModelsAsync();
         }
     }
     
-    private async void LoadGeminiModels()
+    private async Task LoadGeminiModelsAsync()
     {
         if (isLoadingModels) return;
         

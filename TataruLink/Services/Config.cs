@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin;
@@ -8,34 +11,58 @@ namespace TataruLink.Services;
 
 public class Config : IDisposable
 {
-    private readonly IDalamudPluginInterface pluginInterface;
     private readonly SemaphoreSlim saveLock = new(1, 1);
     private CancellationTokenSource? saveDebounceTokenSource;
     private bool isDirty;
+    private readonly string configFilePath;
     
     private const int SaveDebounceDelayMs = 500;
+    private const string ConfigFileName = "tatarulink.json";
+    
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new JsonStringEnumConverter() },
+        IncludeFields = false
+    };
     
     public TataruConfig Data { get; private set; }
     
-    private Config(IDalamudPluginInterface pluginInterface, TataruConfig data)
+    private Config(TataruConfig data, string configPath)
     {
-        this.pluginInterface = pluginInterface;
-        this.Data = data;
+        Data = data;
+        configFilePath = configPath;
     }
     
     public static Config Load(IDalamudPluginInterface pluginInterface)
     {
+        var configDir = pluginInterface.GetPluginConfigDirectory();
+        var configPath = Path.Combine(configDir, ConfigFileName);
+        
         try
         {
-            var data = pluginInterface.GetPluginConfig() as TataruConfig ?? new TataruConfig();
-            Service.PluginLog.Information($"Configuration loaded (Version {data.Version})");
+            TataruConfig data;
             
-            return new Config(pluginInterface, data);
+            // Try to load from custom location first
+            if (File.Exists(configPath))
+            {
+                var json = File.ReadAllText(configPath);
+                data = JsonSerializer.Deserialize<TataruConfig>(json, JsonOptions) ?? new TataruConfig();
+                Service.PluginLog.Information($"Configuration loaded from {configPath} (Version {data.Version})");
+            }
+            else
+            {
+                data = new TataruConfig();
+                Service.PluginLog.Information("Creating new configuration");
+            }
+            
+            return new Config(data, configPath);
         }
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Failed to load configuration, using defaults");
-            return new Config(pluginInterface, new TataruConfig());
+            return new Config(new TataruConfig(), configPath);
         }
     }
     
@@ -76,9 +103,17 @@ public class Config : IDisposable
             
             try
             {
-                pluginInterface.SavePluginConfig(Data);
+                // Ensure directory exists
+                var dir = Path.GetDirectoryName(configFilePath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+                
+                // Save to custom location
+                var json = JsonSerializer.Serialize(Data, JsonOptions);
+                File.WriteAllText(configFilePath, json);
+                
                 isDirty = false;
-                Service.PluginLog.Debug("Configuration saved to disk");
+                Service.PluginLog.Debug($"Configuration saved to {configFilePath}");
             }
             catch (Exception ex)
             {
@@ -102,9 +137,12 @@ public class Config : IDisposable
         
         Data = new TataruConfig
         {
-            Translation = new TranslationConfig { ApiKeys = apiKeys }
+            Translation =
+            {
+                ApiKeys = apiKeys
+            }
         };
-        
+
         Save();
         Service.PluginLog.Information("Configuration reset to defaults");
     }
@@ -113,11 +151,16 @@ public class Config : IDisposable
     {
         try
         {
-            if (pluginInterface.GetPluginConfig() is TataruConfig newData)
+            if (File.Exists(configFilePath))
             {
-                Data = newData;
-                isDirty = false;
-                Service.PluginLog.Information("Configuration reloaded from disk");
+                var json = File.ReadAllText(configFilePath);
+                var newData = JsonSerializer.Deserialize<TataruConfig>(json, JsonOptions);
+                if (newData != null)
+                {
+                    Data = newData;
+                    isDirty = false;
+                    Service.PluginLog.Information($"Configuration reloaded from {configFilePath}");
+                }
             }
         }
         catch (Exception ex)

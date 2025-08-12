@@ -22,7 +22,7 @@ public class ChatCaptureStage : IPipelineStage
     private bool isInitialized;
     
     // WARNING: Limits concurrent processing to prevent thread pool exhaustion
-    private const int MaxConcurrentProcessing = 3;
+    private const int MaxConcurrentProcessing = 1;
     private readonly SemaphoreSlim processingThrottle = new(MaxConcurrentProcessing);
 
     public string Name => "Chat Capture";
@@ -63,23 +63,23 @@ public class ChatCaptureStage : IPipelineStage
     {
         if (!IsEnabled || !configuration.IsEnabled) return;
 
+        var typeValue = (ushort)type;
+        if (!configuration.Chat.IsChatTypeEnabled(typeValue))
+        {
+            return;
+        }
+
         try
         {
             var chatMessage = new Message(
-                chatType: (ushort)type,
+                chatType: typeValue,
                 sender: sender,
                 content: message
             );
 
-            var channelName = chatMessage.GetChannelName();
-            if (channelName == "Unknown")
-            {
-                Service.PluginLog.Debug($"Unknown chat type captured: {(ushort)type:X4} ({(ushort)type}) - {type}");
-            }
-
             if (!messageChannel.Writer.TryWrite(chatMessage))
             {
-                Service.PluginLog.Warning($"Message queue full, dropping message from {channelName}");
+                Service.PluginLog.Warning($"Message queue full, dropping message from {chatMessage.GetChannelName()}");
             }
         }
         catch (Exception ex)

@@ -49,7 +49,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
     private void SelectProvider(string providerName)
     {
-        providerLock.Wait();
+        if (!providerLock.Wait(TimeSpan.FromSeconds(5)))
+        {
+            Service.PluginLog.Warning("Failed to acquire provider lock for SelectProvider");
+            return;
+        }
         try
         {
             if (providers.TryGetValue(providerName, out var provider))
@@ -153,8 +157,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     
                     if (retryCount >= maxRetries)
                     {
-                        var timeoutError = new TimeoutException($"Translation timed out after {configuration.Translation.TimeoutMs}ms");
-                        UpdateProviderStatus(activeProvider.Name, success: false, exception: timeoutError);
+                        UpdateProviderStatus(activeProvider.Name, success: false, 
+                            errorMessage: $"Translation timed out after {configuration.Translation.TimeoutMs}ms");
                     }
                 }
 
@@ -207,7 +211,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         configuration.Translation.SetApiKey(providerName, apiKey);
         Service.Configuration.Save();
 
-        providerLock.Wait();
+        if (!providerLock.Wait(TimeSpan.FromSeconds(5)))
+        {
+            Service.PluginLog.Warning("Failed to acquire provider lock for UpdateApiKey");
+            return;
+        }
         try
         {
             if (activeProvider?.Name == providerName)
@@ -228,7 +236,14 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
     private void UpdateProviderStatus(string providerName, bool success, string? errorMessage = null, Exception? exception = null)
     {
-        providerLock.Wait();
+        // Use a non-blocking approach to avoid deadlocks
+        if (!providerLock.Wait(0))
+        {
+            // If we can't get the lock immediately, skip the update
+            Service.PluginLog.Debug("Skipping provider status update - lock unavailable");
+            return;
+        }
+        
         try
         {
             if (!providerStatuses.TryGetValue(providerName, out var status))
@@ -274,7 +289,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public TranslationProviderStatus? GetProviderStatus(string providerName)
     {
-        providerLock.Wait();
+        if (!providerLock.Wait(TimeSpan.FromSeconds(1)))
+        {
+            Service.PluginLog.Warning("Failed to acquire provider lock for GetProviderStatus");
+            return null;
+        }
         try
         {
             return providerStatuses.GetValueOrDefault(providerName);
@@ -292,7 +311,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public IReadOnlyDictionary<string, TranslationProviderStatus> GetAllProviderStatuses()
     {
-        providerLock.Wait();
+        if (!providerLock.Wait(TimeSpan.FromSeconds(1)))
+        {
+            Service.PluginLog.Warning("Failed to acquire provider lock for GetAllProviderStatuses");
+            return new Dictionary<string, TranslationProviderStatus>();
+        }
         try
         {
             return new Dictionary<string, TranslationProviderStatus>(providerStatuses);
@@ -305,7 +328,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public void Dispose()
     {
-        providerLock.Wait();
+        if (!providerLock.Wait(TimeSpan.FromSeconds(10)))
+        {
+            Service.PluginLog.Warning("Failed to acquire provider lock for Dispose - forcing disposal");
+        }
         try
         {
             foreach (var provider in providers.Values)

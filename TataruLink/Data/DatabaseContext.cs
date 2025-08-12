@@ -45,25 +45,40 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     {
         ThrowIfDisposed();
         
+        // Use a timeout to prevent infinite waiting
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+        
         // WARNING: Single connection prevents SQLite locking errors
-        await connectionSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await connectionSemaphore.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new TimeoutException("Failed to acquire database connection within timeout");
+        }
         
         try
         {
-            connectionLock.Wait(cancellationToken);
+            if (!connectionLock.Wait(TimeSpan.FromSeconds(1), timeoutCts.Token))
+            {
+                throw new TimeoutException("Failed to acquire connection lock");
+            }
+            
             try
             {
                 if (sharedConnection is not { State: System.Data.ConnectionState.Open })
                 {
                     sharedConnection?.Dispose();
                     sharedConnection = new SqliteConnection(connectionString);
-                    sharedConnection.Open();
+                    await sharedConnection.OpenAsync(timeoutCts.Token).ConfigureAwait(false);
                     
                     if (config.EnableWal)
                     {
                         await using var cmd = sharedConnection.CreateCommand();
                         cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;";
-                        cmd.ExecuteNonQuery();
+                        await cmd.ExecuteNonQueryAsync(timeoutCts.Token).ConfigureAwait(false);
                     }
                 }
                 
@@ -137,6 +152,33 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         {
             await currentTransaction.DisposeAsync().ConfigureAwait(false);
             currentTransaction = null;
+        }
+    }
+    
+    public async Task ForceCleanupTransactionAsync()
+    {
+        if (currentTransaction != null)
+        {
+            try
+            {
+                await currentTransaction.RollbackAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Warning(ex, "Failed to rollback transaction during cleanup");
+            }
+            finally
+            {
+                try
+                {
+                    await currentTransaction.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Warning(ex, "Failed to dispose transaction during cleanup");
+                }
+                currentTransaction = null;
+            }
         }
     }
 
@@ -255,8 +297,24 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         connectionLock.Wait();
         try
         {
-            currentTransaction?.Dispose();
-            currentTransaction = null;
+            // Force clean up any hanging transaction
+            if (currentTransaction != null)
+            {
+                try
+                {
+                    currentTransaction.Rollback();
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Warning(ex, "Failed to rollback transaction during dispose");
+                }
+                finally
+                {
+                    currentTransaction.Dispose();
+                    currentTransaction = null;
+                }
+            }
+            
             sharedConnection?.Dispose();
             sharedConnection = null;
         }
@@ -277,11 +335,9 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
         await connectionLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (currentTransaction != null)
-            {
-                await currentTransaction.DisposeAsync().ConfigureAwait(false);
-                currentTransaction = null;
-            }
+            // Force clean up any hanging transaction
+            await ForceCleanupTransactionAsync().ConfigureAwait(false);
+            
             if (sharedConnection != null)
             {
                 await sharedConnection.DisposeAsync().ConfigureAwait(false);

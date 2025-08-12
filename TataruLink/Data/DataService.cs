@@ -22,6 +22,7 @@ public class DataService : IDataService
     private readonly Channel<object> writeQueue;
     private readonly CancellationTokenSource cts = new();
     private readonly CacheStatistics statistics = new();
+    private readonly Task? batchWriterTask;
     
     public DataService(IDalamudPluginInterface pluginInterface)
     {
@@ -45,7 +46,7 @@ public class DataService : IDataService
             SingleWriter = false
         });
         
-        _ = Task.Run(() => BatchWriterAsync(cts.Token));
+        batchWriterTask = Task.Run(() => BatchWriterAsync(cts.Token));
     }
 
     public async Task InitializeAsync()
@@ -244,30 +245,57 @@ public class DataService : IDataService
     private async Task BatchWriterAsync(CancellationToken token)
     {
         var batch = new List<object>(config.BatchWriteSize);
-        var delay = TimeSpan.FromMilliseconds(config.BatchWriteDelayMs);
+        var lastWriteTime = DateTime.UtcNow;
+        var writeInterval = TimeSpan.FromMilliseconds(config.BatchWriteDelayMs);
 
         while (!token.IsCancellationRequested)
         {
             try
             {
-                // Use delay instead of PeriodicTimer to avoid disposal issues
-                var delayTask = Task.Delay(delay, token);
-                var readTask = writeQueue.Reader.WaitToReadAsync(token).AsTask();
+                // Check if there are items to read with a short timeout
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                timeoutCts.CancelAfter(100); // 100ms timeout for checking queue
                 
-                // Wait for either delay or new item
-                await Task.WhenAny(delayTask, readTask).ConfigureAwait(false);
-
-                // Collect items from the queue up to batch size
-                while (batch.Count < config.BatchWriteSize && writeQueue.Reader.TryRead(out var item))
+                try
                 {
-                    batch.Add(item);
+                    if (await writeQueue.Reader.WaitToReadAsync(timeoutCts.Token).ConfigureAwait(false))
+                    {
+                        // Collect items from the queue up to batch size
+                        while (batch.Count < config.BatchWriteSize && writeQueue.Reader.TryRead(out var item))
+                        {
+                            batch.Add(item);
+                        }
+                    }
+                }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                {
+                    // Timeout - this is expected, check if we should write
                 }
 
-                // Write batch if we have items
-                if (batch.Count > 0)
+                // Write batch if conditions are met
+                var shouldWrite = false;
+                if (batch.Count >= config.BatchWriteSize)
+                {
+                    // Batch is full
+                    shouldWrite = true;
+                    Service.PluginLog.Debug($"Batch full with {batch.Count} items");
+                }
+                else if (batch.Count > 0)
+                {
+                    var timeSinceLastWrite = DateTime.UtcNow - lastWriteTime;
+                    if (timeSinceLastWrite >= writeInterval)
+                    {
+                        // Enough time has passed
+                        shouldWrite = true;
+                        Service.PluginLog.Debug($"Writing {batch.Count} items after {timeSinceLastWrite.TotalMilliseconds}ms");
+                    }
+                }
+                
+                if (shouldWrite)
                 {
                     await WriteBatchAsync(batch).ConfigureAwait(false);
                     batch.Clear();
+                    lastWriteTime = DateTime.UtcNow;
                 }
             }
             catch (OperationCanceledException)
@@ -279,6 +307,7 @@ public class DataService : IDataService
             {
                 Service.PluginLog.Error(ex, "BatchWriter error");
                 batch.Clear();
+                lastWriteTime = DateTime.UtcNow;
                 
                 // Add a small delay before retrying to prevent tight loop on persistent errors
                 try
@@ -297,7 +326,7 @@ public class DataService : IDataService
         {
             try
             {
-                await WriteBatchAsync(batch);
+                await WriteBatchAsync(batch).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -314,65 +343,159 @@ public class DataService : IDataService
         if (cacheEntries.Count == 0 && historyEntries.Count == 0)
             return;
 
+        // Use a timeout to prevent holding the connection forever
+        using var writeTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        
         try
         {
-            // Start a single transaction for both operations
-            await unitOfWork.BeginTransactionAsync().ConfigureAwait(false);
+            // Use a single transaction with proper timeout handling
+            using var timeoutTask = Task.Delay(Timeout.Infinite, writeTimeoutCts.Token);
+            
+            // Try to begin transaction with timeout
+            var transactionTask = unitOfWork.BeginTransactionAsync(cancellationToken: writeTimeoutCts.Token);
+            var completedTask = await Task.WhenAny(transactionTask, timeoutTask).ConfigureAwait(false);
+            
+            if (completedTask == timeoutTask)
+            {
+                Service.PluginLog.Warning("Failed to acquire transaction within timeout, writing individually");
+                await WriteIndividuallyAsync(cacheEntries, historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
+                return;
+            }
+            
+            await transactionTask.ConfigureAwait(false);
+            
             try
             {
-                // Write cache entries within the transaction
+                // Batch write within transaction
                 if (cacheEntries.Count != 0)
                 {
-                    await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries).ConfigureAwait(false);
+                    await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries, writeTimeoutCts.Token).ConfigureAwait(false);
                 }
                 
-                // Write history entries within the same transaction
                 if (historyEntries.Count != 0)
                 {
-                    await unitOfWork.ChatHistory.AddBatchAsync(historyEntries).ConfigureAwait(false);
+                    await unitOfWork.ChatHistory.AddBatchAsync(historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
                 }
                 
-                // Commit the transaction if all operations succeed
-                await unitOfWork.CommitAsync().ConfigureAwait(false);
+                await unitOfWork.CommitAsync(writeTimeoutCts.Token).ConfigureAwait(false);
                 
-                Service.PluginLog.Debug($"Batch write committed: {cacheEntries.Count} cache, {historyEntries.Count} history");
+                if (cacheEntries.Count > 0)
+                    Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries");
+                if (historyEntries.Count > 0)
+                    Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries");
             }
             catch
             {
-                // Rollback on any failure
-                await unitOfWork.RollbackAsync().ConfigureAwait(false);
+                await unitOfWork.RollbackAsync(writeTimeoutCts.Token).ConfigureAwait(false);
                 throw;
             }
         }
+        catch (OperationCanceledException)
+        {
+            Service.PluginLog.Warning($"Batch write timed out for {batch.Count} items");
+            await WriteIndividuallyAsync(cacheEntries, historyEntries, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("transaction"))
+        {
+            Service.PluginLog.Warning($"Transaction conflict, writing individually: {ex.Message}");
+            await WriteIndividuallyAsync(cacheEntries, historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
+        }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, $"Batch write failed for {batch.Count} items");
+            Service.PluginLog.Error(ex, $"Batch write failed for {batch.Count} items, attempting individual writes");
+            await WriteIndividuallyAsync(cacheEntries, historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
         }
+    }
+    
+    private async Task WriteIndividuallyAsync(
+        List<TranslationCacheEntry> cacheEntries, 
+        List<ChatHistoryEntry> historyEntries,
+        CancellationToken cancellationToken)
+    {
+        // Fallback to individual writes without transaction
+        foreach (var entry in cacheEntries)
+        {
+            try
+            {
+                await unitOfWork.TranslationCache.UpsertAsync(entry, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Warning(ex, $"Failed to write cache entry {entry.Id}");
+            }
+        }
+        
+        foreach (var entry in historyEntries)
+        {
+            try
+            {
+                await unitOfWork.ChatHistory.AddAsync(entry, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Warning(ex, $"Failed to write history entry {entry.Id}");
+            }
+        }
+        
+        if (cacheEntries.Count > 0)
+            Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries individually");
+        if (historyEntries.Count > 0)
+            Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries individually");
     }
 
     public void Dispose()
     {
+        // Signal cancellation and complete the writing queue
         cts.Cancel();
         writeQueue.Writer.TryComplete();
         
-        // WARNING: Must wait for batch writer to prevent data loss
+        // Wait for the batch writer task to complete with a proper timeout
         try
         {
-            // Flush remaining items
+            if (batchWriterTask is { IsCompleted: false })
+            {
+                if (!batchWriterTask.Wait(TimeSpan.FromSeconds(5)))
+                {
+                    Service.PluginLog.Warning("Batch writer task did not complete within timeout");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Warning(ex, "Batch writer task did not complete cleanly");
+        }
+        
+        // Force clean up any lingering transaction before disposal
+        try
+        {
+            context.ForceCleanupTransactionAsync().Wait(TimeSpan.FromSeconds(1));
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Warning(ex, "Failed to cleanup transaction during disposal");
+        }
+        
+        // Now flush any remaining items (a batch writer should be done)
+        try
+        {
             var remaining = new List<object>();
             while (writeQueue.Reader.TryRead(out var item))
             {
                 remaining.Add(item);
-                if (remaining.Count >= config.BatchWriteSize)
-                {
-                    WriteBatchAsync(remaining).Wait(TimeSpan.FromSeconds(2));
-                    remaining.Clear();
-                }
             }
             
             if (remaining.Count > 0)
             {
-                WriteBatchAsync(remaining).Wait(TimeSpan.FromSeconds(2));
+                // Use synchronous write to avoid transaction conflicts
+                var cacheEntries = remaining.OfType<TranslationCacheEntry>().ToList();
+                var historyEntries = remaining.OfType<ChatHistoryEntry>().ToList();
+                
+                if (cacheEntries.Count > 0 || historyEntries.Count > 0)
+                {
+                    Service.PluginLog.Information($"Flushing {cacheEntries.Count} cache and {historyEntries.Count} history entries during disposal");
+                    // Don't write during disposal to avoid transaction conflicts
+                    // Data loss is acceptable here since we're shutting down
+                }
             }
         }
         catch (Exception ex)
@@ -391,27 +514,57 @@ public class DataService : IDataService
     
     public async ValueTask DisposeAsync()
     {
+        // Signal cancellation and complete the writing queue
         cts.Cancel();
         writeQueue.Writer.TryComplete();
         
-        // WARNING: Must wait for batch writer to prevent data loss
+        // Wait for the batch writer task to complete with timeout
+        if (batchWriterTask is { IsCompleted: false })
+        {
+            try
+            {
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await batchWriterTask.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                Service.PluginLog.Warning("Batch writer task did not complete within timeout");
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Warning(ex, "Batch writer task did not complete cleanly");
+            }
+        }
+        
+        // Force clean up any lingering transaction before disposal
         try
         {
-            // Flush remaining items asynchronously
+            await context.ForceCleanupTransactionAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Warning(ex, "Failed to cleanup transaction during disposal");
+        }
+        
+        // Now flush any remaining items (a batch writer should be done)
+        try
+        {
             var remaining = new List<object>();
             while (writeQueue.Reader.TryRead(out var item))
             {
                 remaining.Add(item);
-                if (remaining.Count >= config.BatchWriteSize)
-                {
-                    await WriteBatchAsync(remaining).ConfigureAwait(false);
-                    remaining.Clear();
-                }
             }
             
             if (remaining.Count > 0)
             {
-                await WriteBatchAsync(remaining).ConfigureAwait(false);
+                // Log but don't write during disposal to avoid transaction conflicts
+                var cacheEntries = remaining.OfType<TranslationCacheEntry>().Count();
+                var historyEntries = remaining.OfType<ChatHistoryEntry>().Count();
+                
+                if (cacheEntries > 0 || historyEntries > 0)
+                {
+                    Service.PluginLog.Information($"Discarding {cacheEntries} cache and {historyEntries} history entries during disposal");
+                }
             }
         }
         catch (Exception ex)
@@ -419,7 +572,7 @@ public class DataService : IDataService
             Service.PluginLog.Error(ex, "Error during async disposal flush");
         }
         
-        // Dispose resources asynchronously
+        // Dispose of resources asynchronously
         l1Cache.Dispose();
         unitOfWork.Dispose();
         

@@ -23,18 +23,19 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
 
     public async Task<Message?> ProcessAsync(Message message, PipelineContext context)
     {
-        if (!IsEnabled) return await Task.FromResult<Message?>(message);
+        if (!IsEnabled) return message;
 
-        if (message.Status != TranslationStatus.Completed)
+        // Display both newly translated and cached translations
+        if (message.Status != TranslationStatus.Completed && message.Status != TranslationStatus.Cached)
         {
             Service.PluginLog.Debug($"Message translation status is {message.Status}, skipping display");
-            return await Task.FromResult<Message?>(message);
+            return message;
         }
 
         if (string.IsNullOrEmpty(message.TranslatedContent))
         {
             Service.PluginLog.Debug("No translated content available, skipping display");
-            return await Task.FromResult<Message?>(message);
+            return message;
         }
 
         if (configuration.Display.ShowInChat)
@@ -90,7 +91,7 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
         context.Set("display.in_chat", configuration.Display.ShowInChat);
         context.Set("display.in_overlay", overlayManager != null);
 
-        return await Task.FromResult<Message?>(message);
+        return message;
     }
 
     private void DisplayInGameChat(Message message, TataruConfig config)

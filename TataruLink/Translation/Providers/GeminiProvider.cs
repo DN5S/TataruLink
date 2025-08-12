@@ -183,7 +183,7 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
             if (!response.IsSuccessStatusCode)
             {
                 Service.PluginLog.Warning($"Failed to fetch models: {response.StatusCode}");
-                return GetDefaultModels();
+                return [];
             }
             
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -209,14 +209,26 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
                     var lowerName = name.ToLowerInvariant();
                     var lowerDisplayName = displayName.ToLowerInvariant();
                     
+                    // Skip non-text generation models
                     if (lowerName.Contains("embed") || 
                         lowerName.Contains("imagen") ||
                         lowerName.Contains("aqa") ||
                         lowerDisplayName.Contains("embed") ||
-                        lowerDisplayName.Contains("tts"))
+                        lowerDisplayName.Contains("tts") ||
+                        lowerName.Contains("image-generation"))
                         continue;
                     
-                    if (!lowerName.Contains("gemini") && !lowerName.Contains("gemma") && !lowerName.Contains("learnlm"))
+                    // Skip thinking models (they're slower and more expensive)
+                    if (lowerName.Contains("thinking"))
+                        continue;
+                    
+                    // Only include Gemini and Gemma models
+                    if (!lowerName.Contains("gemini") && !lowerName.Contains("gemma"))
+                        continue;
+                    
+                    // Skip older preview/experimental versions if we have stable versions
+                    // Note: Keep this until someone want this version
+                    if (lowerName.Contains("preview") && !lowerName.Contains("flash-lite-preview"))
                         continue;
                     
                     var cleanName = name.Replace("models/", "");
@@ -234,14 +246,27 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
                         DisplayName = displayName,
                         Description = description,
                         InputTokenLimit = inputLimit,
-                        OutputTokenLimit = outputLimit,
-                        IsRecommended = IsRecommendedModel(cleanName)
+                        OutputTokenLimit = outputLimit
                     });
                 }
             }
             
-            availableModels = availableModels
-                .OrderByDescending(m => m.IsRecommended)
+            // Group by base model name and take the best version
+            var modelGroups = new Dictionary<string, ModelInfo>();
+            foreach (var model in availableModels)
+            {
+                var baseName = GetBaseModelName(model.Name);
+                
+                // If we haven't seen this base model yet, or this version is better, use it
+                if (!modelGroups.TryGetValue(baseName, out var value) || IsBetterVersion(model, value))
+                {
+                    value = model;
+                    modelGroups[baseName] = value;
+                }
+            }
+            
+            availableModels = modelGroups.Values
+                .OrderByDescending(m => GetModelPriority(m.Name))
                 .ThenBy(m => m.DisplayName)
                 .ToList();
             
@@ -250,80 +275,62 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Failed to retrieve available models");
-            return GetDefaultModels();
+            return [];
         }
         
         return availableModels;
     }
     
-    private static bool IsRecommendedModel(string modelName)
+    
+    private static string GetBaseModelName(string modelName)
     {
-        var recommendedModels = new[]
-        {
-            "gemma-3-12b-it",
-            "gemini-2.5-flash-lite",
-            "gemini-2.0-flash",
-            "gemma-3n-e4b-it",
-            "gemma-3-4b-it"
-        };
+        // Remove version suffixes like -001, -002, -latest, etc.
+        var name = modelName.ToLowerInvariant();
         
-        return recommendedModels.Any(m => modelName.Equals(m, StringComparison.OrdinalIgnoreCase));
+        // Remove common suffixes
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"-(latest|exp|\d{3}).*$", "");
+        
+        return name;
     }
     
-    private static List<ModelInfo> GetDefaultModels()
+    private static bool IsBetterVersion(ModelInfo newModel, ModelInfo existingModel)
     {
-        return
-        [
-            new ModelInfo
-            {
-                Name = "gemini-2.5-flash-lite",
-                DisplayName = "Gemini 2.5 Flash-Lite",
-                Description = "Stable version of Gemini 2.5 Flash-Lite, released in July of 2025",
-                InputTokenLimit = 1048576,
-                OutputTokenLimit = 65536,
-                IsRecommended = true
-            },
-
-            new ModelInfo
-            {
-                Name = "gemini-2.0-flash",
-                DisplayName = "Gemini 2.0 Flash",
-                Description = "Gemini 2.0 Flash",
-                InputTokenLimit = 1048576,
-                OutputTokenLimit = 8192,
-                IsRecommended = true
-            },
-
-            new ModelInfo
-            {
-                Name = "gemma-3-12b-it",
-                DisplayName = "Gemma 3 12B",
-                Description = "Gemma 3 12B",
-                InputTokenLimit = 32768,
-                OutputTokenLimit = 8192,
-                IsRecommended = true
-            },
-
-            new ModelInfo
-            {
-                Name = "gemma-3n-e4b-it",
-                DisplayName = "Gemma 3n E4B",
-                Description = "Gemma 3n E4B",
-                InputTokenLimit = 8192,
-                OutputTokenLimit = 2048,
-                IsRecommended = true
-            },
-
-            new ModelInfo
-            {
-                Name = "gemma-3-4b-it",
-                DisplayName = "Gemma 3 4B",
-                Description = "Gemma 3 4B",
-                InputTokenLimit = 32768,
-                OutputTokenLimit = 8192,
-                IsRecommended = true
-            }
-        ];
+        var newName = newModel.Name.ToLowerInvariant();
+        var existingName = existingModel.Name.ToLowerInvariant();
+        
+        // Prefer non-experimental versions
+        if (!newName.Contains("exp") && existingName.Contains("exp")) return true;
+        if (newName.Contains("exp") && !existingName.Contains("exp")) return false;
+        
+        // Prefer "latest" versions
+        if (newName.Contains("latest") && !existingName.Contains("latest")) return true;
+        if (!newName.Contains("latest") && existingName.Contains("latest")) return false;
+        
+        // Prefer higher version numbers (002 > 001)
+        var newMatch = System.Text.RegularExpressions.Regex.Match(newName, @"-(\d{3})$");
+        var existingMatch = System.Text.RegularExpressions.Regex.Match(existingName, @"-(\d{3})$");
+        
+        if (newMatch.Success && existingMatch.Success)
+        {
+            return int.Parse(newMatch.Groups[1].Value) > int.Parse(existingMatch.Groups[1].Value);
+        }
+        
+        return false;
+    }
+    
+    private static int GetModelPriority(string modelName)
+    {
+        var name = modelName.ToLowerInvariant();
+        
+        // Priority order (higher is better)
+        if (name.Contains("2.5")) return 25;
+        if (name.Contains("2.0")) return 20;
+        if (name.Contains("1.5") && name.Contains("8b")) return 18;
+        if (name.Contains("1.5")) return 15;
+        if (name.Contains("gemma") && name.Contains("3n")) return 10; 
+        if (name.Contains("gemma")) return 5;
+        
+        return 0;
     }
 
     private string BuildTranslationPrompt(string text, string sourceLanguage, string targetLanguage)
@@ -446,6 +453,5 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
         public string Description { get; set; } = "";
         public int InputTokenLimit { get; set; }
         public int OutputTokenLimit { get; set; }
-        public bool IsRecommended { get; set; }
     }
 }
