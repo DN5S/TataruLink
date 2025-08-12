@@ -9,9 +9,6 @@ using TataruLink.UI.Windows;
 
 namespace TataruLink.Overlay;
 
-/// <summary>
-/// Manages multiple translation overlay windows as a module
-/// </summary>
 public class OverlayManager : IDisposable
 {
     private readonly TataruConfig configuration;
@@ -25,13 +22,9 @@ public class OverlayManager : IDisposable
         configuration = config;
         this.windowSystem = windowSystem;
         
-        // Initialize existing overlay windows
         InitializeOverlays();
     }
     
-    /// <summary>
-    /// Initialize overlay windows from configuration
-    /// </summary>
     private void InitializeOverlays()
     {
         foreach (var overlayConfig in configuration.Display.OverlayWindows)
@@ -39,23 +32,19 @@ public class OverlayManager : IDisposable
             CreateOverlayWindow(overlayConfig);
         }
         
-        // Create a default overlay if none exist
         if (configuration.Display.OverlayWindows.Count == 0)
         {
             CreateDefaultOverlay();
         }
     }
-    
-    /// <summary>
-    /// Create a default overlay window
-    /// </summary>
+
     private void CreateDefaultOverlay()
     {
         var defaultConfig = new OverlayWindowConfig
         {
             Name = "Main Translation",
             IsEnabled = true,
-            EnabledChatTypes = new HashSet<ushort>() // Empty = all chat types
+            EnabledChatTypes = new HashSet<ushort>()
         };
         
         configuration.Display.OverlayWindows.Add(defaultConfig);
@@ -63,9 +52,6 @@ public class OverlayManager : IDisposable
         Service.Configuration.Save();
     }
     
-    /// <summary>
-    /// Create an overlay window from configuration
-    /// </summary>
     private void CreateOverlayWindow(OverlayWindowConfig config)
     {
         if (overlays.ContainsKey(config.Id))
@@ -77,10 +63,7 @@ public class OverlayManager : IDisposable
         
         Service.PluginLog.Information($"Created overlay window: {config.Name} (ID: {config.Id})");
     }
-    
-    /// <summary>
-    /// Add a new overlay window
-    /// </summary>
+
     public TranslationOverlay AddOverlay(string name)
     {
         var config = configuration.Display.AddOverlayWindow(name);
@@ -88,18 +71,12 @@ public class OverlayManager : IDisposable
         Service.Configuration.Save();
         return overlays[config.Id];
     }
-    
-    /// <summary>
-    /// Create an overlay from the existing configuration
-    /// </summary>
+
     public void CreateOverlay(OverlayWindowConfig config)
     {
         CreateOverlayWindow(config);
     }
     
-    /// <summary>
-    /// Show an overlay window
-    /// </summary>
     public void ShowOverlay(Guid id)
     {
         if (overlays.TryGetValue(id, out var overlay))
@@ -108,9 +85,6 @@ public class OverlayManager : IDisposable
         }
     }
     
-    /// <summary>
-    /// Hide an overlay window
-    /// </summary>
     public void HideOverlay(Guid id)
     {
         if (overlays.TryGetValue(id, out var overlay))
@@ -118,10 +92,7 @@ public class OverlayManager : IDisposable
             overlay.IsOpen = false;
         }
     }
-    
-    /// <summary>
-    /// Remove an overlay window
-    /// </summary>
+
     public bool RemoveOverlay(Guid id)
     {
         if (overlays.TryGetValue(id, out var overlay))
@@ -138,10 +109,7 @@ public class OverlayManager : IDisposable
         
         return false;
     }
-    
-    /// <summary>
-    /// Toggle overlay visibility
-    /// </summary>
+
     public void ToggleOverlay(Guid id, bool? visible = null)
     {
         if (overlays.TryGetValue(id, out var overlay))
@@ -156,10 +124,7 @@ public class OverlayManager : IDisposable
             }
         }
     }
-    
-    /// <summary>
-    /// Send a message to all active overlay windows
-    /// </summary>
+
     public void SendMessage(Message message)
     {
         if (string.IsNullOrEmpty(message.TranslatedContent))
@@ -177,10 +142,7 @@ public class OverlayManager : IDisposable
             }
         }
     }
-    
-    /// <summary>
-    /// Send a message to a specific overlay window
-    /// </summary>
+
     public void SendMessageToOverlay(Guid id, Message message)
     {
         if (string.IsNullOrEmpty(message.TranslatedContent))
@@ -199,9 +161,6 @@ public class OverlayManager : IDisposable
         }
     }
     
-    /// <summary>
-    /// Clear all messages in a specific overlay
-    /// </summary>
     public void ClearOverlay(Guid id)
     {
         if (overlays.TryGetValue(id, out var overlay))
@@ -209,10 +168,6 @@ public class OverlayManager : IDisposable
             overlay.ClearMessages();
         }
     }
-    
-    /// <summary>
-    /// Clear all messages in all overlays
-    /// </summary>
     public void ClearAllOverlays()
     {
         foreach (var overlay in overlays.Values)
@@ -221,9 +176,6 @@ public class OverlayManager : IDisposable
         }
     }
     
-    /// <summary>
-    /// Update overlay configuration
-    /// </summary>
     public void UpdateOverlayConfig(Guid id, Action<OverlayWindowConfig> updateAction)
     {
         var config = configuration.Display.GetOverlayWindow(id);
@@ -240,10 +192,7 @@ public class OverlayManager : IDisposable
             Service.Configuration.Save();
         }
     }
-    
-    /// <summary>
-    /// Rename an overlay window efficiently without recreation
-    /// </summary>
+
     public void RenameOverlay(Guid id, string newName)
     {
         var config = configuration.Display.GetOverlayWindow(id);
@@ -261,26 +210,16 @@ public class OverlayManager : IDisposable
             Service.PluginLog.Information($"Renamed overlay to: {newName} (ID: {id})");
         }
     }
-    
-    /// <summary>
-    /// Get overlay configuration
-    /// </summary>
+
     public OverlayWindowConfig? GetOverlayConfig(Guid id)
     {
         return configuration.Display.GetOverlayWindow(id);
     }
     
-    /// <summary>
-    /// Get all overlay configurations
-    /// </summary>
     public IEnumerable<OverlayWindowConfig> GetAllOverlayConfigs()
     {
         return configuration.Display.OverlayWindows;
     }
-    
-    /// <summary>
-    /// Reload overlays from configuration
-    /// </summary>
     public void ReloadOverlays()
     {
         // Remove existing overlays

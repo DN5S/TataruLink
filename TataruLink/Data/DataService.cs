@@ -13,9 +13,6 @@ using TataruLink.Services;
 
 namespace TataruLink.Data;
 
-/// <summary>
-/// Data service facade that provides high-level data operations using repositories
-/// </summary>
 public class DataService : IDataService
 {
     private readonly DatabaseContext context;
@@ -28,23 +25,19 @@ public class DataService : IDataService
     
     public DataService(IDalamudPluginInterface pluginInterface)
     {
-        // Initialize configuration
         config = new CacheConfig();
         
-        // Initialize database context
         context = new DatabaseContext(pluginInterface, config);
         
-        // Initialize unit of work with repositories
         unitOfWork = new UnitOfWork(context, config);
         
-        // Initialize L1 cache
         l1Cache = new MemoryCache(new MemoryCacheOptions 
         { 
             SizeLimit = config.L1CacheSize,
             CompactionPercentage = 0.25
         });
         
-        // Initialize a writing queue with bounded capacity to prevent memory exhaustion
+        // WARNING: Bounded write queue prevents memory exhaustion
         writeQueue = Channel.CreateBounded<object>(new BoundedChannelOptions(config.MaxWriteQueueSize)
         {
             FullMode = BoundedChannelFullMode.Wait,
@@ -52,7 +45,6 @@ public class DataService : IDataService
             SingleWriter = false
         });
         
-        // Start background writer
         _ = Task.Run(() => BatchWriterAsync(cts.Token));
     }
 
@@ -60,7 +52,7 @@ public class DataService : IDataService
     {
         await context.InitializeAsync().ConfigureAwait(false);
         
-        // Preload hot translations into L1 cache for better performance
+        // NOTE: Preload hot cache for better performance
         await PreloadHotTranslationsAsync().ConfigureAwait(false);
         
         Service.PluginLog.Information("DataService initialized successfully");
@@ -360,11 +352,10 @@ public class DataService : IDataService
 
     public void Dispose()
     {
-        // Signal cancellation
         cts.Cancel();
         writeQueue.Writer.TryComplete();
         
-        // Wait a bit for the batch writer to finish
+        // WARNING: Must wait for batch writer to prevent data loss
         try
         {
             // Flush remaining items
@@ -400,11 +391,10 @@ public class DataService : IDataService
     
     public async ValueTask DisposeAsync()
     {
-        // Signal cancellation
         cts.Cancel();
         writeQueue.Writer.TryComplete();
         
-        // Wait for the batch writer to finish
+        // WARNING: Must wait for batch writer to prevent data loss
         try
         {
             // Flush remaining items asynchronously

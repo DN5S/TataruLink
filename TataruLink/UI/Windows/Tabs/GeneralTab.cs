@@ -5,10 +5,6 @@ using TataruLink.Translation;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// General settings tab
-/// </summary>
-// ReSharper disable once ClassNeverInstantiated.Global
 public class GeneralTab(TataruConfig configuration, ITranslationService translationService)
 {
     public void Draw()
@@ -28,10 +24,8 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         
         ImGui.Separator();
         
-        // Quick access buttons
         if (ImGui.Button("Open Translation History"u8))
         {
-            // Use chat command to open history window
             Service.CommandManager.ProcessCommand("/tataruhistory");
         }
         

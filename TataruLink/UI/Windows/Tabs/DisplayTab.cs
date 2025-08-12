@@ -4,9 +4,6 @@ using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Display settings tab for general display options
-/// </summary>
 public class DisplayTab(TataruConfig configuration)
 {
     public void Draw()

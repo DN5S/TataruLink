@@ -5,19 +5,14 @@ using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
-/// <summary>
-/// Validates that the chat type is configured for translation.
-/// </summary>
 public class ChatTypeValidator(TataruConfig configuration) : IMessageValidator
 {
     public void Initialize()
     {
-        // No initialization needed
     }
 
     public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
-        // Check if this chat type should be translated
         if (!ChatTypeUtils.ShouldTranslate(message.ChatType, configuration))
         {
             return new ValueTask<ValidationResult>(ValidationResult.Failure(
@@ -30,6 +25,5 @@ public class ChatTypeValidator(TataruConfig configuration) : IMessageValidator
 
     public void Dispose()
     {
-        // No cleanup needed
     }
 }

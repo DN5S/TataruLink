@@ -7,10 +7,6 @@ using TataruLink.Translation;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Debug settings tab
-/// </summary>
-// ReSharper disable once ClassNeverInstantiated.Global
 public class DebugTab(TataruConfig configuration, ITranslationService translationService)
 {
     public void Draw()

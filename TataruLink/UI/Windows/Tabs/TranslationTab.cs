@@ -7,9 +7,6 @@ using TataruLink.Translation;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Translation engine settings tab
-/// </summary>
 public class TranslationTab
 {
     private readonly TataruConfig configuration;

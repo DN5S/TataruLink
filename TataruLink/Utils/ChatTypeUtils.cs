@@ -6,17 +6,10 @@ using TataruLink.Models;
 
 namespace TataruLink.Utils;
 
-/// <summary>
-/// Utility methods for working with chat types
-/// </summary>
 public static class ChatTypeUtils
 {
-    /// <summary>
-    /// Check if a chat type should be translated based on configuration
-    /// </summary>
     public static bool ShouldTranslate(ushort chatType, Configuration.TataruConfig config)
     {
-        // First, check if the type is actually translatable
         return IsTranslatable(chatType) && config.Chat.IsChatTypeEnabled(chatType);
     }
     
@@ -52,7 +45,6 @@ public static class ChatTypeUtils
         XivChatType.PvPTeam
     ];
     
-    // Additional chat types that are translatable (numeric values)
     private static readonly HashSet<ushort> AdditionalTranslatableChannels =
     [
         ChatType.CrossParty,                                                    // 32
@@ -78,7 +70,6 @@ public static class ChatTypeUtils
         XivChatType.RetainerSale
     ];
     
-    // Extended system types (numeric values)
     private static readonly HashSet<ushort> AdditionalSystemChannels =
     [
         ChatType.Debug,           // 1
@@ -94,9 +85,6 @@ public static class ChatTypeUtils
         ChatType.RetainerSale     // 71
     ];
     
-    /// <summary>
-    /// Preset definitions for chat type groups
-    /// </summary>
     public static class Presets
     {
         public static readonly ushort[] PublicChat = 
@@ -230,7 +218,7 @@ public static class ChatTypeUtils
                or 80;  // ChatType.GmTell
     
     public static bool IsBattle(ushort typeValue)
-        => false;  // Battle types are obsolete and not used for translation
+        => false;
     
     public static bool IsGm(ushort typeValue)
         => typeValue is >= 80 and <= 94;  // ChatType.GmTell to ChatType.GmNoviceNetwork
@@ -265,7 +253,6 @@ public static class ChatTypeUtils
     {
         return typeValue switch
         {
-            // GM types map to their base equivalents
             ChatType.GmSay => (ushort)XivChatType.Say,
             ChatType.GmShout => (ushort)XivChatType.Shout,
             ChatType.GmTell => (ushort)XivChatType.TellOutgoing,
@@ -395,9 +382,6 @@ public static class ChatTypeUtils
         return ChatCategory.Other;
     }
     
-    /// <summary>
-    /// Get all translatable chat type IDs
-    /// </summary>
     public static IEnumerable<ushort> GetAllTranslatableChatTypes()
     {
         var types = new HashSet<ushort>();

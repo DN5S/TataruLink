@@ -8,9 +8,6 @@ using TataruLink.Translation.Providers;
 
 namespace TataruLink.Translation;
 
-/// <summary>
-/// Main translation service that manages translation providers with error tracking
-/// </summary>
 public class TranslationService(TataruConfig configuration) : ITranslationService
 {
     private readonly Dictionary<string, ITranslationProvider> providers = new();
@@ -24,12 +21,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
     public void Initialize()
     {
-        // Register available providers
         RegisterProvider(new MockTranslationProvider());
         RegisterProvider(new GoogleTranslateProvider());
         RegisterProvider(new DeepLProvider());
         
-        // Initialize status tracking for all providers
         foreach (var provider in providers.Values)
         {
             providerStatuses[provider.Name] = new TranslationProviderStatus
@@ -40,7 +35,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             };
         }
         
-        // Select and initialize the configured provider
         SelectProvider(configuration.Translation.Engine);
         
         Service.PluginLog.Information($"Translation service initialized with provider: {ProviderName}");
@@ -59,11 +53,9 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         {
             if (providers.TryGetValue(providerName, out var provider))
             {
-                // Initialize with the decrypted API key if available
                 var apiKey = configuration.Translation.GetApiKey(providerName);
                 provider.Initialize(apiKey);
                 
-                // Update status
                 if (providerStatuses.TryGetValue(providerName, out var status))
                 {
                     status.IsConfigured = provider.IsConfigured;
@@ -79,7 +71,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             {
                 Service.PluginLog.Warning($"Translation provider not found: {providerName}");
                 
-                // Fallback to mock provider
                 if (providers.TryGetValue("Mock", out var mockProvider))
                 {
                     activeProvider = mockProvider;
@@ -113,18 +104,15 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
         try
         {
-            // Normalize language codes
             sourceLanguage = NormalizeLanguageCode(sourceLanguage);
             targetLanguage = NormalizeLanguageCode(targetLanguage);
             
-            // Skip translation if source and target are the same
             if (sourceLanguage != "auto" && sourceLanguage == targetLanguage)
             {
                 Service.PluginLog.Debug("Source and target languages are the same, skipping translation");
                 return text;
             }
 
-            // Perform translation with retry logic
             var retryCount = 0;
             var maxRetries = configuration.Translation.RetryFailedTranslations 
                 ? configuration.Translation.MaxRetryAttempts 
@@ -134,7 +122,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             {
                 try
                 {
-                    // Create a new CTS for this attempt with timeout
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromMilliseconds(configuration.Translation.TimeoutMs));
                     
@@ -148,15 +135,12 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     {
                         Service.PluginLog.Debug($"Translation successful: {text[..Math.Min(20, text.Length)]}... -> " +
                                                 $"{response.TranslatedText?[..Math.Min(20, response.TranslatedText.Length)]}...");
-                        
-                        // Update status on success
                         UpdateProviderStatus(activeProvider.Name, success: true);
                         return response.TranslatedText;
                     }
 
                     Service.PluginLog.Warning($"Translation failed (attempt {retryCount + 1}/{maxRetries + 1}): {response.Error}");
                     
-                    // Track the error if this is the last attempt
                     if (retryCount >= maxRetries)
                     {
                         UpdateProviderStatus(activeProvider.Name, success: false, errorMessage: response.Error);
@@ -164,7 +148,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
-                    // Timeout occurred (cts was canceled but not the original token)
                     Service.PluginLog.Warning($"Translation timed out after {configuration.Translation.TimeoutMs}ms (attempt {retryCount + 1}/{maxRetries + 1})");
                     
                     if (retryCount >= maxRetries)
@@ -174,12 +157,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     }
                 }
 
-                // Check if we should retry
                 if (retryCount < maxRetries)
                 {
                     retryCount++;
-                    // Wait before retry with exponential backoff
-                    // This is outside the `cts` scope, so use the original token
+                    // Exponential backoff between retries
                     await Task.Delay(TimeSpan.FromMilliseconds(500 * Math.Pow(2, retryCount - 1)), cancellationToken).ConfigureAwait(false);
                 }
                 else
@@ -205,8 +186,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 
     private static string NormalizeLanguageCode(string code)
     {
-        // Normalize language codes to lowercase
-        // Can be extended to handle different code formats
         return code.ToLowerInvariant();
     }
 
@@ -214,11 +193,9 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     { 
         Service.PluginLog.Information($"Changing translation provider from {ProviderName} to {providerName}");
         
-        // Update configuration
         configuration.Translation.Engine = providerName;
         Service.Configuration.Save();
         
-        // Select and initialize the new provider
         SelectProvider(providerName);
     }
 
@@ -226,20 +203,17 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     {
         Service.PluginLog.Information($"Updating API key for provider: {providerName}");
 
-        // Update configuration with an encrypted key
         configuration.Translation.SetApiKey(providerName, apiKey);
         Service.Configuration.Save();
 
         providerLock.Wait();
         try
         {
-            // If this is the active provider, reinitialize it
             if (activeProvider?.Name == providerName)
             {
                 Service.PluginLog.Information($"Reinitializing active provider {providerName} with new API key");
                 activeProvider.Initialize(apiKey);
             }
-            // Also, update the provider in the registry so it's ready if selected later
             else if (providers.TryGetValue(providerName, out var provider))
             {
                 provider.Initialize(apiKey);
@@ -251,9 +225,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
 
-    /// <summary>
-    /// Update provider status after a translation attempt
-    /// </summary>
     private void UpdateProviderStatus(string providerName, bool success, string? errorMessage = null, Exception? exception = null)
     {
         providerLock.Wait();
@@ -272,14 +243,12 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             else
             {
                 status.ConsecutiveFailures++;
-                
-                // Mark as unhealthy after 3 consecutive failures
+                // NOTE: Mark as unhealthy after 3 consecutive failures
                 if (status.ConsecutiveFailures >= 3)
                 {
                     status.IsHealthy = false;
                 }
                 
-                // Create an error record
                 if (exception != null)
                 {
                     status.LastError = TranslationError.FromException(exception, providerName);
@@ -302,9 +271,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
     
-    /// <summary>
-    /// Get the current status of a translation provider
-    /// </summary>
     public TranslationProviderStatus? GetProviderStatus(string providerName)
     {
         providerLock.Wait();
@@ -318,17 +284,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
     
-    /// <summary>
-    /// Get the current status of the active provider
-    /// </summary>
     public TranslationProviderStatus? GetActiveProviderStatus()
     {
         return activeProvider != null ? GetProviderStatus(activeProvider.Name) : null;
     }
     
-    /// <summary>
-    /// Get status of all registered providers
-    /// </summary>
     public IReadOnlyDictionary<string, TranslationProviderStatus> GetAllProviderStatuses()
     {
         providerLock.Wait();
@@ -347,7 +307,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         providerLock.Wait();
         try
         {
-            // Dispose providers if they implement IDisposable
             foreach (var provider in providers.Values)
             {
                 if (provider is IDisposable disposable)
@@ -380,7 +339,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         await providerLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            // Dispose providers if they implement IAsyncDisposable or IDisposable
             foreach (var provider in providers.Values)
             {
                 try

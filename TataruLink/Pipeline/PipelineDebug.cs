@@ -8,17 +8,11 @@ using TataruLink.Utils;
 
 namespace TataruLink.Pipeline;
 
-/// <summary>
-/// Service for tracking and debugging pipeline failures and validation issues
-/// </summary>
 public class PipelineDebug : IDisposable
 {
     private readonly ConcurrentQueue<FailedMessageInfo> failedMessages = new();
-    private const int MaxFailedMessages = 100; // Keep last 100 failures for debugging
+    private const int MaxFailedMessages = 100;
     
-    /// <summary>
-    /// Information about a failed message in the pipeline
-    /// </summary>
     public class FailedMessageInfo
     {
         public DateTime Timestamp { get; init; }
@@ -30,9 +24,6 @@ public class PipelineDebug : IDisposable
         public string FailureReason { get; init; } = string.Empty;
         public Dictionary<string, object?> ContextData { get; init; } = new();
         
-        /// <summary>
-        /// Gets a formatted summary of the failure
-        /// </summary>
         public string GetSummary()
         {
             var summary = $"[{Timestamp:HH:mm:ss}] {FailureStage}: {FailureReason}";
@@ -42,9 +33,6 @@ public class PipelineDebug : IDisposable
         }
     }
     
-    /// <summary>
-    /// Record a pipeline failure
-    /// </summary>
     public void RecordFailure(Message message, PipelineContext context, string stage, string reason)
     {
         var failureInfo = new FailedMessageInfo
@@ -61,7 +49,7 @@ public class PipelineDebug : IDisposable
         
         failedMessages.Enqueue(failureInfo);
         
-        // Keep only the last N failures
+        // WARNING: Queue size limited to prevent memory growth
         while (failedMessages.Count > MaxFailedMessages)
         {
             failedMessages.TryDequeue(out _);
@@ -70,9 +58,6 @@ public class PipelineDebug : IDisposable
         Service.PluginLog.Debug($"Pipeline failure recorded: {failureInfo.GetSummary()}");
     }
     
-    /// <summary>
-    /// Record a validation failure
-    /// </summary>
     public void RecordValidationFailure(Message message, string validatorName, string reason)
     {
         var failureInfo = new FailedMessageInfo
@@ -89,13 +74,13 @@ public class PipelineDebug : IDisposable
                 ["validator"] = validatorName,
                 ["content_length"] = message.PlainTextContent.Length,
                 ["has_player"] = message.OriginalContent.HasPlayer(),
-                ["is_duplicate"] = false // Will be set by dedup validator
+                ["is_duplicate"] = false
             }
         };
         
         failedMessages.Enqueue(failureInfo);
         
-        // Keep only the last N failures
+        // WARNING: Queue size limited to prevent memory growth
         while (failedMessages.Count > MaxFailedMessages)
         {
             failedMessages.TryDequeue(out _);
@@ -104,35 +89,23 @@ public class PipelineDebug : IDisposable
         Service.PluginLog.Debug($"Validation failure recorded: {failureInfo.GetSummary()}");
     }
     
-    /// <summary>
-    /// Get all recent failures
-    /// </summary>
     public IReadOnlyList<FailedMessageInfo> GetRecentFailures()
     {
         return failedMessages.ToList();
     }
     
-    /// <summary>
-    /// Get failures from the last N minutes
-    /// </summary>
     public IReadOnlyList<FailedMessageInfo> GetRecentFailures(int minutes)
     {
         var cutoff = DateTime.Now.AddMinutes(-minutes);
         return failedMessages.Where(f => f.Timestamp >= cutoff).ToList();
     }
     
-    /// <summary>
-    /// Get failures by stage
-    /// </summary>
     public IReadOnlyList<FailedMessageInfo> GetFailuresByStage(string stage)
     {
         return failedMessages.Where(f => 
             f.FailureStage.Equals(stage, StringComparison.OrdinalIgnoreCase)).ToList();
     }
     
-    /// <summary>
-    /// Get failure statistics
-    /// </summary>
     public Dictionary<string, int> GetFailureStatistics()
     {
         var stats = new Dictionary<string, int>();
@@ -147,26 +120,18 @@ public class PipelineDebug : IDisposable
         return stats;
     }
     
-    /// <summary>
-    /// Clear all recorded failures
-    /// </summary>
     public void ClearFailures()
     {
         while (failedMessages.TryDequeue(out _))
-        {
-            // Clear queue
-        }
+        {}
         Service.PluginLog.Information("Pipeline debug history cleared");
     }
     
-    /// <summary>
-    /// Extract relevant context data for debugging
-    /// </summary>
+    // Extract pipeline context for debugging
     private Dictionary<string, object?> ExtractContextData(PipelineContext context)
     {
         var data = new Dictionary<string, object?>();
         
-        // Extract key context values
         if (context.Has("validation.passed"))
             data["validation_passed"] = context.Get<object>("validation.passed");
             

@@ -2,10 +2,6 @@ using System.Collections.Generic;
 
 namespace TataruLink.Glossary;
 
-/// <summary>
-/// Aho-Corasick algorithm implementation for efficient multi-pattern string matching.
-/// Internal to the Glossary module.
-/// </summary>
 internal class AhoCorasickTrie
 {
     private class Node
@@ -23,7 +19,6 @@ internal class AhoCorasickTrie
         if (string.IsNullOrEmpty(pattern)) return;
         
         var node = root;
-        // Pattern is already lowercased by GlossaryManager
         foreach (var c in pattern)
         {
             if (!node.Children.TryGetValue(c, out var child))
@@ -33,21 +28,20 @@ internal class AhoCorasickTrie
             }
             node = child;
         }
-        node.Output = pattern; // Store the lowercased pattern
+        node.Output = pattern;
     }
 
     public void Build()
     {
         var queue = new Queue<Node>();
         
-        // Initialize first-level nodes
         foreach (var node in root.Children.Values)
         {
             node.FailureLink = root;
             queue.Enqueue(node);
         }
 
-        // Build failure links using BFS
+        // NOTE: BFS builds failure links for efficient pattern matching
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();

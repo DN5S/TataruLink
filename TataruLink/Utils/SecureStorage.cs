@@ -7,37 +7,26 @@ using TataruLink.Services;
 
 namespace TataruLink.Utils;
 
-/// <summary>
-/// Provides secure storage for sensitive data using Windows Data Protection API (DPAPI)
-/// with improved entropy generation for better security.
-/// </summary>
 public static class SecureStorage
 {
-    /// <summary>
-    /// Generate user and machine-specific entropy for stronger encryption.
-    /// This prevents other processes from decrypting the data even with decompiled code.
-    /// </summary>
+    // WARNING: Machine/user-specific entropy prevents cross-user decryption
     private static byte[] GetAdditionalEntropy()
     {
         try
         {
-            // Combine multiple unique identifiers for stronger entropy
             var pluginInterface = Service.PluginInterface;
             var configDir = pluginInterface.GetPluginConfigDirectory();
             var machineId = Environment.MachineName;
             var userId = Environment.UserName;
             var processId = Environment.ProcessId.ToString();
 
-            // Create a unique string from multiple sources
             var uniqueString = $"TataruLink-{configDir}-{machineId}-{userId}-{processId}-APIKey";
             
-            // Use ArrayPool for a temporary buffer
             var byteCount = Encoding.UTF8.GetByteCount(uniqueString);
             var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
             try
             {
                 var actualLength = Encoding.UTF8.GetBytes(uniqueString, 0, uniqueString.Length, buffer, 0);
-                // Generate SHA256 hash as entropy (32 bytes)
                 return SHA256.HashData(buffer.AsSpan(0, actualLength));
             }
             finally
@@ -48,8 +37,7 @@ public static class SecureStorage
         catch (Exception ex)
         {
             Service.PluginLog.Warning(ex, "Failed to generate unique entropy, using fallback");
-            // Fallback to basic entropy if something goes wrong
-            // This is still better than hardcoded values
+            // WARNING: Fallback entropy still better than hardcoded
             var fallback = $"TataruLink-{Environment.MachineName}-{DateTime.UtcNow.Year}";
             
             var byteCount = Encoding.UTF8.GetByteCount(fallback);
@@ -66,9 +54,6 @@ public static class SecureStorage
         }
     }
     
-    /// <summary>
-    /// Encrypts a string using DPAPI with the current user scope
-    /// </summary>
     public static string? Protect(string? plainText)
     {
         if (string.IsNullOrEmpty(plainText))
@@ -76,7 +61,6 @@ public static class SecureStorage
             
         try
         {
-            // Only available on Windows
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 throw new PlatformNotSupportedException("DPAPI encryption is only available on Windows.");
@@ -90,7 +74,6 @@ public static class SecureStorage
                 DataProtectionScope.CurrentUser
             );
             
-            // Convert to Base64 for storage
             return Convert.ToBase64String(encryptedBytes);
         }
         catch (Exception ex)
@@ -107,14 +90,12 @@ public static class SecureStorage
             
         try
         {
-            // Only available on Windows
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 Service.PluginLog.Debug("DPAPI decryption skipped on non-Windows platform.");
                 return encryptedText;
             }
             
-            // Try to decode from Base64
             byte[] encryptedBytes;
             try
             {
@@ -122,7 +103,6 @@ public static class SecureStorage
             }
             catch (FormatException)
             {
-                // Not Base64 encoded - invalid format
                 Service.PluginLog.Error("Invalid encrypted data format.");
                 return null;
             }

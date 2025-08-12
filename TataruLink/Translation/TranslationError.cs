@@ -3,9 +3,6 @@ using System.Net.Http;
 
 namespace TataruLink.Translation;
 
-/// <summary>
-/// Represents translation-specific errors with user-friendly messages
-/// </summary>
 public class TranslationError
 {
     public TranslationErrorType Type { get; init; }
@@ -14,13 +11,9 @@ public class TranslationError
     public DateTime Timestamp { get; init; } = DateTime.Now;
     public string? Provider { get; init; }
     public Exception? Exception { get; init; }
-    
-    /// <summary>
-    /// Create an error from exception with a user-friendly message
-    /// </summary>
+
     public static TranslationError FromException(Exception ex, string provider)
     {
-        // Determine an error type and user-friendly message based on exception
         TranslationErrorType errorType;
         string userFriendlyMessage;
         
@@ -84,9 +77,6 @@ public class TranslationError
     }
 }
 
-/// <summary>
-/// Types of translation errors
-/// </summary>
 public enum TranslationErrorType
 {
     None,
@@ -100,9 +90,6 @@ public enum TranslationErrorType
     Unknown
 }
 
-/// <summary>
-/// Current health status of a translation provider
-/// </summary>
 public class TranslationProviderStatus
 {
     public string ProviderName { get; init; } = string.Empty;
@@ -112,9 +99,6 @@ public class TranslationProviderStatus
     public DateTime? LastSuccessfulTranslation { get; set; }
     public int ConsecutiveFailures { get; set; }
     
-    /// <summary>
-    /// Get a display-friendly status message
-    /// </summary>
     public string GetStatusMessage()
     {
         if (!IsConfigured)
@@ -131,9 +115,6 @@ public class TranslationProviderStatus
         return "[Ready]";
     }
     
-    /// <summary>
-    /// Get a short status indicator
-    /// </summary>
     public string GetStatusIndicator()
     {
         if (!IsConfigured) return "[-]"; // Not configured

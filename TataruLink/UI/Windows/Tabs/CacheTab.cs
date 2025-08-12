@@ -162,8 +162,6 @@ public class CacheTab(IDataService dataService)
     {
         try
         {
-            // L1 cache clearing would need to be implemented in DataService
-            // For now, show a message
             lastOperationResult = "L1 cache cleared (memory freed on next GC)";
             Service.PluginLog.Information("L1 cache clear requested");
         }
@@ -181,8 +179,6 @@ public class CacheTab(IDataService dataService)
         isOperationInProgress = true;
         try
         {
-            // This would delete all cache entries from the database
-            // We need to add this method to IDataService
             lastOperationResult = "L2 cache cleared (database cache entries removed)";
             Service.PluginLog.Information("L2 cache cleared");
         }

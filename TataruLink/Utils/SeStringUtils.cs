@@ -18,6 +18,7 @@ public static partial class SeStringUtils
     
     [GeneratedRegex(@"</?t>")]
     private static partial Regex XmlTagRemover();
+    
     public static string ExtractText(this SeString seString, bool includeSymbols = false)
     {
         if (seString.Payloads.Count == 0)
@@ -104,10 +105,7 @@ public static partial class SeStringUtils
     }
 
 
-    /// <summary>
-    /// Extracts text segments and payload structure from a SeString.
-    /// Returns a list of text segments and a template showing where payloads should be preserved.
-    /// </summary>
+    // WARNING: Complex logic - extracts text segments while preserving payload structure
     public static (List<string> TextSegments, List<Payload?> PayloadTemplate) ExtractStructure(SeString message)
     {
         var textSegments = new List<string>();
@@ -120,17 +118,17 @@ public static partial class SeStringUtils
                 case TextPayload textPayload when !string.IsNullOrWhiteSpace(textPayload.Text):
                     if (IsGameIcon(textPayload.Text))
                     {
-                        // This is an icon, not text. Preserve it.
+                        // WARNING: This is an icon, not text. Must preserve.
                         payloadTemplate.Add(payload);
                     }
                     else
                     {
-                        // Regular text to translate - clean it first
+                        // NOTE: Regular text to translate - clean it first
                         var cleanText = CleanText(textPayload.Text);
                         if (!string.IsNullOrWhiteSpace(cleanText))
                         {
                             textSegments.Add(cleanText);
-                            payloadTemplate.Add(null); // Placeholder for translated text
+                            payloadTemplate.Add(null); // WARNING: Placeholder for translated text
                         }
                     }
                     break;
@@ -140,12 +138,12 @@ public static partial class SeStringUtils
                     if (!string.IsNullOrWhiteSpace(cleanAutoText))
                     {
                         textSegments.Add(cleanAutoText);
-                        payloadTemplate.Add(null); // Placeholder for translated text
+                        payloadTemplate.Add(null); // WARNING: Placeholder for translated text
                     }
                     break;
                     
                 default:
-                    // Preserve all other non-text payloads (items, colors, links, etc.)
+                    // WARNING: Preserve all other non-text payloads (items, colors, links, etc.)
                     payloadTemplate.Add(payload);
                     break;
             }
@@ -154,28 +152,19 @@ public static partial class SeStringUtils
         return (textSegments, payloadTemplate);
     }
     
-    /// <summary>
-    /// Cleans and normalizes text for translation processing.
-    /// </summary>
     private static string CleanText(string text)
     {
-        // Remove excessive whitespace and normalize using source-generated regex
+        // NOTE: Remove excessive whitespace using source-generated regex
         return WhitespaceNormalizer().Replace(text.Trim(), " ");
     }
     
-    /// <summary>
-    /// Determines if a string is likely a game icon character.
-    /// Game icons in FFXIV are typically single characters in the Private Use Area.
-    /// </summary>
+    // WARNING: Game icons are single chars in Private Use Area (U+E000-U+F8FF)
     private static bool IsGameIcon(string text)
     {
         return text.Length == 1 && text[0] >= 0xE000 && text[0] <= 0xF8FF;
     }
     
-    /// <summary>
-    /// Prepares text segments for translation by wrapping them in XML tags.
-    /// This preserves segment boundaries through translation.
-    /// </summary>
+    // WARNING: Wraps segments in XML tags to preserve boundaries through translation
     public static string PrepareForTranslation(List<string> textSegments, bool useXmlTags = true)
     {
         if (!useXmlTags || textSegments.Count <= 1)
@@ -183,8 +172,7 @@ public static partial class SeStringUtils
             return string.Join(" ", textSegments);
         }
         
-        // Wrap each segment in XML tags to preserve boundaries
-        // Escape XML special characters to prevent parsing issues
+        // WARNING: Wrap in XML tags and escape special chars to prevent parsing issues
         return string.Join(" ", textSegments.Select(s => 
         {
             var escaped = s.Replace("&", "&amp;")
@@ -196,12 +184,9 @@ public static partial class SeStringUtils
         }));
     }
     
-    /// <summary>
-    /// Extracts text segments from XML-structured translation result.
-    /// </summary>
     public static List<string> ExtractFromTranslation(string translatedText, int expectedSegmentCount)
     {
-        // Try to extract from XML tags first using source-generated regex
+        // NOTE: Try to extract from XML tags first using source-generated regex
         var xmlMatches = XmlTagExtractor().Matches(translatedText);
         
         if (xmlMatches.Count > 0)
@@ -209,7 +194,7 @@ public static partial class SeStringUtils
             var segments = xmlMatches
                 .Select(m => 
                 {
-                    // Unescape XML entities
+                    // WARNING: Must unescape XML entities
                     var text = m.Groups[1].Value.Trim();
                     return text.Replace("&lt;", "<")
                               .Replace("&gt;", ">")
@@ -225,45 +210,41 @@ public static partial class SeStringUtils
             }
         }
         
-        // Fallback: remove any XML tags using source-generated regex and return as a single segment
+        // WARNING: Fallback - remove XML tags and return as single segment
         var sanitized = XmlTagRemover().Replace(translatedText, "").Trim();
         return [sanitized];
     }
     
-    /// <summary>
-    /// Creates a complete translated SeString by reconstructing with the payload template.
-    /// This is the main method for creating the final translated message.
-    /// Includes safe fallback when translation corrupts the structure.
-    /// </summary>
+    // WARNING: Complex reconstruction logic with structure corruption fallback
     public static SeString CreateTranslatedMessage(string translatedText, List<Payload?> payloadTemplate, int originalSegmentCount, string? prefix = null)
     {
         var builder = new SeStringBuilder();
         
-        // Add prefix if provided
+        // NOTE: Add prefix if provided
         if (!string.IsNullOrEmpty(prefix))
         {
             builder.AddText(prefix + " ");
         }
         
-        // Extract segments from the translated text
+        // NOTE: Extract segments from the translated text
         var translatedSegments = ExtractFromTranslation(translatedText, originalSegmentCount);
         
-        // Check if the structure was corrupted
+        // WARNING: Check if the structure was corrupted
         var structureIntact = translatedSegments.Count == originalSegmentCount || 
                               (originalSegmentCount > 1 && translatedSegments.Count == 1);
         
         if (!structureIntact)
         {
-            // Structure corrupted - use safe fallback -> Return only translated text without any payloads
+            // WARNING: Structure corrupted - use safe fallback
             Services.Service.PluginLog.Warning($"Translation structure corrupted. Expected {originalSegmentCount} segments, got {translatedSegments.Count}. Using fallback.");
             
-            // Clean the translated text of any remaining XML artifacts using source-generated regex
+            // NOTE: Clean remaining XML artifacts using source-generated regex
             var cleanText = XmlTagRemover().Replace(translatedText, "").Trim();
             builder.AddText(cleanText);
             return builder.Build();
         }
         
-        // If we only got one segment back but expected multiple, it means translation merged everything
+        // NOTE: If only one segment but expected multiple, translation merged everything
         if (originalSegmentCount > 1 && translatedSegments.Count == 1)
         {
             var mergedText = translatedSegments[0];
@@ -273,18 +254,18 @@ public static partial class SeStringUtils
             {
                 if (payload == null && !textAdded)
                 {
-                    // Add the merged text at the first text position
+                    // NOTE: Add the merged text at the first text position
                     builder.AddText(mergedText);
                     textAdded = true;
                 }
                 else if (payload != null)
                 {
-                    // Preserve non-text payloads
+                    // WARNING: Preserve non-text payloads
                     builder.Add(payload);
                 }
             }
             
-            // If no text position was found, just add the text
+            // WARNING: If no text position found, just add the text
             if (!textAdded)
             {
                 builder.AddText(mergedText);
@@ -292,13 +273,13 @@ public static partial class SeStringUtils
         }
         else
         {
-            // Normal reconstruction - structure preserved
+            // NOTE: Normal reconstruction - structure preserved
             var segmentIndex = 0;
             foreach (var payload in payloadTemplate)
             {
                 if (payload == null)
                 {
-                    // This is a placeholder for translated text
+                    // WARNING: This is a placeholder for translated text
                     if (segmentIndex < translatedSegments.Count)
                     {
                         var segment = translatedSegments[segmentIndex];
@@ -311,7 +292,7 @@ public static partial class SeStringUtils
                 }
                 else
                 {
-                    // Preserve non-text payloads (icons, items, etc.)
+                    // WARNING: Preserve non-text payloads (icons, items, etc.)
                     builder.Add(payload);
                 }
             }
@@ -320,19 +301,12 @@ public static partial class SeStringUtils
         return builder.Build();
     }
     
-    /// <summary>
-    /// Convenience method that combines extraction and reconstruction for creating translated messages.
-    /// </summary>
     public static SeString BuildTranslation(SeString original, string translatedText, string? prefix = null)
     {
         var (textSegments, payloadTemplate) = ExtractStructure(original);
         return CreateTranslatedMessage(translatedText, payloadTemplate, textSegments.Count, prefix);
     }
     
-    /// <summary>
-    /// Prepares a SeString for translation by extracting text segments and formatting them.
-    /// Returns the prepared text string and the number of segments for validation.
-    /// </summary>
     public static (string PreparedText, int SegmentCount) PrepareForProvider(SeString message, bool useXmlTags)
     {
         var (textSegments, _) = ExtractStructure(message);
@@ -340,18 +314,16 @@ public static partial class SeStringUtils
         return (preparedText, textSegments.Count);
     }
 
-    /// <summary>
-    /// Applies glossary to each text segment individually, preserving SeString structure
-    /// </summary>
+    // NOTE: Applies glossary to each text segment individually, preserving SeString structure
     public static (string PreparedText, int SegmentCount, List<Payload?> PayloadTemplate) PrepareForProviderWithGlossary(
         SeString message, bool useXmlTags, Func<string, string> applyGlossary)
     {
         var (textSegments, payloadTemplate) = ExtractStructure(message);
         
-        // Apply glossary to each segment individually
+        // WARNING: Must apply glossary to each segment individually
         var glossaryAppliedSegments = textSegments.Select(applyGlossary).ToList();
         
-        // Prepare for translation with structure preserved
+        // NOTE: Prepare for translation with structure preserved
         var preparedText = PrepareForTranslation(glossaryAppliedSegments, useXmlTags);
         
         return (preparedText, textSegments.Count, payloadTemplate);

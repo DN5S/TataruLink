@@ -11,10 +11,6 @@ using TataruLink.Data;
 
 namespace TataruLink.Pipeline.Stages.Display;
 
-/// <summary>
-/// Final stage: Displays translated messages to the user.
-/// Handles both in-game chat display and overlay windows.
-/// </summary>
 public class DisplayStage(TataruConfig configuration, IDataService dataService, OverlayManager? overlayManager = null) : IPipelineStage
 {
     public string Name => "Display";
@@ -29,21 +25,18 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
     {
         if (!IsEnabled) return await Task.FromResult<Message?>(message);
 
-        // Only display if we have a translation
         if (message.Status != TranslationStatus.Completed)
         {
             Service.PluginLog.Debug($"Message translation status is {message.Status}, skipping display");
             return await Task.FromResult<Message?>(message);
         }
 
-        // Skip if no translated content
         if (string.IsNullOrEmpty(message.TranslatedContent))
         {
             Service.PluginLog.Debug("No translated content available, skipping display");
             return await Task.FromResult<Message?>(message);
         }
 
-        // Display in game chat
         if (configuration.Display.ShowInChat)
         {
             try
@@ -57,7 +50,6 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             }
         }
 
-        // Send it to overlay windows
         if (overlayManager != null && configuration.Display.GetActiveOverlays().Any())
         {
             try
@@ -71,7 +63,6 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             }
         }
 
-        // Save chat history
         try
         {
             var cacheId = context.Get<string>("translation.cache_id");
@@ -95,7 +86,6 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             Service.PluginLog.Error(ex, "Failed to save chat history");
         }
 
-        // Mark in context
         context.Set("display.completed", true);
         context.Set("display.in_chat", configuration.Display.ShowInChat);
         context.Set("display.in_overlay", overlayManager != null);
@@ -105,17 +95,15 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
 
     private void DisplayInGameChat(Message message, TataruConfig config)
     {
-        // Build the message prefix with display options
         var prefixBuilder = new System.Text.StringBuilder();
         
-        // Add translation prefix if configured
         if (!string.IsNullOrEmpty(config.Translation.TranslationPrefix))
         {
             prefixBuilder.Append(config.Translation.TranslationPrefix);
             prefixBuilder.Append(' ');
         }
         
-        // Add a chat type if enabled (no timestamp since the game adds it automatically)
+        // NOTE: ChatGUI adds timestamps automatically
         if (config.Display.ShowChatType)
         {
             var chatTypeName = message.GetChannelName();
@@ -125,13 +113,12 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             }
         }
         
-        // Add sender name if enabled
         if (config.Display.ShowSenderName && !string.IsNullOrEmpty(message.SenderName))
         {
             prefixBuilder.Append($"{message.SenderName}: ");
         }
         
-        // Use SeStringUtils to create the complete translated message with preserved payloads
+        // WARNING: Must preserve SeString payloads for proper display
         var formattedMessage = SeStringUtils.BuildTranslation(
             message.OriginalContent,
             message.TranslatedContent!,

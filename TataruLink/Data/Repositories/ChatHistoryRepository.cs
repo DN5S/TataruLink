@@ -9,9 +9,6 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-/// <summary>
-/// Repository for chat history operations
-/// </summary>
 public class ChatHistoryRepository : IChatHistoryRepository
 {
     private readonly DatabaseContext context;
@@ -131,7 +128,7 @@ public class ChatHistoryRepository : IChatHistoryRepository
         var idsList = ids.ToList();
         if (idsList.Count == 0) return 0;
         
-        // Validate IDs
+        // WARNING: Must validate all IDs
         if (idsList.Any(id => id <= 0))
             throw new ArgumentException("All IDs must be positive", nameof(ids));
             
@@ -213,14 +210,13 @@ public class ChatHistoryRepository : IChatHistoryRepository
 
     private void PrepareEntry(ChatHistoryEntry entry)
     {
-        // Set timestamp if not set
+        // NOTE: Set timestamp if not set
         if (entry.Timestamp == 0)
         {
             entry.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         }
         
-        // Ensure IsVisible is set (default to true)
-        // Note: The property already has a default value, but this is explicit
+        // NOTE: Property has default value but ensure it's set explicitly
         if (!entry.IsVisible)
         {
             entry.IsVisible = true;

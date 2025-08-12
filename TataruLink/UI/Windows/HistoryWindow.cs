@@ -46,7 +46,6 @@ public class HistoryWindow : Window, IDisposable
 
     private void DrawControls()
     {
-        // Search bar
         ImGui.SetNextItemWidth(300f);
         ImGui.InputTextWithHint("##search"u8, "Search..."u8, ref searchText, 256);
         
@@ -78,7 +77,6 @@ public class HistoryWindow : Window, IDisposable
             ImGui.OpenPopup("ClearAllConfirm"u8);
         }
         
-        // Clear confirmation popup
         var popupOpen = true;
         if (ImGui.BeginPopupModal("ClearAllConfirm"u8, ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize))
         {
@@ -101,7 +99,6 @@ public class HistoryWindow : Window, IDisposable
             ImGui.EndPopup();
         }
         
-        // Statistics
         ImGui.TextUnformatted($"Total entries: {historyItems.Count} | Selected: {selectedIds.Count}");
         
         if (this.isLoading)
@@ -118,7 +115,6 @@ public class HistoryWindow : Window, IDisposable
         if (!ImGui.BeginTable("HistoryTable"u8, 9, tableFlags, new Vector2(0, -1)))
             return;
 
-        // Setup columns
         ImGui.TableSetupColumn("Select"u8, ImGuiTableColumnFlags.WidthFixed, 50f);
         ImGui.TableSetupColumn("Time"u8, ImGuiTableColumnFlags.WidthFixed, 140f);
         ImGui.TableSetupColumn("Chat Type"u8, ImGuiTableColumnFlags.WidthFixed, 80f);
@@ -138,7 +134,6 @@ public class HistoryWindow : Window, IDisposable
 
         ImGui.EndTable();
         
-        // Pagination controls
         DrawPaginationControls();
     }
 
@@ -146,7 +141,6 @@ public class HistoryWindow : Window, IDisposable
     {
         ImGui.TableNextRow();
         
-        // Select checkbox
         ImGui.TableNextColumn();
         bool isSelected = selectedIds.Contains(item.Id);
         if (ImGui.Checkbox($"##select_{item.Id}", ref isSelected))
@@ -157,24 +151,19 @@ public class HistoryWindow : Window, IDisposable
                 selectedIds.Remove(item.Id);
         }
         
-        // Timestamp
         ImGui.TableNextColumn();
         var timestamp = DateTimeOffset.FromUnixTimeSeconds(item.Timestamp).ToLocalTime();
         ImGui.TextUnformatted(timestamp.ToString("MM/dd HH:mm:ss"));
         
-        // Chat type
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(item.ChatTypeName ?? item.ChatType.ToString());
         
-        // Sender
         ImGui.TableNextColumn();
         ImGui.TextUnformatted(item.SenderName ?? "System");
         
-        // Original content
         ImGui.TableNextColumn();
         ImGui.TextWrapped(item.OriginalContent);
         
-        // Translated content
         ImGui.TableNextColumn();
         if (!string.IsNullOrEmpty(item.TranslatedContent))
         {
@@ -185,7 +174,6 @@ public class HistoryWindow : Window, IDisposable
             ImGui.TextDisabled("No translation"u8);
         }
         
-        // Cached indicator
         ImGui.TableNextColumn();
         if (!string.IsNullOrEmpty(item.TranslationCacheId))
         {
@@ -196,7 +184,6 @@ public class HistoryWindow : Window, IDisposable
             ImGui.TextDisabled("No"u8);
         }
         
-        // ID (short)
         ImGui.TableNextColumn();
         var messageIdStr = item.MessageId.ToString();
         var shortId = messageIdStr.Length > 8 ? messageIdStr[..8] + "..." : messageIdStr;
@@ -207,14 +194,12 @@ public class HistoryWindow : Window, IDisposable
             ImGui.SetTooltip(messageIdStr);
         }
         
-        // Actions
         ImGui.TableNextColumn();
         if (ImGui.Button($"Delete##del_{item.Id}"))
         {
             _ = DeleteItemAsync(item.Id);
         }
         
-        // Context menu
         if (ImGui.BeginPopupContextItem($"context_{item.Id}"))
         {
             if (ImGui.Selectable("Copy Original Text"u8))
@@ -268,7 +253,7 @@ public class HistoryWindow : Window, IDisposable
         if (string.IsNullOrWhiteSpace(searchText))
             return historyItems;
         
-        // Use StringComparison for all comparisons to avoid unnecessary ToLowerInvariant calls
+        // NOTE: StringComparison avoids ToLowerInvariant overhead
         return historyItems.Where(item =>
             item.OriginalContent.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) ||
             (item.TranslatedContent?.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) == true) ||
@@ -348,6 +333,5 @@ public class HistoryWindow : Window, IDisposable
 
     public void Dispose()
     {
-        // Nothing to dispose
     }
 }

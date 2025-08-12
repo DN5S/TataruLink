@@ -7,9 +7,6 @@ using TataruLink.Data.Repositories;
 
 namespace TataruLink.Data;
 
-/// <summary>
-/// Unit of Work implementation for coordinating repositories and transactions
-/// </summary>
 public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWork
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
@@ -42,11 +39,10 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // If there's an active transaction, commit it
         if (context.GetCurrentTransaction() != null)
         {
             await CommitAsync(cancellationToken).ConfigureAwait(false);
-            return 1; // Return 1 to indicate success
+            return 1;
         }
         
         return 0;

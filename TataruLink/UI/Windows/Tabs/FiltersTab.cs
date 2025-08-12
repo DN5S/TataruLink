@@ -6,13 +6,8 @@ using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Chat filter settings tab with keyword management
-/// </summary>
-// ReSharper disable once ClassNeverInstantiated.Global
 public class FiltersTab(TataruConfig configuration)
 {
-    private readonly TataruConfig configuration = configuration;
     private string newKeyword = string.Empty;
     private string? keywordToRemove;
 

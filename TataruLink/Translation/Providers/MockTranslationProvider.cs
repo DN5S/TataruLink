@@ -3,18 +3,15 @@ using System.Threading.Tasks;
 
 namespace TataruLink.Translation.Providers;
 
-/// <summary>
-/// Mock translation provider for testing
-/// </summary>
 public class MockTranslationProvider : ITranslationProvider
 {
     public string Name => "Mock";
     public bool IsConfigured { get; private set; }
-    public bool SupportsStructuredTranslation => false;  // Mock provider doesn't need structured translation
+    public bool SupportsStructuredTranslation => false;
 
     public void Initialize(string? apiKey = null)
     {
-        // Mock provider doesn't need configuration
+        // NOTE: Mock provider doesn't need configuration
         IsConfigured = true;
     }
 
@@ -24,13 +21,13 @@ public class MockTranslationProvider : ITranslationProvider
         string targetLanguage,
         CancellationToken cancellationToken = default)
     {
-        // Simulate network delay
+        // NOTE: Simulate network delay
         await Task.Delay(100, cancellationToken);
         
-        // If the source is "auto", pretend we detected Japanese
+        // NOTE: Mock auto-detection always returns Japanese
         var detectedSource = sourceLanguage == "auto" ? "ja" : sourceLanguage;
         
-        // Simple mock translation - just wrap the text
+        // NOTE: Simple mock translation - just wrap the text
         var translatedText = $"[{targetLanguage.ToUpper()}] {text}";
         
         return new TranslationResponse
@@ -46,14 +43,11 @@ public class MockTranslationProvider : ITranslationProvider
         string text,
         CancellationToken cancellationToken = default)
     {
-        // Most translation APIs handle language detection internally
-        // when the source language is set to "auto"
-        // This method is mainly for standalone detection if needed
+        // NOTE: Most APIs handle detection internally when source is 'auto'
         
         await Task.Delay(50, cancellationToken);
         
-        // For mock purposes, return Japanese (common in FFXIV)
-        // Real providers (Google, DeepL, ...) will use their own detection
+        // NOTE: Mock always returns Japanese (common in FFXIV)
         return "ja";
     }
 }

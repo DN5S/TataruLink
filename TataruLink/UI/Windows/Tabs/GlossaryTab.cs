@@ -11,9 +11,6 @@ using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Glossary management tab for user-defined text replacements
-/// </summary>
 public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryManager)
 {
     private string newOriginal = string.Empty;
@@ -22,9 +19,7 @@ public class GlossaryTab(TataruConfig configuration, GlossaryManager glossaryMan
     private string? errorMessage;
     private DateTime errorMessageTime = DateTime.MinValue;
 
-    /// <summary>
-    /// Save configuration and rebuild the glossary trie
-    /// </summary>
+    // NOTE: Save configuration and rebuild the glossary trie
     private void SaveAndRebuild()
     {
         Service.Configuration.Save();

@@ -12,12 +12,8 @@ using TataruLink.UI.Windows.Tabs;
 
 namespace TataruLink.UI.Windows;
 
-/// <summary>
-/// Main settings window using Dalamud's WindowSystem
-/// </summary>
 public class SettingsWindow : Window, IDisposable
 {
-    // Tab panels
     private readonly GeneralTab generalTab;
     private readonly TranslationTab translationTab;
     private readonly LanguagesTab languagesTab;
@@ -32,11 +28,9 @@ public class SettingsWindow : Window, IDisposable
     public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, IDataService dataService) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
-        // Window configuration
         Size = new Vector2(600, 400);
         SizeCondition = ImGuiCond.FirstUseEver;
         
-        // Initialize tabs
         generalTab = new GeneralTab(configuration, translationService);
         translationTab = new TranslationTab(configuration, translationService);
         languagesTab = new LanguagesTab(configuration);
@@ -117,6 +111,5 @@ public class SettingsWindow : Window, IDisposable
 
     public void Dispose()
     {
-        // Cleanup if needed
     }
 }

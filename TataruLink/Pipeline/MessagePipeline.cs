@@ -8,19 +8,12 @@ using TataruLink.Services;
 
 namespace TataruLink.Pipeline;
 
-/// <summary>
-/// Orchestrates the message processing pipeline.
-/// Messages flow through each stage in sequence.
-/// </summary>
 public class MessagePipeline : IDisposable
 {
     private readonly List<IPipelineStage> stages = [];
     private readonly SemaphoreSlim @lock = new(1, 1);
     private bool isInitialized;
 
-    /// <summary>
-    /// Add a stage to the pipeline.
-    /// </summary>
     public MessagePipeline AddStage(IPipelineStage stage)
     {
         @lock.Wait();
@@ -41,9 +34,6 @@ public class MessagePipeline : IDisposable
         return this;
     }
 
-    /// <summary>
-    /// Remove a stage from the pipeline.
-    /// </summary>
     public MessagePipeline RemoveStage(IPipelineStage stage)
     {
         @lock.Wait();
@@ -62,9 +52,6 @@ public class MessagePipeline : IDisposable
         return this;
     }
 
-    /// <summary>
-    /// Initialize all pipeline stages.
-    /// </summary>
     public void Initialize()
     {
         @lock.Wait();
@@ -94,9 +81,6 @@ public class MessagePipeline : IDisposable
         }
     }
 
-    /// <summary>
-    /// Process a message through the entire pipeline.
-    /// </summary>
     public async Task<Message?> ProcessAsync(Message message)
     {
         if (!isInitialized)
@@ -123,7 +107,7 @@ public class MessagePipeline : IDisposable
             {
                 var stageStart = stopwatch.ElapsedMilliseconds;
                 
-                // Check if the message is null before processing (from the previous stage)
+                // WARNING: Null check prevents downstream processing after stage filtering
                 if (currentMessage == null)
                 {
                     Service.PluginLog.Debug($"Pipeline already stopped, skipping stage: {stage.Name}");
@@ -144,7 +128,7 @@ public class MessagePipeline : IDisposable
             catch (Exception ex)
             {
                 Service.PluginLog.Error(ex, $"Error in pipeline stage: {stage.Name}");
-                // Continue to the next stage on error (resilience)
+                // WARNING: Continues on error for pipeline resilience
             }
         }
 
@@ -154,9 +138,6 @@ public class MessagePipeline : IDisposable
         return currentMessage;
     }
 
-    /// <summary>
-    /// Get information about the current pipeline configuration.
-    /// </summary>
     public string GetPipelineInfo()
     {
         var info = new List<string> { "Pipeline Stages:" };
@@ -169,9 +150,6 @@ public class MessagePipeline : IDisposable
         return string.Join("\n", info);
     }
 
-    /// <summary>
-    /// Clear all stages from the pipeline.
-    /// </summary>
     public void Clear()
     {
         @lock.Wait();

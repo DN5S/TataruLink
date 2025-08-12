@@ -7,10 +7,6 @@ using TataruLink.Services;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
-/// <summary>
-/// Validates that messages are not duplicates within a detection period.
-/// Prevents the same message from being processed multiple times.
-/// </summary>
 public class DeduplicationValidator : IMessageValidator, IDisposable
 {
     private readonly TimeSpan duplicateDetectionPeriod;
@@ -22,7 +18,7 @@ public class DeduplicationValidator : IMessageValidator, IDisposable
     {
         this.duplicateDetectionPeriod = duplicateDetectionPeriod;
         
-        // Start a background timer to clean up old entries every 5 seconds
+        // WARNING: Background cleanup prevents memory growth
         cleanupTimer = new Timer(
             CleanupOldEntries,
             null,
@@ -65,14 +61,13 @@ public class DeduplicationValidator : IMessageValidator, IDisposable
 
     public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
-        // Create hash from message components
         var hash = HashCode.Combine(
             message.ChatType,
             message.SenderName,
             message.PlainTextContent
         );
 
-        // Check if duplicate (no inline cleanup needed, handled by timer)
+        // NOTE: Timer-based cleanup, no inline pruning needed
         if (!recentMessageHashes.TryAdd(hash, DateTime.UtcNow))
         {
             var preview = message.PlainTextContent.Length > 30 
@@ -81,7 +76,6 @@ public class DeduplicationValidator : IMessageValidator, IDisposable
             return new ValueTask<ValidationResult>(ValidationResult.Failure($"Duplicate message: {preview}"));
         }
 
-        // Mark in context that this message passed deduplication
         context.Set("validation.deduplication.passed", true);
         context.Set("validation.deduplication.hash", hash);
 

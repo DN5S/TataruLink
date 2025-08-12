@@ -6,10 +6,6 @@ using TataruLink.Configuration;
 
 namespace TataruLink.Services;
 
-/// <summary>
-/// Configuration management service that handles loading, saving, and debouncing
-/// Separates configuration management logic from the configuration data itself
-/// </summary>
 public class Config : IDisposable
 {
     private readonly IDalamudPluginInterface pluginInterface;
@@ -17,25 +13,16 @@ public class Config : IDisposable
     private CancellationTokenSource? saveDebounceTokenSource;
     private bool isDirty;
     
-    private const int SaveDebounceDelayMs = 500; // Wait 500 ms after the last change before saving
+    private const int SaveDebounceDelayMs = 500;
     
-    /// <summary>
-    /// The current configuration data
-    /// </summary>
     public TataruConfig Data { get; private set; }
     
-    /// <summary>
-    /// Initialize the configuration manager with the plugin interface
-    /// </summary>
     private Config(IDalamudPluginInterface pluginInterface, TataruConfig data)
     {
         this.pluginInterface = pluginInterface;
         this.Data = data;
     }
     
-    /// <summary>
-    /// Load configuration from a file or create new if it doesn't exist
-    /// </summary>
     public static Config Load(IDalamudPluginInterface pluginInterface)
     {
         try
@@ -52,9 +39,6 @@ public class Config : IDisposable
         }
     }
     
-    /// <summary>
-    /// Mark configuration as changed and schedule a debounced save
-    /// </summary>
     public void Save()
     {
         saveLock.Wait();
@@ -62,11 +46,9 @@ public class Config : IDisposable
         {
             isDirty = true;
             
-            // Cancel any existing debounced timer
             saveDebounceTokenSource?.Cancel();
             saveDebounceTokenSource?.Dispose();
             
-            // Start a new debounced timer
             saveDebounceTokenSource = new CancellationTokenSource();
             var token = saveDebounceTokenSource.Token;
             
@@ -84,10 +66,7 @@ public class Config : IDisposable
         }
     }
     
-    /// <summary>
-    /// Save configuration immediately without debouncing
-    /// Use this when the plugin is shutting down or when explicit save is needed
-    /// </summary>
+    // NOTE: Call this when plugin shuts down to flush pending saves
     public void SaveImmediately()
     {
         saveLock.Wait();
@@ -106,7 +85,6 @@ public class Config : IDisposable
                 Service.PluginLog.Error(ex, "Failed to save configuration");
             }
             
-            // Cancel any pending saves
             saveDebounceTokenSource?.Cancel();
             saveDebounceTokenSource?.Dispose();
             saveDebounceTokenSource = null;
@@ -117,15 +95,11 @@ public class Config : IDisposable
         }
     }
     
-    /// <summary>
-    /// Reset configuration to defaults while preserving API keys
-    /// </summary>
     public void Reset()
     {
-        // Keep API keys when resetting
+        // NOTE: Preserve API keys when resetting config
         var apiKeys = Data.Translation.ApiKeys;
         
-        // Create a new configuration with defaults
         Data = new TataruConfig
         {
             Translation = new TranslationConfig { ApiKeys = apiKeys }
@@ -135,9 +109,6 @@ public class Config : IDisposable
         Service.PluginLog.Information("Configuration reset to defaults");
     }
     
-    /// <summary>
-    /// Reload configuration from disk
-    /// </summary>
     public void Reload()
     {
         try
@@ -157,7 +128,6 @@ public class Config : IDisposable
     
     public void Dispose()
     {
-        // Ensure any pending saves are completed
         SaveImmediately();
         
         saveDebounceTokenSource?.Cancel();

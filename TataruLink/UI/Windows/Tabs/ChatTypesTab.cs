@@ -10,9 +10,6 @@ using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Chat types configuration tab
-/// </summary>
 public class ChatTypesTab(TataruConfig configuration)
 {
     

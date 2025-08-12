@@ -2,9 +2,6 @@ using System;
 
 namespace TataruLink.Models;
 
-/// <summary>
-/// Chat type constants and enumerations
-/// </summary>
 public static class ChatType
 {
     // GM Types (80-94)
@@ -63,9 +60,6 @@ public static class ChatType
     public const ushort RetainerSale = 71;
 }
 
-/// <summary>
-/// Chat category enumeration
-/// </summary>
 public enum ChatCategory
 {
     Player,

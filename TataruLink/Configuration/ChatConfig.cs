@@ -4,38 +4,20 @@ using TataruLink.Utils;
 
 namespace TataruLink.Configuration;
 
-/// <summary>
-/// Configuration for chat-related settings
-/// </summary>
 public class ChatConfig
 {
-    /// <summary>
-    /// Which chat types are enabled for translation
-    /// Key: Chat type ID (ushort), Value: enabled/disabled
-    /// </summary>
     public Dictionary<ushort, bool> EnabledChatTypes { get; set; } = new();
     
-    /// <summary>
-    /// Provider preferences for specific chat types
-    /// Key: Chat type ID (ushort), Value: Provider name (null = use default)
-    /// </summary>
     public Dictionary<ushort, string?> ChatTypeProviders { get; set; } = new();
     
-    /// <summary>
-    /// Default translation provider when none specified for a chat type
-    /// </summary>
     public string? DefaultProvider { get; set; }
     
-    /// <summary>
-    /// Check if a specific chat type is enabled for translation
-    /// </summary>
     public bool IsChatTypeEnabled(ushort chatTypeId)
     {
-        // First check if the exact type is enabled
         if (EnabledChatTypes.GetValueOrDefault(chatTypeId, false))
             return true;
             
-        // For GM types, check if the parent type is enabled
+        // NOTE: GM types fallback to parent type settings
         var parentType = ChatTypeUtils.GetParentType(chatTypeId);
         if (parentType != chatTypeId)
         {
@@ -45,9 +27,6 @@ public class ChatConfig
         return false;
     }
     
-    /// <summary>
-    /// Enable or disable a specific chat type
-    /// </summary>
     public void SetChatTypeEnabled(ushort chatTypeId, bool enabled)
     {
         EnabledChatTypes[chatTypeId] = enabled;

@@ -7,10 +7,6 @@ using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
-/// <summary>
-/// Validates incoming messages, including deduplication, content checks, and configuration-based filtering.
-/// This is a unified validation stage that combines multiple validation concerns.
-/// </summary>
 public class MessageValidationStage : IPipelineStage
 {
     public string Name => "Message Validation";
@@ -23,7 +19,7 @@ public class MessageValidationStage : IPipelineStage
     {
         this.configuration = configuration;
         
-        // Initialize validators in order of execution
+        // WARNING: Validator order affects execution sequence
         validators =
         [
             new GameStateValidator(this.configuration.Filter),
@@ -47,7 +43,6 @@ public class MessageValidationStage : IPipelineStage
     {
         if (!IsEnabled) return message;
         
-        // Check if message should be skipped entirely
         if (message.ShouldSkip())
         {
             Service.PluginLog.Debug($"Message skipped (empty or pure symbols): {message.PlainTextContent}");
@@ -57,7 +52,6 @@ public class MessageValidationStage : IPipelineStage
             return null;
         }
 
-        // Run all validators
         foreach (var validator in validators)
         {
             var result = await validator.ValidateAsync(message, context);
@@ -68,19 +62,17 @@ public class MessageValidationStage : IPipelineStage
                 context.Set($"validation.failed_at", validator.GetType().Name);
                 context.Set($"validation.reason", result.Reason);
                 
-                // Only record failure to debug service if it's not an unconfigured/unknown chat type
-                // This prevents spamming the debug log with expected validation failures
+                // WARNING: Filters out expected failures to prevent debug log spam
                 var chatTypeName = ChatTypeUtils.GetChannelName(message.ChatType);
                 if (chatTypeName != "Unknown" && !result.Reason.Contains("is not configured for translation"))
                 {
                     Service.PipelineDebug.RecordValidationFailure(message, validator.GetType().Name, result.Reason);
                 }
                 
-                return null; // Stop the pipeline
+                return null;
             }
         }
 
-        // Mark successful validation
         context.Set("validation.passed", true);
         Service.PluginLog.Debug($"Message passed all validations: [{ChatTypeUtils.GetChannelName(message.ChatType)}] {message.SenderName}");
         

@@ -19,10 +19,6 @@ public class GlossaryManager : IDisposable
         Build();
     }
 
-    /// <summary>
-    /// Rebuild the Aho-Corasick trie from configuration.
-    /// Should be called whenever the glossary entries are modified.
-    /// </summary>
     public void Build()
     {
         Service.PluginLog.Debug("Building Glossary Trie...");
@@ -32,7 +28,6 @@ public class GlossaryManager : IDisposable
             .Where(e => e.IsEnabled && !string.IsNullOrEmpty(e.Original) && !string.IsNullOrEmpty(e.Replacement))
             .ToList();
         
-        // Use case-insensitive dictionary for replacements
         replacementMap = enabledEntries.ToDictionary(
             e => e.Original.ToLowerInvariant(), 
             e => e.Replacement, 
@@ -40,7 +35,7 @@ public class GlossaryManager : IDisposable
 
         foreach (var entry in enabledEntries)
         {
-            // Add already lowercased pattern to avoid duplicate conversion in trie
+            // NOTE: Pre-lowercased to avoid duplicate conversion
             trie.Add(entry.Original.ToLowerInvariant());
         }
         
@@ -48,10 +43,7 @@ public class GlossaryManager : IDisposable
         Service.PluginLog.Information($"Glossary Trie built with {replacementMap.Count} entries.");
     }
 
-    /// <summary>
-    /// Apply glossary replacements to the given text.
-    /// Uses reverse iteration to prevent index corruption when replacements change string length.
-    /// </summary>
+    // WARNING: Reverse iteration prevents index corruption during replacements
     public string Apply(string text)
     {
         if (!glossaryConfig.IsEnabled || replacementMap.Count == 0 || string.IsNullOrEmpty(text))
@@ -62,8 +54,7 @@ public class GlossaryManager : IDisposable
         var matches = trie.FindAll(text).ToList();
         if (matches.Count == 0) return text;
 
-        // Sort by index in REVERSE order to process from end to beginning
-        // This prevents index corruption when replacement lengths differ from originals
+        // WARNING: Reverse order prevents corruption from length differences
         matches.Sort((a, b) => b.index.CompareTo(a.index));
 
         var result = new StringBuilder(text);
@@ -73,7 +64,7 @@ public class GlossaryManager : IDisposable
         {
             var endIndex = index + pattern.Length;
             
-            // Check for overlaps with already processed ranges
+            // WARNING: Skip overlapping ranges to prevent double-replacement
             var isOverlapping = processedRanges.Any(range => 
                                                         (index >= range.start && index < range.end) || 
                                                         (endIndex > range.start && endIndex <= range.end) ||
@@ -81,14 +72,11 @@ public class GlossaryManager : IDisposable
             
             if (isOverlapping) continue;
             
-            // Get the replacement (case-insensitive lookup)
             if (replacementMap.TryGetValue(pattern.ToLowerInvariant(), out var replacement))
             {
-                // Replace from the end to avoid index shifting
                 result.Remove(index, pattern.Length);
                 result.Insert(index, replacement);
                 
-                // Mark this range as processed
                 processedRanges.Add((index, endIndex));
             }
         }

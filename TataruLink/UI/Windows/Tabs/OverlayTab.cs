@@ -9,9 +9,6 @@ using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Overlay management tab for creating, configuring, and removing overlay windows
-/// </summary>
 public class OverlayTab(TataruConfig configuration, OverlayManager overlayManager)
 {
     private string newOverlayName = "New Overlay";

@@ -3,30 +3,15 @@ using TataruLink.Models;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
-/// <summary>
-/// Interface for message validators used within the validation pipeline stage.
-/// </summary>
 public interface IMessageValidator
 {
-    /// <summary>
-    /// Initialize the validator.
-    /// </summary>
     void Initialize();
     
-    /// <summary>
-    /// Validate a message.
-    /// </summary>
     ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context);
     
-    /// <summary>
-    /// Clean up resources.
-    /// </summary>
     void Dispose();
 }
 
-/// <summary>
-/// Result of a validation check.
-/// </summary>
 public class ValidationResult
 {
     public bool IsValid { get; }

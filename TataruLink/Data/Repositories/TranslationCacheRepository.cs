@@ -12,9 +12,6 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-/// <summary>
-/// Repository for translation cache operations
-/// </summary>
 public class TranslationCacheRepository(DatabaseContext context, CacheConfig config) : ITranslationCacheRepository
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
@@ -190,13 +187,13 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
 
     private static void PrepareEntry(TranslationCacheEntry entry)
     {
-        // Generate a cache key if not set
+        // NOTE: Generate a cache key if not set
         if (string.IsNullOrWhiteSpace(entry.CacheKey))
         {
             entry.CacheKey = GenerateCacheKey(entry.OriginalText, entry.SourceLanguage, entry.TargetLanguage);
         }
         
-        // Set timestamps if not set
+        // NOTE: Set timestamps if not set
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         if (entry.CreatedAt == 0)
         {
@@ -207,13 +204,13 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             entry.LastAccessedAt = now;
         }
         
-        // Set character count if not set
+        // NOTE: Set character count if not set
         if (entry.CharacterCount == 0)
         {
             entry.CharacterCount = entry.OriginalText.Length;
         }
         
-        // Ensure the access count is at least 1
+        // NOTE: Ensure the access count is at least 1
         if (entry.AccessCount < 1)
         {
             entry.AccessCount = 1;
@@ -280,7 +277,7 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             
         var normalized = $"{originalText.Trim()}|{sourceLanguage.ToLowerInvariant()}|{targetLanguage.ToLowerInvariant()}";
         
-        // Use ArrayPool for a temporary buffer
+        // NOTE: Use ArrayPool for performance optimization
         var byteCount = Encoding.UTF8.GetByteCount(normalized);
         var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
         try

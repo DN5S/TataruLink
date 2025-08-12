@@ -7,23 +7,17 @@ using TataruLink.Utils;
 
 namespace TataruLink.Pipeline.Stages.Validation;
 
-/// <summary>
-/// Validates messages based on current game state conditions.
-/// Skips translation when the player is in states where they can't see or won't read chat.
-/// </summary>
 public class GameStateValidator(FilterConfig config) : IMessageValidator
 {
     public void Initialize()
     {
-        // No initialization needed for this validator
     }
 
     public ValueTask<ValidationResult> ValidateAsync(Message message, PipelineContext context)
     {
-        // Check cutscene conditions
         if (config.SkipInCutscene)
         {
-            // Special handling: Allow NPC messages even during cutscenes
+            // WARNING: NPCs allowed during cutscenes for quest progression
             var isNpcMessage = ChatTypeUtils.IsNpcMessage(message.ChatType);
             
             if (!isNpcMessage && Service.Condition.Any(
@@ -37,7 +31,6 @@ public class GameStateValidator(FilterConfig config) : IMessageValidator
             }
         }
         
-        // Check loading conditions
         if (config.SkipInLoading && 
             Service.Condition.Any(
                 ConditionFlag.BetweenAreas,
@@ -47,7 +40,7 @@ public class GameStateValidator(FilterConfig config) : IMessageValidator
             return new ValueTask<ValidationResult>(ValidationResult.Failure("Player loading between areas"));
         }
         
-        // Check retainer conditions  
+  
         if (config.SkipInRetainer && 
             Service.Condition[ConditionFlag.OccupiedSummoningBell])
         {
@@ -55,7 +48,6 @@ public class GameStateValidator(FilterConfig config) : IMessageValidator
             return new ValueTask<ValidationResult>(ValidationResult.Failure("Player at retainer bell"));
         }
         
-        // Always skip when logging out
         if (Service.Condition[ConditionFlag.LoggingOut])
         {
             Service.PluginLog.Debug($"GameStateValidator: Skipping message during logout");
@@ -67,6 +59,5 @@ public class GameStateValidator(FilterConfig config) : IMessageValidator
 
     public void Dispose()
     {
-        // No resources to dispose
     }
 }

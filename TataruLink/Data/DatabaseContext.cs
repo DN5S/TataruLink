@@ -9,9 +9,6 @@ using TataruLink.Services;
 
 namespace TataruLink.Data;
 
-/// <summary>
-/// Database context for managing SQLite connections and initialization
-/// </summary>
 public class DatabaseContext : IDisposable, IAsyncDisposable
 {
     private readonly string connectionString;
@@ -35,13 +32,12 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
             Mode = SqliteOpenMode.ReadWriteCreate,
             Cache = SqliteCacheMode.Shared,
             DefaultTimeout = config.ConnectionTimeoutSeconds,
-            Pooling = false // Disable pooling, we'll manage our own connection
+            Pooling = false
         };
         
         connectionString = builder.ConnectionString;
         
-        // Use semaphore to limit concurrent database access
-        // SQLite can handle multiple readers but only one writer
+        // WARNING: SQLite only supports one writer - semaphore prevents locking
         connectionSemaphore = new SemaphoreSlim(1, 1);
     }
 
@@ -49,8 +45,7 @@ public class DatabaseContext : IDisposable, IAsyncDisposable
     {
         ThrowIfDisposed();
         
-        // For SQLite, it's better to use a single connection with proper locking
-        // This prevents "database is locked" errors
+        // WARNING: Single connection prevents SQLite locking errors
         await connectionSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         
         try

@@ -11,10 +11,7 @@ using TataruLink.Services;
 
 namespace TataruLink.Pipeline.Stages.Capture;
 
-/// <summary>
-/// Entry point stage: Captures chat messages from FFXIV and feeds them into the pipeline.
-/// Uses Producer-Consumer pattern with Channels for efficient and stable message processing.
-/// </summary>
+// Producer-Consumer pattern for game chat capture
 public class ChatCaptureStage : IPipelineStage
 {
     private readonly MessagePipeline pipeline;
@@ -24,8 +21,8 @@ public class ChatCaptureStage : IPipelineStage
     private Task? consumerTask;
     private bool isInitialized;
     
-    // Performance configuration
-    private const int MaxConcurrentProcessing = 3; // Limit concurrent pipeline processing
+    // WARNING: Limits concurrent processing to prevent thread pool exhaustion
+    private const int MaxConcurrentProcessing = 3;
     private readonly SemaphoreSlim processingThrottle = new(MaxConcurrentProcessing);
 
     public string Name => "Chat Capture";
@@ -36,13 +33,13 @@ public class ChatCaptureStage : IPipelineStage
         this.pipeline = pipeline;
         this.configuration = configuration;
         
-        // Create a bounded channel to prevent memory issues during message floods
+        // WARNING: Bounded channel prevents memory growth during chat floods
         var queueSize = configuration.Performance.MaxQueueSize > 0 ? configuration.Performance.MaxQueueSize : 1000;
         var options = new BoundedChannelOptions(queueSize)
         {
-            FullMode = BoundedChannelFullMode.Wait, // Block producer when full
-            SingleReader = true, // Only one consumer task
-            SingleWriter = false // Multiple chat events can write
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = false
         };
         
         messageChannel = Channel.CreateBounded<Message>(options);
@@ -52,45 +49,36 @@ public class ChatCaptureStage : IPipelineStage
     {
         if (isInitialized) return;
         
-        // Start the consumer task
         cancellationTokenSource = new CancellationTokenSource();
         consumerTask = RunConsumerAsync(cancellationTokenSource.Token);
         
-        // Subscribe to chat events
         Service.ChatGui.ChatMessage += OnChatMessage;
         isInitialized = true;
         
         Service.PluginLog.Information($"{Name} stage initialized with queue size {configuration.Performance.MaxQueueSize}, max concurrent {MaxConcurrentProcessing}");
     }
 
-    /// <summary>
-    /// Producer: Captures chat messages and adds them to the queue.
-    /// This runs on the game thread and must be fast.
-    /// </summary>
+    // WARNING: Runs on game thread - must be fast to avoid game lag
     private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
     {
         if (!IsEnabled || !configuration.IsEnabled) return;
 
         try
         {
-            // Create the message model (fast operation)
             var chatMessage = new Message(
                 chatType: (ushort)type,
                 sender: sender,
                 content: message
             );
 
-            // Debug log for unknown chat types
             var channelName = chatMessage.GetChannelName();
             if (channelName == "Unknown")
             {
                 Service.PluginLog.Debug($"Unknown chat type captured: {(ushort)type:X4} ({(ushort)type}) - {type}");
             }
 
-            // Try to add to the queue without blocking
             if (!messageChannel.Writer.TryWrite(chatMessage))
             {
-                // Queue is a full-log warning and drop message
                 Service.PluginLog.Warning($"Message queue full, dropping message from {channelName}");
             }
         }
@@ -100,25 +88,19 @@ public class ChatCaptureStage : IPipelineStage
         }
     }
 
-    /// <summary>
-    /// Consumer: Processes messages from the queue in a controlled manner.
-    /// This runs on a dedicated background thread.
-    /// </summary>
+    // Background thread consumer with throttling
     private async Task RunConsumerAsync(CancellationToken cancellationToken)
     {
         Service.PluginLog.Information("Message consumer started");
         
         try
         {
-            // Create tasks list to track concurrent processing
             var processingTasks = new List<Task>();
             
             await foreach (var message in messageChannel.Reader.ReadAllAsync(cancellationToken))
             {
-                // Wait for a processing slot
                 await processingThrottle.WaitAsync(cancellationToken);
                 
-                // Start processing the message
                 var task = ProcessMessageAsync(message, cancellationToken).ContinueWith(t =>
                 {
                     processingThrottle.Release();
@@ -132,11 +114,10 @@ public class ChatCaptureStage : IPipelineStage
                 
                 processingTasks.Add(task);
                 
-                // Clean up completed tasks to prevent list from growing indefinitely
+                // WARNING: Cleanup prevents unbounded list growth
                 processingTasks.RemoveAll(t => t.IsCompleted);
                 
-                // If we have max concurrent tasks, wait for at least one to complete
-                // This ensures messages are processed mostly in order while allowing some concurrency
+                // WARNING: Maintains message order while allowing controlled concurrency
                 if (processingTasks.Count >= MaxConcurrentProcessing)
                 {
                     await Task.WhenAny(processingTasks);
@@ -144,7 +125,6 @@ public class ChatCaptureStage : IPipelineStage
                 }
             }
             
-            // Wait for all remaining tasks to complete on shutdown
             if (processingTasks.Count > 0)
             {
                 await Task.WhenAll(processingTasks);
@@ -162,20 +142,16 @@ public class ChatCaptureStage : IPipelineStage
         Service.PluginLog.Information("Message consumer stopped");
     }
 
-    /// <summary>
-    /// Process a single message through the pipeline with proper error isolation.
-    /// </summary>
     private async Task ProcessMessageAsync(Message message, CancellationToken cancellationToken)
     {
         try
         {
-            // cancellationToken will be used when pipeline.ProcessAsync supports cancellation
+            // NOTE: CancellationToken unused until pipeline supports it
             _ = cancellationToken;
             await pipeline.ProcessAsync(message);
         }
         catch (OperationCanceledException)
         {
-            // Expected during shutdown
         }
         catch (Exception ex)
         {
@@ -185,8 +161,7 @@ public class ChatCaptureStage : IPipelineStage
 
     public Task<Message?> ProcessAsync(Message message, PipelineContext context)
     {
-        // This stage is an entry point, it doesn't process messages from other stages
-        // It only captures from the game and feeds into the pipeline
+        // NOTE: Entry stage - captures from game, not from other pipeline stages
         return Task.FromResult<Message?>(message);
     }
 
@@ -196,26 +171,21 @@ public class ChatCaptureStage : IPipelineStage
         
         Service.PluginLog.Information($"{Name} stage shutting down...");
         
-        // Unsubscribe from chat events first
         Service.ChatGui.ChatMessage -= OnChatMessage;
         
-        // Signal the channel that no more items will be written
         messageChannel.Writer.TryComplete();
         
-        // Cancel the consumer task
         cancellationTokenSource?.Cancel();
         
-        // Wait for the consumer to finish (with timeout)
+        // WARNING: Timeout prevents indefinite shutdown wait
         try
         {
             consumerTask?.Wait(TimeSpan.FromSeconds(5));
         }
         catch (AggregateException)
         {
-            // Expected if a task was canceled
         }
         
-        // Cleanup
         cancellationTokenSource?.Dispose();
         processingThrottle.Dispose();
         isInitialized = false;

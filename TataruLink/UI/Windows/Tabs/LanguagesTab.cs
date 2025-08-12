@@ -4,10 +4,6 @@ using TataruLink.Services;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-/// <summary>
-/// Language selection tab
-/// </summary>
-// ReSharper disable once ClassNeverInstantiated.Global
 public class LanguagesTab(TataruConfig configuration)
 {
     private readonly string[] languageNames = 

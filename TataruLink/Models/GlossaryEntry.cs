@@ -1,8 +1,5 @@
 namespace TataruLink.Models;
 
-/// <summary>
-/// Represents a single entry in the user's glossary.
-/// </summary>
 public class GlossaryEntry
 {
     public string Original { get; set; } = string.Empty;

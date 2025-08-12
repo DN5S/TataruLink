@@ -9,17 +9,11 @@ using TataruLink.Services;
 
 namespace TataruLink.Translation.Providers;
 
-/// <summary>
-/// Google Translate provider using the unofficial public API
-/// WARNING: This uses an UNOFFICIAL API that may be changed or blocked by Google at any time.
-/// For production use, consider using official Google Cloud Translation API instead.
-/// No API key required, but stability is not guaranteed.
-/// </summary>
+// WARNING: Uses UNOFFICIAL Google API - may break at any time
 public class GoogleTranslateProvider : ITranslationProvider
 {
     private const string ApiUrlTemplate = "https://translate.googleapis.com/translate_a/single?client=gtx&sl={0}&tl={1}&dt=t&q={2}";
     
-    // Optimized HttpClient with connection pooling and HTTP/2
     private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
@@ -34,11 +28,10 @@ public class GoogleTranslateProvider : ITranslationProvider
 
     public string Name => "Google";
     public bool IsConfigured { get; private set; }
-    public bool SupportsStructuredTranslation => false;  // Google breaks XML structure with nested tags
+    public bool SupportsStructuredTranslation => false;
 
     public void Initialize(string? apiKey = null)
     {
-        // Google's unofficial API doesn't need an API key
         IsConfigured = true;
         Service.PluginLog.Warning("Google Translate provider initialized using UNOFFICIAL API - stability not guaranteed");
         Service.PluginLog.Information("Consider using DeepL or another official API for better reliability");
@@ -63,13 +56,11 @@ public class GoogleTranslateProvider : ITranslationProvider
         
         try
         {
-            // Build the API URL
             var url = string.Format(ApiUrlTemplate,
                 Uri.EscapeDataString(sourceLanguage),
                 Uri.EscapeDataString(targetLanguage),
                 Uri.EscapeDataString(text));
 
-            // Make the HTTP request
             var response = await HttpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
             
             if (!response.IsSuccessStatusCode)
@@ -82,7 +73,6 @@ public class GoogleTranslateProvider : ITranslationProvider
                 };
             }
 
-            // Parse the response
             var jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var (translatedText, detectedLanguage) = ParseGoogleResponse(jsonResponse);
             
@@ -148,7 +138,7 @@ public class GoogleTranslateProvider : ITranslationProvider
 
     /// <summary>
     /// Parse the Google Translate JSON response
-    ///  format: [[["translated text", "source text",null,null,0]],null,"detected_lang"]
+    /// format: [[["translated text", "source text",null,null,0]],null,"detected_lang"]
     /// </summary>
     private (string? TranslatedText, string? DetectedLanguage) ParseGoogleResponse(string jsonResponse)
     {
