@@ -46,6 +46,16 @@ public class MessageValidationStage : IPipelineStage
     public async Task<Message?> ProcessAsync(Message message, PipelineContext context)
     {
         if (!IsEnabled) return message;
+        
+        // Check if message should be skipped entirely
+        if (message.ShouldSkip())
+        {
+            Service.PluginLog.Debug($"Message skipped (empty or pure symbols): {message.PlainTextContent}");
+            context.Set("validation.failed_at", "ShouldSkip");
+            context.Set("validation.reason", "Message empty or contains only symbols");
+            message.Skip("Empty or pure symbols");
+            return null;
+        }
 
         // Run all validators
         foreach (var validator in validators)

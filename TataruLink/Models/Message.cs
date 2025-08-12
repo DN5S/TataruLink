@@ -20,9 +20,10 @@ public sealed class Message
     public TranslationStatus Status { get; set; }
     public string? SourceLanguage { get; set; }
     public string? TargetLanguage { get; set; }
-    public float? QualityScore { get; set; }
     public string? TranslationEngine { get; set; }
     public TimeSpan? TranslationTime { get; set; }
+    public bool IsFromCache { get; set; }
+    public string? ErrorMessage { get; set; }
     
     public Message(ushort chatType, SeString sender, SeString content)
     {
@@ -43,17 +44,19 @@ public sealed class Message
     public bool IsTranslated()
         => Status == TranslationStatus.Completed && !string.IsNullOrWhiteSpace(TranslatedContent);
 
-    public void SetTranslation(string translatedText, string engine, TimeSpan translationTime)
+    public void SetTranslation(string translatedText, string engine, TimeSpan translationTime, bool isFromCache = false)
     {
         TranslatedContent = translatedText;
         TranslationEngine = engine;
         TranslationTime = translationTime;
-        Status = TranslationStatus.Completed;
+        IsFromCache = isFromCache;
+        Status = isFromCache ? TranslationStatus.Cached : TranslationStatus.Completed;
     }
 
     public void SetError(string errorMessage)
     {
-        TranslatedContent = errorMessage;
+        ErrorMessage = errorMessage;
+        TranslatedContent = null;
         Status = TranslationStatus.Failed;
     }
 
@@ -71,6 +74,35 @@ public sealed class Message
 
     public ChatCategory GetCategory()
         => ChatTypeUtils.GetCategory(ChatType);
+    
+    public bool IsSuccessful()
+        => Status == TranslationStatus.Completed && 
+           !string.IsNullOrWhiteSpace(TranslatedContent) &&
+           !TranslatedContent.Equals(PlainTextContent, StringComparison.Ordinal);
+    
+    public bool ShouldSkip()
+    {
+        if (string.IsNullOrWhiteSpace(PlainTextContent))
+            return true;
+        
+        if (IsPureSymbols(PlainTextContent))
+            return true;
+        
+        return false;
+    }
+    
+    private static bool IsPureSymbols(string text)
+    {
+        foreach (var c in text)
+        {
+            if (char.IsLetterOrDigit(c))
+                return false;
+        }
+        return true;
+    }
+    
+    public bool IsExpired(TimeSpan timeout)
+        => DateTime.Now - Timestamp > timeout;
 }
 
 public enum TranslationStatus

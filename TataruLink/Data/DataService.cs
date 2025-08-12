@@ -231,32 +231,6 @@ public class DataService : IDataService
         return await unitOfWork.ChatHistory.ClearAllAsync().ConfigureAwait(false);
     }
 
-    public Task<List<UIColumnConfig>> GetColumnSettingsAsync()
-    {
-        // UI settings are stored separately from cache/history
-        // For now, return empty list - can be extended later if needed
-        return Task.FromResult(new List<UIColumnConfig>());
-    }
-
-    public async Task SaveColumnSettingsAsync(List<UIColumnConfig> settings)
-    {
-        // UI settings are stored separately from cache/history
-        // For now, no-op - can be extended later if needed
-        await Task.CompletedTask;
-    }
-
-    public async Task<string?> GetSettingAsync(string key)
-    {
-        // Settings are managed through configuration, not database
-        return await Task.FromResult<string?>(null);
-    }
-
-    public async Task SetSettingAsync(string key, string value)
-    {
-        // Settings are managed through configuration, not database
-        await Task.CompletedTask;
-    }
-
     public async Task<int> PruneOldCacheEntriesAsync(TimeSpan maxAge)
     {
         var cutoffTime = DateTimeOffset.UtcNow.Subtract(maxAge);

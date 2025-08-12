@@ -25,7 +25,6 @@ public class ChatCaptureStage : IPipelineStage
     private bool isInitialized;
     
     // Performance configuration
-    private const int MaxQueueSize = 1000; // Prevent unbounded growth
     private const int MaxConcurrentProcessing = 3; // Limit concurrent pipeline processing
     private readonly SemaphoreSlim processingThrottle = new(MaxConcurrentProcessing);
 
@@ -38,7 +37,8 @@ public class ChatCaptureStage : IPipelineStage
         this.configuration = configuration;
         
         // Create a bounded channel to prevent memory issues during message floods
-        var options = new BoundedChannelOptions(MaxQueueSize)
+        var queueSize = configuration.Performance.MaxQueueSize > 0 ? configuration.Performance.MaxQueueSize : 1000;
+        var options = new BoundedChannelOptions(queueSize)
         {
             FullMode = BoundedChannelFullMode.Wait, // Block producer when full
             SingleReader = true, // Only one consumer task
@@ -60,7 +60,7 @@ public class ChatCaptureStage : IPipelineStage
         Service.ChatGui.ChatMessage += OnChatMessage;
         isInitialized = true;
         
-        Service.PluginLog.Information($"{Name} stage initialized with queue size {MaxQueueSize}, max concurrent {MaxConcurrentProcessing}");
+        Service.PluginLog.Information($"{Name} stage initialized with queue size {configuration.Performance.MaxQueueSize}, max concurrent {MaxConcurrentProcessing}");
     }
 
     /// <summary>

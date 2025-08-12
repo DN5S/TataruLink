@@ -156,31 +156,6 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         }
     }
 
-    public async Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
-    {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                SELECT 
-                    COUNT(*) as TotalEntries,
-                    SUM(AccessCount) as TotalAccesses,
-                    AVG(AccessCount) as AverageAccesses
-                FROM TranslationCache";
-            
-            // Query for future use when we need database statistics
-            _ = await connection.QuerySingleOrDefaultAsync<dynamic>(sql);
-            
-            // Note: This returns database statistics, not runtime cache hit/miss statistics
-            // the cache service should track Runtime statistics
-            return new CacheStatistics();
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
-    }
-
     private static void ValidateCacheKey(string cacheKey)
     {
         if (string.IsNullOrWhiteSpace(cacheKey))

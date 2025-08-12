@@ -14,7 +14,6 @@ public interface ITranslationCacheRepository
     Task<int> UpsertBatchAsync(IEnumerable<TranslationCacheEntry> entries, CancellationToken cancellationToken = default);
     Task<int> PruneOldEntriesAsync(DateTimeOffset cutoffTime, CancellationToken cancellationToken = default);
     Task<long> GetTotalSizeAsync(CancellationToken cancellationToken = default);
-    Task<CacheStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<TranslationCacheEntry>> GetHotTranslationsAsync(int limit = 100, int minAccessCount = 5, CancellationToken cancellationToken = default);
     Task<IEnumerable<TranslationCacheEntry>> GetRecentlyAccessedAsync(int limit = 50, int withinHours = 1, CancellationToken cancellationToken = default);
 }

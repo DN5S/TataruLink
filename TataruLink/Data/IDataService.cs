@@ -21,13 +21,6 @@ public interface IDataService : IDisposable, IAsyncDisposable
     Task<int> DeleteHistoryAsync(params long[] ids);
     Task<int> ClearHistoryAsync();
     
-    // Column settings
-    Task<List<UIColumnConfig>> GetColumnSettingsAsync();
-    Task SaveColumnSettingsAsync(List<UIColumnConfig> settings);
-    
-    // Cache settings
-    Task<string?> GetSettingAsync(string key);
-    Task SetSettingAsync(string key, string value);
     
     // Maintenance
     Task<int> PruneOldCacheEntriesAsync(TimeSpan maxAge);

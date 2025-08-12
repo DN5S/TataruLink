@@ -101,6 +101,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 translatedText = cacheEntry.TranslatedText;
                 context.Set("translation.from_cache", true);
                 context.Set("translation.cache_id", cacheEntry.Id);
+                message.IsFromCache = true;
                 Service.PluginLog.Debug($"Translation found in cache: {textToTranslate} -> {translatedText}");
             }
             else
@@ -116,7 +117,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             if (translatedText != null)
             {
                 message.TranslatedContent = translatedText;
-                message.Status = TranslationStatus.Completed;
+                message.Status = message.IsFromCache ? TranslationStatus.Cached : TranslationStatus.Completed;
                 
                 // Save to cache if translation was not from cache
                 if (!cacheFound)
@@ -150,6 +151,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             }
             else
             {
+                message.ErrorMessage = "Translation returned null or empty";
                 message.Status = TranslationStatus.Failed;
                 context.Set("translation.success", false);
                 
@@ -157,6 +159,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 var providerStatus = translationService.GetActiveProviderStatus();
                 if (providerStatus?.LastError != null)
                 {
+                    message.ErrorMessage = providerStatus.LastError.Message;
                     context.Set("translation.error", providerStatus.LastError.Message);
                     
                     // Store user-friendly error if available
@@ -176,6 +179,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
         {
             // Translation was canceled (timeout or user cancellation)
             Service.PluginLog.Debug($"Translation cancelled for message {message.Id}");
+            message.ErrorMessage = "Translation cancelled or timed out";
             message.Status = TranslationStatus.Failed;
             context.Set("translation.error", "Translation cancelled or timed out");
             context.Set("translation.user_error", "Translation took too long. Try increasing the timeout in settings.");
@@ -186,10 +190,11 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, $"Error in translation stage for message {message.Id}");
-            message.Status = TranslationStatus.Failed;
             
             // Create a translation error for better user feedback
             var error = TranslationError.FromException(ex, translationService.ProviderName);
+            message.ErrorMessage = error.Message;
+            message.Status = TranslationStatus.Failed;
             context.Set("translation.error", error.Message);
             
             if (error.UserFriendlyMessage != null)
