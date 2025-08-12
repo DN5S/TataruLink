@@ -28,6 +28,7 @@ public class Service
     [PluginService] public static IObjectTable ObjectTable { get; private set; } = null!;
     [PluginService] public static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] public static IToastGui ToastGui { get; private set; } = null!;
+    [PluginService] public static ICondition Condition { get; private set; } = null!;
     
     // [PluginService] public static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
     // ^ For hooking game functions (advanced)
@@ -37,8 +38,5 @@ public class Service
     
     // [PluginService] public static IKeyState KeyState { get; private set; } = null!;
     // ^ For keyboard input handling
-    
-    // [PluginService] public static ICondition Condition { get; private set; } = null!;
-    // ^ For checking game conditions (in combat, in cutscene, etc.)
 
 }

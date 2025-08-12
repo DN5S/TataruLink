@@ -121,10 +121,61 @@ public class FiltersTab(TataruConfig configuration)
         ImGui.Separator();
         ImGui.Spacing();
         
+        // Game State Filters Section
+        ImGui.TextUnformatted("Game State Filters"u8);
+        ImGui.Separator();
+        ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), 
+            "Skip translation during certain game states to improve performance"u8);
+        ImGui.Spacing();
+        
+        // Cutscene filter
+        var skipInCutscene = configuration.Filter.SkipInCutscene;
+        if (ImGui.Checkbox("Skip during cutscenes"u8, ref skipInCutscene))
+        {
+            configuration.Filter.SkipInCutscene = skipInCutscene;
+            Service.Configuration.Save();
+            Service.PluginLog.Information($"Skip in cutscene: {skipInCutscene}");
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("When enabled, player messages are skipped during cutscenes.\nNPC dialogue will still be translated."u8);
+        }
+        
+        // Loading screen filter
+        var skipInLoading = configuration.Filter.SkipInLoading;
+        if (ImGui.Checkbox("Skip during loading screens"u8, ref skipInLoading))
+        {
+            configuration.Filter.SkipInLoading = skipInLoading;
+            Service.Configuration.Save();
+            Service.PluginLog.Information($"Skip in loading: {skipInLoading}");
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("When enabled, all translations are skipped while loading between areas."u8);
+        }
+        
+        // Retainer bell filter
+        var skipInRetainer = configuration.Filter.SkipInRetainer;
+        if (ImGui.Checkbox("Skip at retainer bell"u8, ref skipInRetainer))
+        {
+            configuration.Filter.SkipInRetainer = skipInRetainer;
+            Service.Configuration.Save();
+            Service.PluginLog.Information($"Skip at retainer: {skipInRetainer}");
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("When enabled, translations are skipped while accessing retainers."u8);
+        }
+        
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        
         // Help text
         ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Tips:"u8);
         ImGui.BulletText("Add your character name to block your own messages from being translated"u8);
         ImGui.BulletText("Keywords are case-insensitive"u8);
         ImGui.BulletText("Messages are blocked if they contain the keyword or if the sender matches"u8);
+        ImGui.BulletText("NPC dialogue is always translated during cutscenes regardless of settings"u8);
     }
 }
