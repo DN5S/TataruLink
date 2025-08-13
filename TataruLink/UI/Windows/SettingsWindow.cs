@@ -17,7 +17,6 @@ public class SettingsWindow : Window, IDisposable
 {
     private GeneralTab generalTab;
     private readonly TranslationTab translationTab;
-    private readonly LanguagesTab languagesTab;
     private readonly ChatTypesTab chatTypesTab;
     private readonly FiltersTab filtersTab;
     private readonly GlossaryTab glossaryTab;
@@ -39,7 +38,6 @@ public class SettingsWindow : Window, IDisposable
         
         generalTab = new GeneralTab(configuration, translationService, null);
         translationTab = new TranslationTab(configuration, translationService);
-        languagesTab = new LanguagesTab(configuration);
         chatTypesTab = new ChatTypesTab(configuration);
         filtersTab = new FiltersTab(configuration);
         glossaryTab = new GlossaryTab(glossaryManager);
@@ -70,12 +68,6 @@ public class SettingsWindow : Window, IDisposable
         {
             if (tab)
                 translationTab.Draw();
-        }
-            
-        using (var tab = ImRaii.TabItem("Languages"u8))
-        {
-            if (tab)
-                languagesTab.Draw();
         }
             
         using (var tab = ImRaii.TabItem("Chat Types"u8))

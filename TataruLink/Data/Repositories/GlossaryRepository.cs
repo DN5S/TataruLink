@@ -12,7 +12,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
 
-    public async Task<GlossaryDbEntry> AddAsync(GlossaryDbEntry entry, CancellationToken cancellationToken = default)
+    public async Task<GlossaryEntry> AddAsync(GlossaryEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         PrepareEntry(entry);
@@ -22,7 +22,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         return entry;
     }
 
-    public async Task<GlossaryDbEntry?> UpdateAsync(GlossaryDbEntry entry, CancellationToken cancellationToken = default)
+    public async Task<GlossaryEntry?> UpdateAsync(GlossaryEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         entry.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -53,7 +53,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         return true;
     }
 
-    public async Task<GlossaryDbEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    public async Task<GlossaryEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
@@ -61,7 +61,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         return await context.GlossaryEntries.FindAsync([id], cancellationToken);
     }
 
-    public async Task<GlossaryDbEntry?> GetByOriginalAsync(string original, CancellationToken cancellationToken = default)
+    public async Task<GlossaryEntry?> GetByOriginalAsync(string original, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(original))
             throw new ArgumentException("Original text cannot be empty", nameof(original));
@@ -70,7 +70,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
             .FirstOrDefaultAsync(e => e.Original.Equals(original, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
     }
 
-    public async Task<IEnumerable<GlossaryDbEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<GlossaryEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
         var query = enabledOnly
             ? context.GlossaryEntries.Where(e => e.IsEnabled)
@@ -95,7 +95,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         return await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<int> AddBatchAsync(IEnumerable<GlossaryDbEntry> entries, CancellationToken cancellationToken = default)
+    public async Task<int> AddBatchAsync(IEnumerable<GlossaryEntry> entries, CancellationToken cancellationToken = default)
     {
         var entriesList = entries.ToList() ?? throw new ArgumentNullException(nameof(entries));
         if (entriesList.Count == 0) return 0;
@@ -125,7 +125,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         return await context.SaveChangesAsync(cancellationToken);
     }
 
-    private static void ValidateEntry(GlossaryDbEntry entry)
+    private static void ValidateEntry(GlossaryEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
@@ -142,7 +142,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
             throw new ArgumentException("Replacement text exceeds maximum length of 200");
     }
 
-    private static void PrepareEntry(GlossaryDbEntry entry)
+    private static void PrepareEntry(GlossaryEntry entry)
     {
         entry.Original = entry.Original.Trim();
         entry.Replacement = entry.Replacement.Trim();

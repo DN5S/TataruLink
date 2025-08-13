@@ -116,15 +116,9 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
         return message;
     }
 
-    private void DisplayInGameChat(Message message, TataruConfig config)
+    private static void DisplayInGameChat(Message message, TataruConfig config)
     {
-        var prefixBuilder = new System.Text.StringBuilder();
-        
-        if (!string.IsNullOrEmpty(config.Translation.TranslationPrefix))
-        {
-            prefixBuilder.Append(config.Translation.TranslationPrefix);
-            prefixBuilder.Append(' ');
-        }
+        var headerBuilder = new System.Text.StringBuilder(capacity: 128);
         
         // NOTE: ChatGUI adds timestamps automatically
         if (config.Display.ShowChatType)
@@ -132,20 +126,21 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             var chatTypeName = message.GetChannelName();
             if (!string.IsNullOrEmpty(chatTypeName))
             {
-                prefixBuilder.Append($"[{chatTypeName}] ");
+                headerBuilder.Append($"[{chatTypeName}] ");
             }
         }
         
         if (config.Display.ShowSenderName && !string.IsNullOrEmpty(message.SenderName))
         {
-            prefixBuilder.Append($"{message.SenderName}: ");
+            headerBuilder.Append($"{message.SenderName}: ");
         }
         
         // WARNING: Must preserve SeString payloads for proper display
+        var messageHeader = headerBuilder.Length > 0 ? headerBuilder.ToString().TrimEnd() : null;
         var formattedMessage = SeStringUtils.BuildTranslation(
             message.OriginalContent,
             message.TranslatedContent!,
-            prefixBuilder.ToString().TrimEnd()
+            messageHeader
         );
         
         var chatEntry = new XivChatEntry

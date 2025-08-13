@@ -16,7 +16,7 @@ public class FiltersTab(TataruConfig configuration)
 
     public void Draw()
     {
-        ImGuiUtils.Section("Chat Filters");
+        ImGuiUtils.Section("Chat Filters"u8);
         
         // Keyword Filter Section
         if (ImGui.CollapsingHeader("Keyword Filtering"u8, ImGuiTreeNodeFlags.DefaultOpen))
@@ -29,7 +29,7 @@ public class FiltersTab(TataruConfig configuration)
                 Service.Configuration.Save();
             }
             
-            ImGuiUtils.HelpMarker("When enabled, messages containing blocked keywords or from blocked senders will not be translated.");
+            ImGuiUtils.HelpMarker("When enabled, messages containing blocked keywords or from blocked senders will not be translated."u8);
             
             ImGui.Separator();
             
@@ -38,7 +38,7 @@ public class FiltersTab(TataruConfig configuration)
             ImGui.Spacing();
             
             ImGui.SetNextItemWidth(-100);
-            ImGuiUtils.InputTextWithHint("##NewKeyword", "Enter a keyword to block", ref newKeyword);
+            ImGuiUtils.InputTextWithHint("##NewKeyword"u8, "Enter a keyword to block"u8, ref newKeyword);
             
             ImGui.SameLine();
             var canAdd = !string.IsNullOrWhiteSpace(newKeyword);
@@ -72,33 +72,10 @@ public class FiltersTab(TataruConfig configuration)
             ImGui.Dummy(new Vector2(20, 0));
             ImGui.SameLine();
             
-            if (ImGui.Button("Remove All"u8))
+            if (ImGuiUtils.ConfirmationButton("Remove All"u8, "Are you sure you want to remove all keywords?\nThis action cannot be undone."u8))
             {
-                ImGui.OpenPopup("ConfirmRemoveAllKeywords"u8);
-            }
-            
-            // Confirmation popup for Remove All
-            if (ImGui.BeginPopupModal("ConfirmRemoveAllKeywords"u8, ImGuiWindowFlags.AlwaysAutoResize))
-            {
-                ImGui.TextUnformatted("Are you sure you want to remove all keywords?"u8);
-                ImGui.TextUnformatted("This action cannot be undone."u8);
-                ImGui.Separator();
-                
-                if (ImGui.Button("Yes, Remove All"u8, new Vector2(120, 0)))
-                {
-                    configuration.Filter.KeywordBlocklist.Clear();
-                    Service.Configuration.Save();
-                    ImGui.CloseCurrentPopup();
-                }
-                
-                ImGui.SameLine();
-                
-                if (ImGui.Button("Cancel"u8, new Vector2(120, 0)))
-                {
-                    ImGui.CloseCurrentPopup();
-                }
-                
-                ImGui.EndPopup();
+                configuration.Filter.KeywordBlocklist.Clear();
+                Service.Configuration.Save();
             }
             
             ImGui.Separator();
@@ -156,9 +133,9 @@ public class FiltersTab(TataruConfig configuration)
         ImGuiUtils.Spacing(2);
         
         // Game State Filters Section
-        ImGuiUtils.Section("Game State Filters");
+        ImGuiUtils.Section("Game State Filters"u8);
         ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, 
-            "Skip translation during certain game states to improve performance");
+            "Skip translation during certain game states to improve performance"u8);
         ImGuiUtils.Spacing();
         
         // Cutscene filter
@@ -169,7 +146,7 @@ public class FiltersTab(TataruConfig configuration)
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip in cutscene: {skipInCutscene}");
         }
-        ImGuiUtils.HelpMarker("When enabled, player messages are skipped during cutscenes.\nNPC dialogue will still be translated.");
+        ImGuiUtils.HelpMarker("When enabled, player messages are skipped during cutscenes.\nNPC dialogue will still be translated."u8);
         
         // Loading screen filter
         var skipInLoading = configuration.Filter.SkipInLoading;
@@ -179,7 +156,7 @@ public class FiltersTab(TataruConfig configuration)
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip in loading: {skipInLoading}");
         }
-        ImGuiUtils.HelpMarker("When enabled, all translations are skipped while loading between areas.");
+        ImGuiUtils.HelpMarker("When enabled, all translations are skipped while loading between areas."u8);
         
         // Retainer bell filter
         var skipInRetainer = configuration.Filter.SkipInRetainer;
@@ -189,12 +166,12 @@ public class FiltersTab(TataruConfig configuration)
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip at retainer: {skipInRetainer}");
         }
-        ImGuiUtils.HelpMarker("When enabled, translations are skipped while accessing retainers.");
+        ImGuiUtils.HelpMarker("When enabled, translations are skipped while accessing retainers."u8);
         
         ImGuiUtils.Spacing(2);
         
         // Validation Settings Section
-        ImGuiUtils.Section("Validation Settings");
+        ImGuiUtils.Section("Validation Settings"u8);
         
         // Duplicate detection period
         var dupePeriod = configuration.Validation.DuplicateDetectionPeriodMs;
@@ -203,12 +180,12 @@ public class FiltersTab(TataruConfig configuration)
             configuration.Validation.DuplicateDetectionPeriodMs = dupePeriod;
             Service.Configuration.Save();
         }
-        ImGuiUtils.HelpMarker("Messages identical to recent ones within this time period will not be translated again.");
+        ImGuiUtils.HelpMarker("Messages identical to recent ones within this time period will not be translated again."u8);
         
         ImGuiUtils.Spacing(2);
         
         // Help text
-        ImGuiUtils.SectionSmall("Tips");
+        ImGuiUtils.SectionSmall("Tips"u8);
         ImGui.BulletText("Add your character name to block your own messages from being translated"u8);
         ImGui.BulletText("Keywords are case-insensitive"u8);
         ImGui.BulletText("Messages are blocked if they contain the keyword or if the sender matches"u8);

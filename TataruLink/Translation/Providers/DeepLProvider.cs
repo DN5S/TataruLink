@@ -190,6 +190,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable, IAsyncDisposable
         translator = null;
         apiKey = null;
         Service.PluginLog.Debug("DeepL provider disposed");
+        GC.SuppressFinalize(this);
     }
     
     public ValueTask DisposeAsync()

@@ -12,7 +12,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
 
-    public async Task<BlocklistDbEntry> AddAsync(BlocklistDbEntry entry, CancellationToken cancellationToken = default)
+    public async Task<BlocklistEntry> AddAsync(BlocklistEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         PrepareEntry(entry);
@@ -36,7 +36,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         return true;
     }
 
-    public async Task<BlocklistDbEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+    public async Task<BlocklistEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
@@ -44,7 +44,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         return await context.BlocklistKeywords.FindAsync([id], cancellationToken);
     }
 
-    public async Task<BlocklistDbEntry?> GetByKeywordAsync(string keyword, CancellationToken cancellationToken = default)
+    public async Task<BlocklistEntry?> GetByKeywordAsync(string keyword, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(keyword))
             throw new ArgumentException("Keyword cannot be empty", nameof(keyword));
@@ -53,7 +53,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
             .FirstOrDefaultAsync(e => e.Keyword.Equals(keyword, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
     }
 
-    public async Task<IEnumerable<BlocklistDbEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<BlocklistEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
         var query = enabledOnly
             ? context.BlocklistKeywords.Where(e => e.IsEnabled)
@@ -78,7 +78,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         return await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<int> AddBatchAsync(IEnumerable<BlocklistDbEntry> entries, CancellationToken cancellationToken = default)
+    public async Task<int> AddBatchAsync(IEnumerable<BlocklistEntry> entries, CancellationToken cancellationToken = default)
     {
         var entriesList = entries.ToList() ?? throw new ArgumentNullException(nameof(entries));
         if (entriesList.Count == 0) return 0;
@@ -116,7 +116,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         return new HashSet<string>(keywords, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static void ValidateEntry(BlocklistDbEntry entry)
+    private static void ValidateEntry(BlocklistEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
@@ -127,7 +127,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
             throw new ArgumentException("Keyword exceeds maximum length of 100");
     }
 
-    private static void PrepareEntry(BlocklistDbEntry entry)
+    private static void PrepareEntry(BlocklistEntry entry)
     {
         entry.Keyword = entry.Keyword.Trim();
         

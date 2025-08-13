@@ -20,6 +20,26 @@ public class TranslationTab
     private string tempApiKey = string.Empty;
     private GeminiProvider.ModelInfo[] geminiModels = [];
     private bool isLoadingModels;
+    
+    // Language settings
+    private readonly string[] languageNames = 
+    [
+        "Auto-Detect", "English", "Japanese", "German", "French", 
+        "Chinese", "Korean", "Spanish", "Portuguese", "Russian", "Italian", "Dutch", "Polish"
+    ];
+    private readonly string[] languageNamesNoAuto = 
+    [
+        "English", "Japanese", "German", "French", 
+        "Chinese", "Korean", "Spanish", "Portuguese", "Russian", "Italian", "Dutch", "Polish"
+    ];
+    private readonly string[] languageCodes =
+    [
+        "auto", "en", "ja", "de", "fr", "zh", "ko", "es", "pt", "ru", "it", "nl", "pl"
+    ];
+    private readonly string[] languageCodesNoAuto =
+    [
+        "en", "ja", "de", "fr", "zh", "ko", "es", "pt", "ru", "it", "nl", "pl"
+    ];
 
     public TranslationTab(TataruConfig configuration, ITranslationService translationService)
     {
@@ -38,6 +58,34 @@ public class TranslationTab
 
     public void Draw()
     {
+        // Language Settings Section
+        ImGui.TextUnformatted("Language Settings"u8);
+        ImGui.Separator();
+        ImGui.Spacing();
+        
+        ImGuiUtils.AlignedLabel("Source Language"u8, 150);
+        var sourceIndex = GetLanguageIndex(configuration.Translation.SourceLanguage);
+        if (ImGui.Combo("##SourceLang"u8, ref sourceIndex, languageNames, languageNames.Length))
+        {
+            configuration.Translation.SourceLanguage = languageCodes[sourceIndex];
+            Service.Configuration.Save();
+        }
+        
+        ImGuiUtils.AlignedLabel("Target Language"u8, 150);
+        var targetIndex = GetLanguageIndexNoAuto(configuration.Translation.TargetLanguage);
+        if (ImGui.Combo("##TargetLang"u8, ref targetIndex, languageNamesNoAuto, languageNamesNoAuto.Length))
+        {
+            configuration.Translation.TargetLanguage = languageCodesNoAuto[targetIndex];
+            Service.Configuration.Save();
+        }
+        
+        ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, "Tip: Select 'Auto-Detect' as source language to automatically detect the language of incoming messages."u8);
+        
+        ImGui.Spacing();
+        ImGui.Separator();
+        ImGui.Spacing();
+        
+        // Translation Engine Section
         ImGui.TextUnformatted("Translation Engine"u8);
         
         // Show the current provider status with detailed error information
@@ -56,9 +104,11 @@ public class TranslationTab
             else
                 statusColor = ImGuiUtils.Colors.Success;
                 
-            ImGuiUtils.TextColored(statusColor, status.GetStatusIndicator());
+            var statusIndicator = System.Text.Encoding.UTF8.GetBytes(status.GetStatusIndicator());
+            var statusMessage = System.Text.Encoding.UTF8.GetBytes(status.GetStatusMessage());
+            ImGuiUtils.TextColored(statusColor, statusIndicator);
             ImGui.SameLine();
-            ImGuiUtils.TextColored(statusColor, status.GetStatusMessage());
+            ImGuiUtils.TextColored(statusColor, statusMessage);
             
             // Show a detailed error on hover if there's an error
             if (status.LastError != null && ImGui.IsItemHovered())
@@ -75,7 +125,7 @@ public class TranslationTab
         }
         else
         {
-            ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, "[Status Unknown]");
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, "[Status Unknown]"u8);
         }
         
         // Get available provider types
@@ -113,14 +163,14 @@ public class TranslationTab
             {
                 ImGui.TextUnformatted("DeepL API Key"u8);
                 ImGui.SameLine();
-                ImGuiUtils.HelpMarker("Get your API key from https://www.deepl.com/pro-api");
+                ImGuiUtils.HelpMarker("Get your API key from https://www.deepl.com/pro-api"u8);
             
                 ImGui.InputText("##ApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
                 
                 // Show inline validation status
                 if (status is { LastError.Type: TranslationErrorType.InvalidApiKey })
                 {
-                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "Invalid API key. Please check and re-enter.");
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "Invalid API key. Please check and re-enter."u8);
                 }
                 
                 ImGui.SameLine();
@@ -140,8 +190,8 @@ public class TranslationTab
             }
             case TranslationProviderType.Google:
                 ImGui.TextWrapped("Google Translate uses an unofficial API and doesn't require an API key."u8);
-                ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "WARNING: This uses an UNOFFICIAL API that may stop working at any time.");
-                ImGuiUtils.TextColored(ImGuiUtils.Colors.Orange, "Consider DeepL or another official API for better reliability.");
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "WARNING: This uses an UNOFFICIAL API that may stop working at any time."u8);
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Orange, "Consider DeepL or another official API for better reliability."u8);
                 break;
                 
             case TranslationProviderType.Gemini:
@@ -150,26 +200,6 @@ public class TranslationTab
         }
         
         ImGui.Separator();
-        ImGui.Spacing();
-        
-        // Translation prefix
-        ImGui.TextUnformatted("Translation Prefix"u8);
-        ImGui.SameLine();
-        ImGui.TextDisabled("(?)"u8);
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.BeginTooltip();
-            ImGui.TextUnformatted("Prefix added to translated messages (e.g., '[TR]')"u8);
-            ImGui.EndTooltip();
-        }
-        
-        var prefix = configuration.Translation.TranslationPrefix;
-        if (ImGui.InputText("##TranslationPrefix"u8, ref prefix, 20))
-        {
-            configuration.Translation.TranslationPrefix = prefix;
-            Service.Configuration.Save();
-        }
-        
         ImGui.Spacing();
         
         // Translation options
@@ -232,13 +262,7 @@ public class TranslationTab
     {
         ImGui.TextUnformatted("Gemini API Key"u8);
         ImGui.SameLine();
-        ImGui.TextDisabled("(?)"u8);
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.BeginTooltip();
-            ImGui.TextUnformatted("Get your API key from https://aistudio.google.com/app/apikey"u8);
-            ImGui.EndTooltip();
-        }
+        ImGuiUtils.HelpMarker("Get your API key from https://aistudio.google.com/app/apikey"u8);
         
         ImGui.InputText("##GeminiApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
         
@@ -302,12 +326,8 @@ public class TranslationTab
             configuration.Translation.Gemini.Temperature = temperature;
             Service.Configuration.Save();
         }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.BeginTooltip();
-            ImGui.TextUnformatted("Controls randomness in responses. Lower = more focused, higher = more creative"u8);
-            ImGui.EndTooltip();
-        }
+        ImGui.SameLine();
+        ImGuiUtils.HelpMarker("Controls randomness in responses. Lower = more focused, higher = more creative"u8);
         
         var maxTokens = configuration.Translation.Gemini.MaxOutputTokens;
         if (ImGui.SliderInt("Max Output Tokens"u8, ref maxTokens, 50, 1024))
@@ -319,6 +339,14 @@ public class TranslationTab
         if (ImGui.Button("Refresh Models"u8))
         {
             _ = LoadGeminiModelsAsync();
+        }
+        
+        ImGui.SameLine();
+        if (ImGuiUtils.ConfirmationButton("Reset to Defaults"u8, "This will reset all Gemini settings to their default values."u8))
+        {
+            configuration.Translation.Gemini.ResetToDefaults();
+            Service.Configuration.Save();
+            Service.PluginLog.Information("Gemini settings reset to defaults");
         }
     }
     
@@ -345,5 +373,25 @@ public class TranslationTab
         {
             isLoadingModels = false;
         }
+    }
+    
+    private int GetLanguageIndex(string code)
+    {
+        for (var i = 0; i < languageCodes.Length; i++)
+        {
+            if (languageCodes[i] == code)
+                return i;
+        }
+        return 0; // Default to auto
+    }
+
+    private int GetLanguageIndexNoAuto(string code)
+    {
+        for (var i = 0; i < languageCodesNoAuto.Length; i++)
+        {
+            if (languageCodesNoAuto[i] == code)
+                return i;
+        }
+        return 0; // Default to English
     }
 }

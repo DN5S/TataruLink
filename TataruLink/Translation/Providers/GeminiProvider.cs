@@ -227,7 +227,7 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
                         continue;
                     
                     // Skip older preview/experimental versions if we have stable versions
-                    // Note: Keep this until someone want this version
+                    // Note: Keep this until someone wants this version
                     if (lowerName.Contains("preview") && !lowerName.Contains("flash-lite-preview"))
                         continue;
                     
@@ -444,14 +444,15 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
     {
         apiKey = null;
         await Task.CompletedTask;
+        GC.SuppressFinalize(this);
     }
     
     public class ModelInfo
     {
-        public string Name { get; set; } = "";
-        public string DisplayName { get; set; } = "";
-        public string Description { get; set; } = "";
-        public int InputTokenLimit { get; set; }
-        public int OutputTokenLimit { get; set; }
+        public string Name { get; init; } = "";
+        public string DisplayName { get; init; } = "";
+        public string Description { get; init; } = "";
+        public int InputTokenLimit { get; init; }
+        public int OutputTokenLimit { get; init; }
     }
 }

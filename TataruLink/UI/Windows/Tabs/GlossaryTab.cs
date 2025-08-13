@@ -18,7 +18,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
     private string searchFilter = string.Empty;
     private string? errorMessage;
     private DateTime errorMessageTime = DateTime.MinValue;
-    private List<GlossaryDbEntry> displayEntries = [];
+    private List<GlossaryEntry> displayEntries = [];
 
     private void RefreshDisplayEntries()
     {
@@ -35,8 +35,8 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         {
             glossaryManager.IsEnabled = isEnabled;
         }
-        
-        ImGuiUtils.HelpMarker("Applies user-defined text replacements BEFORE translation");
+        ImGui.SameLine();
+        ImGuiUtils.HelpMarker("Applies user-defined text replacements BEFORE translation"u8);
 
         ImGui.Separator();
 
@@ -52,12 +52,12 @@ public class GlossaryTab(GlossaryManager glossaryManager)
             ImGui.Columns(2, "AddEntryColumns"u8);
             
             ImGui.SetNextItemWidth(-1);
-            ImGuiUtils.InputTextWithHint("##OriginalText", "Original text to replace", ref newOriginal);
+            ImGuiUtils.InputTextWithHint("##OriginalText"u8, "Original text to replace"u8, ref newOriginal);
             
             ImGui.NextColumn();
             
             ImGui.SetNextItemWidth(-1);
-            ImGuiUtils.InputTextWithHint("##ReplacementText", "Text to replace with", ref newReplacement);
+            ImGuiUtils.InputTextWithHint("##ReplacementText"u8, "Text to replace with"u8, ref newReplacement);
             
             ImGui.Columns();
             
@@ -100,7 +100,8 @@ public class GlossaryTab(GlossaryManager glossaryManager)
                 }
                 else
                 {
-                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorMessage);
+                    var errorText = System.Text.Encoding.UTF8.GetBytes(errorMessage);
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorText);
                 }
             }
         }
@@ -139,39 +140,15 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         }
         
         ImGui.SameLine();
-        if (ImGui.Button("Remove All"u8))
+        if (ImGuiUtils.ConfirmationButton("Remove All"u8, "Are you sure you want to remove all glossary entries?\nThis action cannot be undone."u8))
         {
-            ImGui.OpenPopup("ConfirmRemoveAll"u8);
-        }
-
-        // Confirmation popup for Remove All
-        var popupOpen = true;
-        if (ImGui.BeginPopupModal("ConfirmRemoveAll"u8, ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize))
-        {
-            ImGui.TextUnformatted("Are you sure you want to remove all glossary entries?"u8);
-            ImGui.TextUnformatted("This action cannot be undone."u8);
-            ImGui.Separator();
-            
-            if (ImGui.Button("Yes, Remove All"u8, new Vector2(120, 0)))
-            {
-                _ = glossaryManager.ClearAllAsync();
-                ImGui.CloseCurrentPopup();
-            }
-            
-            ImGui.SameLine();
-            
-            if (ImGui.Button("Cancel"u8, new Vector2(120, 0)))
-            {
-                ImGui.CloseCurrentPopup();
-            }
-            
-            ImGui.EndPopup();
+            _ = glossaryManager.ClearAllAsync();
         }
 
         ImGui.Separator();
 
         // Glossary entries table
-        ImGuiUtils.SectionSmall("Glossary Entries");
+        ImGuiUtils.SectionSmall("Glossary Entries"u8);
         
         if (ImGui.BeginTable("GlossaryTable"u8, 4, 
             ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
@@ -302,8 +279,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
                 return;
             }
 
-            // Support both an old GlossaryEntry format and new format
-            var importedEntries = new List<GlossaryDbEntry>();
+            var importedEntries = new List<GlossaryEntry>();
             
             try
             {
@@ -316,7 +292,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
                         if (item.TryGetValue("Original", out var orig) && 
                             item.TryGetValue("Replacement", out var repl))
                         {
-                            var entry = new GlossaryDbEntry
+                            var entry = new GlossaryEntry
                             {
                                 Original = orig.GetString() ?? string.Empty,
                                 Replacement = repl.GetString() ?? string.Empty,

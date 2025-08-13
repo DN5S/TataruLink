@@ -25,8 +25,8 @@ public class DatabaseContext : DbContext
 
     public DbSet<TranslationCacheEntry> TranslationCache { get; set; } = null!;
     public DbSet<ChatHistoryEntry> ChatHistory { get; set; } = null!;
-    public DbSet<GlossaryDbEntry> GlossaryEntries { get; set; } = null!;
-    public DbSet<BlocklistDbEntry> BlocklistKeywords { get; set; } = null!;
+    public DbSet<GlossaryEntry> GlossaryEntries { get; set; } = null!;
+    public DbSet<BlocklistEntry> BlocklistKeywords { get; set; } = null!;
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -73,7 +73,7 @@ public class DatabaseContext : DbContext
         });
 
         // GlossaryEntries configuration
-        modelBuilder.Entity<GlossaryDbEntry>(entity =>
+        modelBuilder.Entity<GlossaryEntry>(entity =>
         {
             entity.ToTable("GlossaryEntries");
             entity.HasKey(e => e.Id);
@@ -83,7 +83,7 @@ public class DatabaseContext : DbContext
         });
 
         // BlocklistKeywords configuration
-        modelBuilder.Entity<BlocklistDbEntry>(entity =>
+        modelBuilder.Entity<BlocklistEntry>(entity =>
         {
             entity.ToTable("BlocklistKeywords");
             entity.HasKey(e => e.Id);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TataruLink.Configuration;
 using TataruLink.Data.Repositories;
 using TataruLink.Models;
 using TataruLink.Services;
@@ -12,31 +13,32 @@ namespace TataruLink.Glossary;
 public class GlossaryManager : IDisposable
 {
     private readonly IGlossaryRepository repository;
+    private readonly GlossaryConfig config;
     private readonly AhoCorasickTrie trie = new();
     private Dictionary<string, string> replacementMap = new();
-    private List<GlossaryDbEntry> cachedEntries = new();
-    private bool isEnabled = true;
+    private List<GlossaryEntry> cachedEntries = new();
 
-    public GlossaryManager(IGlossaryRepository repository)
+    public GlossaryManager(IGlossaryRepository repository, GlossaryConfig config)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        this.config = config ?? throw new ArgumentNullException(nameof(config));
         _ = LoadFromDatabaseAsync();
     }
 
     public bool IsEnabled 
     { 
-        get => isEnabled;
+        get => config.IsEnabled;
         set
         {
-            if (isEnabled != value)
+            if (config.IsEnabled != value)
             {
-                isEnabled = value;
-                Service.PluginLog.Debug($"Glossary enabled: {isEnabled}");
+                config.IsEnabled = value;
+                Service.PluginLog.Debug($"Glossary enabled: {value}");
             }
         }
     }
 
-    public List<GlossaryDbEntry> GetCachedEntries() => [..cachedEntries];
+    public List<GlossaryEntry> GetCachedEntries() => [..cachedEntries];
 
     public async Task LoadFromDatabaseAsync()
     {
@@ -82,7 +84,7 @@ public class GlossaryManager : IDisposable
     // WARNING: Reverse iteration prevents index corruption during replacements
     public string Apply(string text)
     {
-        if (!isEnabled || replacementMap.Count == 0 || string.IsNullOrEmpty(text))
+        if (!config.IsEnabled || replacementMap.Count == 0 || string.IsNullOrEmpty(text))
         {
             return text;
         }
@@ -137,11 +139,11 @@ public class GlossaryManager : IDisposable
         return (total, enabled);
     }
 
-    public async Task<GlossaryDbEntry?> AddEntryAsync(string original, string replacement)
+    public async Task<GlossaryEntry?> AddEntryAsync(string original, string replacement)
     {
         try
         {
-            var entry = new GlossaryDbEntry
+            var entry = new GlossaryEntry
             {
                 Original = original.Trim(),
                 Replacement = replacement.Trim(),
@@ -273,7 +275,7 @@ public class GlossaryManager : IDisposable
         }
     }
 
-    public async Task<int> ImportEntriesAsync(IEnumerable<GlossaryDbEntry> entries)
+    public async Task<int> ImportEntriesAsync(IEnumerable<GlossaryEntry> entries)
     {
         try
         {

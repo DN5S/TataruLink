@@ -49,6 +49,7 @@ public sealed class Plugin : IDalamudPlugin
         
         Service.PluginLog.Info("TataruLink initialized successfully");
     }
+    
     private void InitializeCore()
     {
         var configuration = Service.Configuration.Data;
@@ -82,7 +83,7 @@ public sealed class Plugin : IDalamudPlugin
         unitOfWork = new UnitOfWork(databaseContext, configuration.Cache);
         
         // Initialize managers with repositories
-        glossaryManager = new GlossaryManager(unitOfWork.Glossary);
+        glossaryManager = new GlossaryManager(unitOfWork.Glossary, configuration.Glossary);
         blocklistManager = new BlocklistManager(unitOfWork.Blocklist);
         
         // Initialize translation service

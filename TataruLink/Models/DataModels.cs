@@ -94,7 +94,7 @@ public class CacheStatistics
     }
 }
 
-public class GlossaryDbEntry
+public class GlossaryEntry
 {
     public long Id { get; init; }
     
@@ -109,7 +109,7 @@ public class GlossaryDbEntry
     public long UpdatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 }
 
-public class BlocklistDbEntry
+public class BlocklistEntry
 {
     public long Id { get; init; }
     

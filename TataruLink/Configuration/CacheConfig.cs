@@ -8,13 +8,8 @@ public class CacheConfig
     public int BatchWriteSize { get; set; } = 10;
     public int BatchWriteDelayMs { get; set; } = 500; // ms
     public int MaxWriteQueueSize { get; set; } = 5000;
-    public bool EnableStatistics { get; set; } = true;
-    public int MaxCacheAgeDays { get; set; } = 30;
-    public bool EnableAutoPrune { get; set; } = true;
-    public int AutoPruneIntervalHours { get; set; } = 24;
     public string DatabaseFileName { get; set; } = "tatarulink_cache.db";
-    // NOTE: WAL mode improves SQLite performance significantly
-    public bool EnableWal { get; set; } = true;
+    public bool EnableWal { get; set; } = true; // NOTE: WAL mode improves SQLite performance significantly
     public int ConnectionTimeoutSeconds { get; set; } = 30;
     public int MaxHotCacheEntries { get; set; } = 100;
     public int MinAccessCountForHot { get; set; } = 5;

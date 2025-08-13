@@ -26,7 +26,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             ImGui.Separator();
             
             // Add a new overlay section
-            ImGui.InputText("##NewOverlayName"u8, ref newOverlayName, 50);
+            ImGuiUtils.InputTextWithHint("##NewOverlayName"u8, "Enter overlay name"u8, ref newOverlayName, 50);
             ImGui.SameLine();
             if (ImGui.Button("Add"u8))
             {
@@ -36,6 +36,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                     overlayManager.CreateOverlay(newOverlay);
                     selectedOverlay = newOverlay;
                     newOverlayName = "New Overlay";
+                    Service.Configuration.Save();
                     Service.PluginLog.Info($"Created new overlay: {newOverlay.Name}");
                 }
             }
@@ -61,6 +62,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                     {
                         overlayManager.HideOverlay(overlay.Id);
                     }
+                    Service.Configuration.Save();
                 }
                 
                 ImGui.SameLine();
@@ -77,7 +79,6 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                     if (ImGui.MenuItem("Delete"u8))
                     {
                         overlayManager.RemoveOverlay(overlay.Id);
-                        configuration.Display.RemoveOverlayWindow(overlay.Id);
                         if (selectedOverlay?.Id == overlay.Id)
                         {
                             selectedOverlay = configuration.Display.OverlayWindows.FirstOrDefault();
@@ -106,6 +107,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                         
                         overlayManager.CreateOverlay(duplicate);
                         selectedOverlay = duplicate;
+                        Service.Configuration.Save();
                         Service.PluginLog.Info($"Duplicated overlay: {overlay.Name} -> {duplicate.Name}");
                     }
                     
@@ -165,12 +167,14 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                 {
                     overlayManager.HideOverlay(overlay.Id);
                 }
+                Service.Configuration.Save();
             }
             
             var clickThrough = overlay.IsClickThrough;
             if (ImGui.Checkbox("Click-through"u8, ref clickThrough))
             {
                 overlay.IsClickThrough = clickThrough;
+                Service.Configuration.Save();
             }
             
             
@@ -178,30 +182,37 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             if (ImGui.Checkbox("Auto-scroll"u8, ref autoScroll))
             {
                 overlay.AutoScroll = autoScroll;
+                Service.Configuration.Save();
             }
             
             var showBorder = overlay.ShowBorder;
             if (ImGui.Checkbox("Show background"u8, ref showBorder))
             {
                 overlay.ShowBorder = showBorder;
+                Service.Configuration.Save();
             }
-            ImGuiUtils.HelpMarker("Toggle window background visibility");
+            ImGui.SameLine();
+            ImGuiUtils.HelpMarker("Toggle window background visibility"u8);
             
             // Background color picker
             if (overlay.ShowBorder)
             {
-                var bgColor = overlay.BackgroundColor ?? ImGuiUtils.Colors.WindowBackground;
-                if (ImGui.ColorEdit4("Background Color"u8, ref bgColor, 
-                    ImGuiColorEditFlags.NoAlpha | ImGuiColorEditFlags.NoInputs))
+                ImGuiUtils.Indent(() =>
                 {
-                    overlay.BackgroundColor = bgColor;
-                }
-                
-                var opacity = overlay.Opacity;
-                if (ImGui.SliderFloat("Background Opacity"u8, ref opacity, 0f, 100f, "%.0f%%"u8))
-                {
-                    overlay.Opacity = opacity;
-                }
+                    var bgColor = overlay.BackgroundColor ?? ImGuiUtils.Colors.WindowBackground;
+                    if (ImGuiUtils.ColorEditWithReset("Background Color"u8, ref bgColor, ImGuiUtils.Colors.WindowBackground))
+                    {
+                        overlay.BackgroundColor = bgColor;
+                        Service.Configuration.Save();
+                    }
+                    
+                    var opacity = overlay.Opacity;
+                    if (ImGui.SliderFloat("Background Opacity"u8, ref opacity, 0f, 100f, "%.0f%%"u8))
+                    {
+                        overlay.Opacity = opacity;
+                        Service.Configuration.Save();
+                    }
+                });
             }
             
             
@@ -209,6 +220,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             if (ImGui.SliderInt("Max Messages"u8, ref maxMessages, 10, 200))
             {
                 overlay.MaxMessages = maxMessages;
+                Service.Configuration.Save();
             }
         }
         
@@ -219,42 +231,49 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             if (ImGui.Checkbox("Show Timestamp"u8, ref showTimestamp))
             {
                 overlay.ShowTimestamp = showTimestamp;
+                Service.Configuration.Save();
             }
             
             var showSenderName = overlay.ShowSenderName;
             if (ImGui.Checkbox("Show Sender Name"u8, ref showSenderName))
             {
                 overlay.ShowSenderName = showSenderName;
+                Service.Configuration.Save();
             }
             
             var showChatType = overlay.ShowChatType;
             if (ImGui.Checkbox("Show Chat Type"u8, ref showChatType))
             {
                 overlay.ShowChatType = showChatType;
+                Service.Configuration.Save();
             }
             
             var showOriginalText = overlay.ShowOriginalText;
             if (ImGui.Checkbox("Show Original Text"u8, ref showOriginalText))
             {
                 overlay.ShowOriginalText = showOriginalText;
+                Service.Configuration.Save();
             }
             
             var windowRounding = overlay.WindowRounding;
             if (ImGui.SliderFloat("Window Rounding"u8, ref windowRounding, 0f, 20f, "%.0f"u8))
             {
                 overlay.WindowRounding = windowRounding;
+                Service.Configuration.Save();
             }
             
             var messageSpacing = overlay.MessageSpacing;
             if (ImGui.SliderFloat("Message Spacing"u8, ref messageSpacing, 0f, 20f, "%.0f"u8))
             {
                 overlay.MessageSpacing = messageSpacing;
+                Service.Configuration.Save();
             }
             
             var padding = overlay.WindowPadding;
             if (ImGui.SliderFloat2("Window Padding"u8, ref padding, 0f, 20f, "%.0f"u8))
             {
                 overlay.WindowPadding = padding;
+                Service.Configuration.Save();
             }
         }
         
@@ -368,6 +387,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                     overlayManager.ShowOverlay(overlay.Id);
                     overlay.IsEnabled = true;
                 }
+                Service.Configuration.Save();
             }
         }
     }

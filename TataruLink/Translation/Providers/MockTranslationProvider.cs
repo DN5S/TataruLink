@@ -43,7 +43,7 @@ public class MockTranslationProvider : ITranslationProvider
         string text,
         CancellationToken cancellationToken = default)
     {
-        // NOTE: Most APIs handle detection internally when source is 'auto'
+        // NOTE: Most APIs handle detection internally when a source is 'auto'
         
         await Task.Delay(50, cancellationToken);
         

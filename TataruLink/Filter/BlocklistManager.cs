@@ -12,7 +12,7 @@ public class BlocklistManager : IDisposable
 {
     private readonly IBlocklistRepository repository;
     private HashSet<string> cachedKeywords = new(StringComparer.OrdinalIgnoreCase);
-    private List<BlocklistDbEntry> cachedEntries = new();
+    private List<BlocklistEntry> cachedEntries = [];
     private bool isEnabled = true;
 
     public BlocklistManager(IBlocklistRepository repository)
@@ -34,7 +34,7 @@ public class BlocklistManager : IDisposable
         }
     }
 
-    public List<BlocklistDbEntry> GetCachedEntries() => new(cachedEntries);
+    public List<BlocklistEntry> GetCachedEntries() => [..cachedEntries];
     public HashSet<string> GetEnabledKeywords() => new(cachedKeywords, StringComparer.OrdinalIgnoreCase);
 
     public async Task LoadFromDatabaseAsync()
@@ -79,11 +79,11 @@ public class BlocklistManager : IDisposable
             text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
-    public async Task<BlocklistDbEntry?> AddKeywordAsync(string keyword)
+    public async Task<BlocklistEntry?> AddKeywordAsync(string keyword)
     {
         try
         {
-            var entry = new BlocklistDbEntry
+            var entry = new BlocklistEntry
             {
                 Keyword = keyword.Trim(),
                 IsEnabled = true
@@ -189,7 +189,7 @@ public class BlocklistManager : IDisposable
         {
             var entries = keywords
                 .Where(k => !string.IsNullOrWhiteSpace(k))
-                .Select(k => new BlocklistDbEntry
+                .Select(k => new BlocklistEntry
                 {
                     Keyword = k.Trim(),
                     IsEnabled = true

@@ -105,19 +105,20 @@ public static class ImGuiUtils
     }
     
     // Common UI helper methods
-    public static void TextColored(Vector4 color, string text)
+    public static void TextColored(Vector4 color, ReadOnlySpan<byte> text)
     {
         ImGui.TextColored(color, text);
     }
     
-    public static void TextStatus(string label, bool isActive, string activeText = "Active", string inactiveText = "Inactive")
+    public static void TextStatus(ReadOnlySpan<byte> label, bool isActive, ReadOnlySpan<byte> activeText, ReadOnlySpan<byte> inactiveText)
     {
-        ImGui.Text($"{label}: ");
+        ImGui.Text(label);
+        ImGui.TextUnformatted(": "u8);
         ImGui.SameLine();
         ImGui.TextColored(isActive ? Colors.Success : Colors.TextDisabled, isActive ? activeText : inactiveText);
     }
     
-    public static void TextWithTooltip(string text, string tooltip)
+    public static void TextWithTooltip(ReadOnlySpan<byte> text, ReadOnlySpan<byte> tooltip)
     {
         ImGui.Text(text);
         if (ImGui.IsItemHovered())
@@ -126,7 +127,7 @@ public static class ImGuiUtils
         }
     }
     
-    public static bool ButtonWithTooltip(string label, string tooltip)
+    public static bool ButtonWithTooltip(ReadOnlySpan<byte> label, ReadOnlySpan<byte> tooltip)
     {
         var clicked = ImGui.Button(label);
         if (ImGui.IsItemHovered())
@@ -136,9 +137,9 @@ public static class ImGuiUtils
         return clicked;
     }
     
-    public static void HelpMarker(string desc)
+    public static void HelpMarker(ReadOnlySpan<byte> desc)
     {
-        ImGui.TextDisabled("(?)");
+        ImGui.TextDisabled("(?)"u8);
         if (ImGui.IsItemHovered())
         {
             using var tooltip = ImRaii.Tooltip();
@@ -148,32 +149,32 @@ public static class ImGuiUtils
         }
     }
     
-    public static void Section(string title)
+    public static void Section(ReadOnlySpan<byte> title)
     {
         ImGui.Separator();
         ImGui.TextColored(Colors.Info, title);
         ImGui.Separator();
     }
     
-    public static void SectionSmall(string title)
+    public static void SectionSmall(ReadOnlySpan<byte> title)
     {
         ImGui.Spacing();
         ImGui.TextColored(Colors.TextMuted, title);
         ImGui.Separator();
     }
     
-    public static bool InputTextWithHint(string label, string hint, ref string text, int maxLength = 100)
+    public static bool InputTextWithHint(ReadOnlySpan<byte> label, ReadOnlySpan<byte> hint, ref string text, int maxLength = 100)
     {
         return ImGui.InputTextWithHint(label, hint, ref text, maxLength);
     }
     
-    public static bool ColorEditWithReset(string label, ref Vector4 color, Vector4 defaultColor)
+    public static bool ColorEditWithReset(ReadOnlySpan<byte> label, ref Vector4 color, Vector4 defaultColor)
     {
         var changed = ImGui.ColorEdit4(label, ref color, ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.AlphaBar);
         
         ImGui.SameLine();
         ImGui.PushID(label);
-        if (ImGui.Button("Reset"))
+        if (ImGui.Button("Reset"u8))
         {
             color = defaultColor;
             changed = true;
@@ -183,7 +184,7 @@ public static class ImGuiUtils
         return changed;
     }
     
-    public static void CenteredText(string text)
+    public static void CenteredText(ReadOnlySpan<byte> text)
     {
         var windowWidth = ImGui.GetWindowSize().X;
         var textWidth = ImGui.CalcTextSize(text).X;
@@ -206,7 +207,7 @@ public static class ImGuiUtils
             ImGui.Unindent();
     }
     
-    public static bool ToggleButton(string label, ref bool value)
+    public static bool ToggleButton(ReadOnlySpan<byte> label, ref bool value)
     {
         var activeColor = Colors.Success;
         var inactiveColor = Colors.Gray50;
@@ -222,13 +223,13 @@ public static class ImGuiUtils
         return false;
     }
     
-    public static void ProgressBar(float fraction, string label = "", Vector2? size = null)
+    public static void ProgressBar(float fraction, ReadOnlySpan<byte> label, Vector2? size = null)
     {
         var actualSize = size ?? new Vector2(-1, 0);
         ImGui.ProgressBar(fraction, actualSize, label);
     }
     
-    public static bool BeginGroupBox(string label)
+    public static bool BeginGroupBox(ReadOnlySpan<byte> label)
     {
         ImGui.BeginGroup();
         ImGui.TextColored(Colors.Info, label);
@@ -248,15 +249,17 @@ public static class ImGuiUtils
             ImGui.Spacing();
     }
     
-    public static void AlignedLabel(string label, float alignment = 100f)
+    public static void AlignedLabel(ReadOnlySpan<byte> label, float alignment = 100f)
     {
         ImGui.Text(label);
         ImGui.SameLine(alignment);
     }
     
-    public static bool ConfirmationButton(string label, string confirmText = "Are you sure?")
+    public static bool ConfirmationButton(ReadOnlySpan<byte> label, ReadOnlySpan<byte> confirmText)
     {
-        var id = $"##{label}_confirm";
+        // Convert label to string for popup ID (needed for ImGui internal tracking)
+        var labelStr = System.Text.Encoding.UTF8.GetString(label);
+        var id = $"##{labelStr}_confirm";
         
         if (ImGui.Button(label))
         {
@@ -269,14 +272,14 @@ public static class ImGuiUtils
             ImGui.Text(confirmText);
             ImGui.Separator();
             
-            if (ImGui.Button("Yes", new Vector2(120, 0)))
+            if (ImGui.Button("Yes"u8, new Vector2(120, 0)))
             {
                 confirmed = true;
                 ImGui.CloseCurrentPopup();
             }
             
             ImGui.SameLine();
-            if (ImGui.Button("No", new Vector2(120, 0)))
+            if (ImGui.Button("No"u8, new Vector2(120, 0)))
             {
                 ImGui.CloseCurrentPopup();
             }

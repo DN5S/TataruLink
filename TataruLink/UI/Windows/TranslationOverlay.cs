@@ -7,6 +7,7 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Models;
+using TataruLink.Services;
 using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows;
@@ -101,6 +102,7 @@ public class TranslationOverlay : Window, IDisposable
         if (IsOpen != config.IsEnabled)
         {
             config.IsEnabled = IsOpen;
+            Service.Configuration.Save();
         }
         
         DrawMessages();
@@ -129,6 +131,7 @@ public class TranslationOverlay : Window, IDisposable
             config.Size = Size;
             lastSavedPosition = Position;
             lastSavedSize = Size;
+            Service.Configuration.Save();
         }
     }
 
@@ -178,38 +181,33 @@ public class TranslationOverlay : Window, IDisposable
         
         var color = GetChatTypeColor(message.ChatTypeValue);
         
+        // Build the complete message as a single line
+        var messageBuilder = new System.Text.StringBuilder();
+        
         if (config.ShowTimestamp)
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, color * 0.8f))
-            {
-                ImGui.TextUnformatted($"[{message.Timestamp:HH:mm:ss}]");
-            }
-            ImGui.SameLine();
+            messageBuilder.Append($"[{message.Timestamp:HH:mm:ss}] ");
         }
         
         if (config.ShowChatType && !string.IsNullOrEmpty(message.ChatType))
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, color))
-            {
-                ImGui.TextUnformatted($"[{message.ChatType}]");
-            }
-            ImGui.SameLine();
+            messageBuilder.Append($"[{message.ChatType}] ");
         }
         
         if (config.ShowSenderName && !string.IsNullOrEmpty(message.SenderName))
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, color))
-            {
-                ImGui.TextUnformatted($"{message.SenderName}:");
-            }
-            ImGui.SameLine();
+            messageBuilder.Append($"{message.SenderName}: ");
         }
         
+        messageBuilder.Append(message.TranslatedText);
+        
+        // Draw the complete message on a single line with wrapping
         using (ImRaii.PushColor(ImGuiCol.Text, color))
         {
-            ImGui.TextWrapped(message.TranslatedText);
+            ImGui.TextWrapped(messageBuilder.ToString());
         }
         
+        // Draw original text on a separate line if enabled
         if (config.ShowOriginalText && !string.IsNullOrEmpty(message.OriginalText))
         {
             using (ImRaii.PushColor(ImGuiCol.Text, ImGuiUtils.Colors.TextMuted))
@@ -306,6 +304,7 @@ public class TranslationOverlay : Window, IDisposable
     {
         config.Position = Position;
         config.Size = Size;
+        Service.Configuration.Save();
         messageLock.Dispose();
         GC.SuppressFinalize(this);
     }

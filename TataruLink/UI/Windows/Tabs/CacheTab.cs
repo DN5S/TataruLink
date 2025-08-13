@@ -38,7 +38,7 @@ public class CacheTab(IDataService dataService)
 
     private void DrawCacheControls()
     {
-        ImGuiUtils.Section("Cache Management");
+        ImGuiUtils.Section("Cache Management"u8);
         
         using (ImRaii.Disabled(isOperationInProgress))
         {
@@ -59,40 +59,40 @@ public class CacheTab(IDataService dataService)
         // Cache statistics
         var stats = dataService.GetStatistics();
         ImGui.TextUnformatted("Cache Statistics:"u8);
-        ImGui.Indent();
-        ImGui.TextUnformatted($"L1 Hits: {stats.L1HitCount:N0}");
-        ImGui.TextUnformatted($"L2 Hits: {stats.L2HitCount:N0}");
-        ImGui.TextUnformatted($"Misses: {stats.MissCount:N0}");
-        ImGui.TextUnformatted($"Hot Cache Hits: {stats.HotCacheHitCount:N0}");
-        ImGui.TextUnformatted($"Total Requests: {stats.TotalRequests:N0}");
-        
-        if (stats.TotalRequests > 0)
+        ImGuiUtils.Indent(() =>
         {
-            ImGui.TextUnformatted($"L1 Hit Rate: {stats.L1HitRatio:P1}");
-            ImGui.TextUnformatted($"L2 Hit Rate: {stats.L2HitRatio:P1}");
-            ImGui.TextUnformatted($"Hot Cache Rate: {stats.HotCacheRatio:P1}");
-            ImGui.TextUnformatted($"Overall Hit Rate: {stats.OverallHitRatio:P1}");
-        }
-        ImGui.Unindent();
+            ImGui.TextUnformatted($"L1 Hits: {stats.L1HitCount:N0}");
+            ImGui.TextUnformatted($"L2 Hits: {stats.L2HitCount:N0}");
+            ImGui.TextUnformatted($"Misses: {stats.MissCount:N0}");
+            ImGui.TextUnformatted($"Hot Cache Hits: {stats.HotCacheHitCount:N0}");
+            ImGui.TextUnformatted($"Total Requests: {stats.TotalRequests:N0}");
+            
+            if (stats.TotalRequests > 0)
+            {
+                ImGui.TextUnformatted($"L1 Hit Rate: {stats.L1HitRatio:P1}");
+                ImGui.TextUnformatted($"L2 Hit Rate: {stats.L2HitRatio:P1}");
+                ImGui.TextUnformatted($"Hot Cache Rate: {stats.HotCacheRatio:P1}");
+                ImGui.TextUnformatted($"Overall Hit Rate: {stats.OverallHitRatio:P1}");
+            }
+        });
     }
 
     private static void DrawHotCacheInfo()
     {
-        ImGuiUtils.Section("Hot Cache Information");
-        ImGui.Indent();
-        
-        var config = Service.Configuration.Data.Cache;
-        ImGui.TextUnformatted($"Pre-load Limit: {config.MaxHotCacheEntries} entries");
-        ImGui.TextUnformatted($"Hot Threshold: {config.MinAccessCountForHot} accesses");
-        
-        ImGuiUtils.HelpMarker("Translations accessed this many times or more are considered 'hot' and get priority caching");
-        
-        ImGui.Unindent();
+        ImGuiUtils.Section("Hot Cache Information"u8);
+        ImGuiUtils.Indent(() =>
+        {
+            var config = Service.Configuration.Data.Cache;
+            ImGui.TextUnformatted($"Pre-load Limit: {config.MaxHotCacheEntries} entries");
+            ImGui.TextUnformatted($"Hot Threshold: {config.MinAccessCountForHot} accesses");
+            
+            ImGuiUtils.HelpMarker("Translations accessed this many times or more are considered 'hot' and get priority caching"u8);
+        });
     }
     
     private void DrawDatabaseInfo()
     {
-        ImGuiUtils.Section("Database Information");
+        ImGuiUtils.Section("Database Information"u8);
         
         // Update size info periodically
         if (DateTime.Now - lastSizeCheck > TimeSpan.FromSeconds(5))
@@ -101,14 +101,15 @@ public class CacheTab(IDataService dataService)
             lastSizeCheck = DateTime.Now;
         }
         
-        ImGui.Indent();
-        ImGui.TextUnformatted($"Size: {FormatBytes(databaseSize)}");
-        ImGui.Unindent();
+        ImGuiUtils.Indent(() =>
+        {
+            ImGui.TextUnformatted($"Size: {FormatBytes(databaseSize)}");
+        });
     }
 
     private void DrawMaintenanceControls()
     {
-        ImGuiUtils.Section("Database Maintenance");
+        ImGuiUtils.Section("Database Maintenance"u8);
         
         using (ImRaii.Disabled(isOperationInProgress))
         {
@@ -147,7 +148,8 @@ public class CacheTab(IDataService dataService)
             ? ImGuiUtils.Colors.Error
             : ImGuiUtils.Colors.Success;
             
-        ImGuiUtils.TextColored(color, lastOperationResult);
+        var resultText = System.Text.Encoding.UTF8.GetBytes(lastOperationResult);
+        ImGuiUtils.TextColored(color, resultText);
         
         ImGui.SameLine();
         if (ImGui.Button("Clear##clearResult"u8))
