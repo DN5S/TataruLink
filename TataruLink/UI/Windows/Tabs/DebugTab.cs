@@ -5,6 +5,7 @@ using TataruLink.Configuration;
 using TataruLink.DtrBar;
 using TataruLink.Services;
 using TataruLink.Translation;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -13,8 +14,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
     public void Draw()
     {
         // Debug Mode Section
-        ImGui.TextUnformatted("Debug Settings"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("Debug Settings");
         
         var debugMode = configuration.DebugMode;
         if (ImGui.Checkbox("Enable Debug Mode"u8, ref debugMode))
@@ -23,11 +23,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             Service.Configuration.Save();
         }
         ImGui.SameLine();
-        ImGui.TextDisabled("(?)"u8);
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Enables detailed logging and debug features"u8);
-        }
+        ImGuiUtils.HelpMarker("Enables detailed logging and debug features");
         
         if (configuration.DebugMode)
         {
@@ -41,11 +37,11 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             ImGui.Separator();
             ImGui.TextUnformatted("API Keys:"u8);
             
-            if (configuration.Translation.ApiKeys.Any())
+            if (configuration.Translation.ApiKeys.Count != 0)
             {
                 foreach (var kvp in configuration.Translation.ApiKeys)
                 {
-                    ImGui.TextColored(new Vector4(0, 1, 0, 1), $"  {kvp.Key}: Configured");
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, $"  {kvp.Key}: Configured");
                 }
             }
             else
@@ -56,8 +52,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
             ImGui.Separator();
             
             // Performance Settings Section
-            ImGui.TextUnformatted("Performance Settings"u8);
-            ImGui.Separator();
+            ImGuiUtils.Section("Performance Settings");
             
             var enableCache = configuration.Performance.EnableCache;
             if (ImGui.Checkbox("Enable Translation Cache"u8, ref enableCache))
@@ -72,10 +67,7 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
                 configuration.Performance.TranslationsPerSecond = translationsPerSecond;
                 Service.Configuration.Save();
             }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Rate limit to avoid overwhelming translation APIs"u8);
-            }
+            ImGuiUtils.HelpMarker("Rate limit to avoid overwhelming translation APIs");
             
             var maxQueueSize = configuration.Performance.MaxQueueSize;
             if (ImGui.SliderInt("Max Queue Size"u8, ref maxQueueSize, 100, 5000))
@@ -201,9 +193,9 @@ public class DebugTab(TataruConfig configuration, ITranslationService translatio
                     // Stage
                     ImGui.TableNextColumn();
                     var stageColor = failure.FailureStage == "Validation" 
-                        ? new Vector4(1, 0.5f, 0, 1)  // Orange for validation
-                        : new Vector4(1, 0, 0, 1);     // Red for other failures
-                    ImGui.TextColored(stageColor, failure.FailureStage);
+                        ? ImGuiUtils.Colors.Warning
+                        : ImGuiUtils.Colors.Error;
+                    ImGuiUtils.TextColored(stageColor, failure.FailureStage);
                     
                     // Reason
                     ImGui.TableNextColumn();

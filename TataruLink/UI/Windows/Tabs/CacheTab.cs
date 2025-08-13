@@ -6,6 +6,7 @@ using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using TataruLink.Data;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -37,7 +38,7 @@ public class CacheTab(IDataService dataService)
 
     private void DrawCacheControls()
     {
-        ImGui.TextUnformatted("Cache Management"u8);
+        ImGuiUtils.Section("Cache Management");
         
         using (ImRaii.Disabled(isOperationInProgress))
         {
@@ -75,26 +76,23 @@ public class CacheTab(IDataService dataService)
         ImGui.Unindent();
     }
 
-    private void DrawHotCacheInfo()
+    private static void DrawHotCacheInfo()
     {
-        ImGui.TextUnformatted("Hot Cache Information"u8);
+        ImGuiUtils.Section("Hot Cache Information");
         ImGui.Indent();
         
         var config = Service.Configuration.Data.Cache;
         ImGui.TextUnformatted($"Pre-load Limit: {config.MaxHotCacheEntries} entries");
         ImGui.TextUnformatted($"Hot Threshold: {config.MinAccessCountForHot} accesses");
         
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Translations accessed this many times or more are considered 'hot' and get priority caching"u8);
-        }
+        ImGuiUtils.HelpMarker("Translations accessed this many times or more are considered 'hot' and get priority caching");
         
         ImGui.Unindent();
     }
     
     private void DrawDatabaseInfo()
     {
-        ImGui.TextUnformatted("Database Information"u8);
+        ImGuiUtils.Section("Database Information");
         
         // Update size info periodically
         if (DateTime.Now - lastSizeCheck > TimeSpan.FromSeconds(5))
@@ -110,7 +108,7 @@ public class CacheTab(IDataService dataService)
 
     private void DrawMaintenanceControls()
     {
-        ImGui.TextUnformatted("Database Maintenance"u8);
+        ImGuiUtils.Section("Database Maintenance");
         
         using (ImRaii.Disabled(isOperationInProgress))
         {
@@ -146,10 +144,10 @@ public class CacheTab(IDataService dataService)
         ImGui.SameLine();
         
         var color = lastOperationResult.Contains("Error") || lastOperationResult.Contains("Failed") 
-            ? new Vector4(1, 0.3f, 0.3f, 1) 
-            : new Vector4(0.3f, 1, 0.3f, 1);
+            ? ImGuiUtils.Colors.Error
+            : ImGuiUtils.Colors.Success;
             
-        ImGui.TextColored(color, lastOperationResult);
+        ImGuiUtils.TextColored(color, lastOperationResult);
         
         ImGui.SameLine();
         if (ImGui.Button("Clear##clearResult"u8))

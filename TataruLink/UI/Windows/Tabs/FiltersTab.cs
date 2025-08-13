@@ -4,6 +4,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -15,8 +16,7 @@ public class FiltersTab(TataruConfig configuration)
 
     public void Draw()
     {
-        ImGui.TextUnformatted("Chat Filters"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("Chat Filters");
         
         // Keyword Filter Section
         if (ImGui.CollapsingHeader("Keyword Filtering"u8, ImGuiTreeNodeFlags.DefaultOpen))
@@ -29,10 +29,7 @@ public class FiltersTab(TataruConfig configuration)
                 Service.Configuration.Save();
             }
             
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("When enabled, messages containing blocked keywords or from blocked senders will not be translated."u8);
-            }
+            ImGuiUtils.HelpMarker("When enabled, messages containing blocked keywords or from blocked senders will not be translated.");
             
             ImGui.Separator();
             
@@ -41,11 +38,7 @@ public class FiltersTab(TataruConfig configuration)
             ImGui.Spacing();
             
             ImGui.SetNextItemWidth(-100);
-            ImGui.InputText("##NewKeyword"u8, ref newKeyword, 100);
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Enter a keyword to block"u8);
-            }
+            ImGuiUtils.InputTextWithHint("##NewKeyword", "Enter a keyword to block", ref newKeyword);
             
             ImGui.SameLine();
             var canAdd = !string.IsNullOrWhiteSpace(newKeyword);
@@ -110,7 +103,7 @@ public class FiltersTab(TataruConfig configuration)
             
             ImGui.Separator();
             
-            // Keywords table
+            // Keyword table
             ImGui.TextUnformatted($"Blocked Keywords ({configuration.Filter.KeywordBlocklist.Count})");
             
             if (ImGui.BeginTable("KeywordTable"u8, 2,
@@ -160,16 +153,13 @@ public class FiltersTab(TataruConfig configuration)
             }
         }
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Game State Filters Section
-        ImGui.TextUnformatted("Game State Filters"u8);
-        ImGui.Separator();
-        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), 
-            "Skip translation during certain game states to improve performance"u8);
-        ImGui.Spacing();
+        ImGuiUtils.Section("Game State Filters");
+        ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, 
+            "Skip translation during certain game states to improve performance");
+        ImGuiUtils.Spacing();
         
         // Cutscene filter
         var skipInCutscene = configuration.Filter.SkipInCutscene;
@@ -179,10 +169,7 @@ public class FiltersTab(TataruConfig configuration)
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip in cutscene: {skipInCutscene}");
         }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("When enabled, player messages are skipped during cutscenes.\nNPC dialogue will still be translated."u8);
-        }
+        ImGuiUtils.HelpMarker("When enabled, player messages are skipped during cutscenes.\nNPC dialogue will still be translated.");
         
         // Loading screen filter
         var skipInLoading = configuration.Filter.SkipInLoading;
@@ -192,10 +179,7 @@ public class FiltersTab(TataruConfig configuration)
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip in loading: {skipInLoading}");
         }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("When enabled, all translations are skipped while loading between areas."u8);
-        }
+        ImGuiUtils.HelpMarker("When enabled, all translations are skipped while loading between areas.");
         
         // Retainer bell filter
         var skipInRetainer = configuration.Filter.SkipInRetainer;
@@ -205,18 +189,12 @@ public class FiltersTab(TataruConfig configuration)
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip at retainer: {skipInRetainer}");
         }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("When enabled, translations are skipped while accessing retainers."u8);
-        }
+        ImGuiUtils.HelpMarker("When enabled, translations are skipped while accessing retainers.");
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Validation Settings Section
-        ImGui.TextUnformatted("Validation Settings"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("Validation Settings");
         
         // Duplicate detection period
         var dupePeriod = configuration.Validation.DuplicateDetectionPeriodMs;
@@ -225,17 +203,12 @@ public class FiltersTab(TataruConfig configuration)
             configuration.Validation.DuplicateDetectionPeriodMs = dupePeriod;
             Service.Configuration.Save();
         }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Messages identical to recent ones within this time period will not be translated again."u8);
-        }
+        ImGuiUtils.HelpMarker("Messages identical to recent ones within this time period will not be translated again.");
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Help text
-        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Tips:"u8);
+        ImGuiUtils.SectionSmall("Tips");
         ImGui.BulletText("Add your character name to block your own messages from being translated"u8);
         ImGui.BulletText("Keywords are case-insensitive"u8);
         ImGui.BulletText("Messages are blocked if they contain the keyword or if the sender matches"u8);

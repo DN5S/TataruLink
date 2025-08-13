@@ -15,7 +15,7 @@ namespace TataruLink.UI.Windows;
 public class HistoryWindow : Window, IDisposable
 {
     private readonly IDataService dataService;
-    private List<ChatHistoryEntry> historyItems = new();
+    private List<ChatHistoryEntry> historyItems = [];
     private string searchText = string.Empty;
     private List<long> selectedIds = [];
     private bool isLoading;
@@ -23,11 +23,11 @@ public class HistoryWindow : Window, IDisposable
     private const int PageSize = 100;
     private long? editingId;
     private string editingText = string.Empty;
-    
-    private readonly ImGuiTableFlags tableFlags = 
-        ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
-        ImGuiTableFlags.ScrollY | ImGuiTableFlags.ScrollX | ImGuiTableFlags.Sortable |
-        ImGuiTableFlags.Hideable;
+
+    private const ImGuiTableFlags TableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | 
+                                               ImGuiTableFlags.Resizable | ImGuiTableFlags.Sortable |
+                                               ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY | 
+                                               ImGuiTableFlags.Hideable;
 
     public HistoryWindow(IDataService dataService) 
         : base("Translation History###TataruHistoryWindow")
@@ -114,7 +114,7 @@ public class HistoryWindow : Window, IDisposable
     {
         var filteredItems = GetFilteredItems();
         
-        if (!ImGui.BeginTable("HistoryTable"u8, 9, tableFlags, new Vector2(0, -1)))
+        if (!ImGui.BeginTable("HistoryTable"u8, 9, TableFlags, new Vector2(0, -1)))
             return;
 
         ImGui.TableSetupColumn("Select"u8, ImGuiTableColumnFlags.WidthFixed, 50f);
@@ -144,7 +144,7 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TableNextRow();
         
         ImGui.TableNextColumn();
-        bool isSelected = selectedIds.Contains(item.Id);
+        var isSelected = selectedIds.Contains(item.Id);
         if (ImGui.Checkbox($"##select_{item.Id}", ref isSelected))
         {
             if (isSelected)
@@ -406,5 +406,6 @@ public class HistoryWindow : Window, IDisposable
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this); 
     }
 }

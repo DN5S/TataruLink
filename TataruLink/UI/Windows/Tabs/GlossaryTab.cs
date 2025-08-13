@@ -7,12 +7,12 @@ using Dalamud.Bindings.ImGui;
 using TataruLink.Glossary;
 using TataruLink.Models;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
 public class GlossaryTab(GlossaryManager glossaryManager)
 {
-    private readonly GlossaryManager glossaryManager = glossaryManager;
     private string newOriginal = string.Empty;
     private string newReplacement = string.Empty;
     private string searchFilter = string.Empty;
@@ -36,10 +36,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
             glossaryManager.IsEnabled = isEnabled;
         }
         
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Applies user-defined text replacements BEFORE translation"u8);
-        }
+        ImGuiUtils.HelpMarker("Applies user-defined text replacements BEFORE translation");
 
         ImGui.Separator();
 
@@ -55,20 +52,12 @@ public class GlossaryTab(GlossaryManager glossaryManager)
             ImGui.Columns(2, "AddEntryColumns"u8);
             
             ImGui.SetNextItemWidth(-1);
-            ImGui.InputText("##OriginalText"u8, ref newOriginal, 100);
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Original text to replace"u8);
-            }
+            ImGuiUtils.InputTextWithHint("##OriginalText", "Original text to replace", ref newOriginal);
             
             ImGui.NextColumn();
             
             ImGui.SetNextItemWidth(-1);
-            ImGui.InputText("##ReplacementText"u8, ref newReplacement, 100);
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Text to replace with"u8);
-            }
+            ImGuiUtils.InputTextWithHint("##ReplacementText", "Text to replace with", ref newReplacement);
             
             ImGui.Columns();
             
@@ -111,9 +100,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
                 }
                 else
                 {
-                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1, 0.3f, 0.3f, 1));
-                    ImGui.TextUnformatted(errorMessage);
-                    ImGui.PopStyleColor();
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorMessage);
                 }
             }
         }
@@ -158,7 +145,8 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         }
 
         // Confirmation popup for Remove All
-        if (ImGui.BeginPopupModal("ConfirmRemoveAll"u8, ImGuiWindowFlags.AlwaysAutoResize))
+        var popupOpen = true;
+        if (ImGui.BeginPopupModal("ConfirmRemoveAll"u8, ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize))
         {
             ImGui.TextUnformatted("Are you sure you want to remove all glossary entries?"u8);
             ImGui.TextUnformatted("This action cannot be undone."u8);
@@ -183,7 +171,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         ImGui.Separator();
 
         // Glossary entries table
-        ImGui.TextUnformatted("Glossary Entries"u8);
+        ImGuiUtils.SectionSmall("Glossary Entries");
         
         if (ImGui.BeginTable("GlossaryTable"u8, 4, 
             ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 

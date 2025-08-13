@@ -1,11 +1,11 @@
 using System.Linq;
-using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.DtrBar;
 using TataruLink.Services;
 using TataruLink.Translation;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -37,11 +37,7 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                     Service.Configuration.Save();
                 }
                 ImGui.SameLine();
-                ImGui.TextDisabled("(?)"u8);
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.SetTooltip("Shows translation count in server info bar"u8);
-                }
+                ImGuiUtils.HelpMarker("Shows translation count in server info bar");
                 
                 ImGui.TableNextColumn();
                 
@@ -53,13 +49,10 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
             }
         }
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Status Overview Section
-        ImGui.TextUnformatted("System Status"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("System Status");
         
         using (var table = ImRaii.Table("StatusTable"u8, 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
         {
@@ -73,8 +66,8 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Plugin"u8);
                 ImGui.TableNextColumn();
-                var pluginStatusColor = configuration.IsEnabled ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
-                ImGui.TextColored(pluginStatusColor, configuration.IsEnabled ? "Active"u8 : "Disabled"u8);
+                ImGuiUtils.TextColored(configuration.IsEnabled ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
+                    configuration.IsEnabled ? "Active" : "Disabled");
                 
                 // Translation Engine
                 ImGui.TableNextRow();
@@ -88,8 +81,8 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Engine Configuration"u8);
                 ImGui.TableNextColumn();
-                var configuredColor = translationService.IsConfigured ? new Vector4(0, 1, 0, 1) : new Vector4(1, 1, 0, 1);
-                ImGui.TextColored(configuredColor, translationService.IsConfigured ? "Configured"u8 : "Not Configured"u8);
+                ImGuiUtils.TextColored(translationService.IsConfigured ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.Warning, 
+                    translationService.IsConfigured ? "Configured" : "Not Configured");
                 
                 // Translation Count
                 if (dtrBarManager != null)
@@ -106,8 +99,8 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Chat Display"u8);
                 ImGui.TableNextColumn();
-                var chatColor = configuration.Display.ShowInChat ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
-                ImGui.TextColored(chatColor, configuration.Display.ShowInChat ? "Enabled"u8 : "Disabled"u8);
+                ImGuiUtils.TextColored(configuration.Display.ShowInChat ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
+                    configuration.Display.ShowInChat ? "Enabled" : "Disabled");
                 
                 // Overlay Windows
                 ImGui.TableNextRow();
@@ -118,12 +111,12 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 var totalOverlays = configuration.Display.OverlayWindows.Count;
                 if (totalOverlays > 0)
                 {
-                    var overlayColor = activeOverlays > 0 ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
-                    ImGui.TextColored(overlayColor, $"{activeOverlays}/{totalOverlays} Active");
+                    ImGuiUtils.TextColored(activeOverlays > 0 ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
+                        $"{activeOverlays}/{totalOverlays} Active");
                 }
                 else
                 {
-                    ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1), "None Configured"u8);
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.TextDisabled, "None Configured");
                 }
                 
                 // Cache Status
@@ -131,18 +124,15 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Translation Cache"u8);
                 ImGui.TableNextColumn();
-                var cacheColor = configuration.Performance.EnableCache ? new Vector4(0, 1, 0, 1) : new Vector4(0.5f, 0.5f, 0.5f, 1);
-                ImGui.TextColored(cacheColor, configuration.Performance.EnableCache ? "Enabled"u8 : "Disabled"u8);
+                ImGuiUtils.TextColored(configuration.Performance.EnableCache ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
+                    configuration.Performance.EnableCache ? "Enabled" : "Disabled");
             }
         }
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Configuration Summary
-        ImGui.TextUnformatted("Configuration Summary"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("Configuration Summary");
         
         // Languages
         ImGui.TextUnformatted($"Languages: {configuration.Translation.SourceLanguage} -> {configuration.Translation.TargetLanguage}");
@@ -159,20 +149,18 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         ImGui.TextUnformatted($"Translation Rate: {configuration.Performance.TranslationsPerSecond}/sec");
         ImGui.TextUnformatted($"Max Queue Size: {configuration.Performance.MaxQueueSize}");
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Tips
-        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "Tips:"u8);
+        ImGuiUtils.SectionSmall("Tips");
         ImGui.BulletText("Use /tatarulink to open settings"u8);
         ImGui.BulletText("Use /tataruhistory to view translation history"u8);
         ImGui.BulletText("Configure overlay windows for custom translation displays"u8);
         
         if (!translationService.IsConfigured)
         {
-            ImGui.Spacing();
-            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Note: Translation engine needs configuration. Go to Translation tab."u8);
+            ImGuiUtils.Spacing();
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "Note: Translation engine needs configuration. Go to Translation tab.");
         }
     }
 }

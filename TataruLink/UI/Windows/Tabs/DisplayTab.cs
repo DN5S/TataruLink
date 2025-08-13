@@ -2,6 +2,7 @@ using System.Linq;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -10,8 +11,7 @@ public class DisplayTab(TataruConfig configuration)
     public void Draw()
     {
         // Chat Display Section
-        ImGui.TextUnformatted("Chat Display"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("Chat Display");
         
         var showInChat = configuration.Display.ShowInChat;
         if (ImGui.Checkbox("Enable Chat Display"u8, ref showInChat))
@@ -19,10 +19,7 @@ public class DisplayTab(TataruConfig configuration)
             configuration.Display.ShowInChat = showInChat;
             Service.Configuration.Save();
         }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Show translated messages in the game's chat window"u8);
-        }
+        ImGuiUtils.HelpMarker("Show translated messages in the game's chat window");
         
         if (configuration.Display.ShowInChat)
         {
@@ -45,21 +42,18 @@ public class DisplayTab(TataruConfig configuration)
             ImGui.Unindent();
         }
         
-        ImGui.Spacing();
-        ImGui.Separator();
-        ImGui.Spacing();
+        ImGuiUtils.Spacing(2);
         
         // Overlay Display Section
-        ImGui.TextUnformatted("Overlay System"u8);
-        ImGui.Separator();
+        ImGuiUtils.Section("Overlay System");
         
         var hasOverlays = configuration.Display.OverlayWindows.Count > 0;
         var hasEnabledOverlays = configuration.Display.GetActiveOverlays().Any();
         
         if (!hasOverlays)
         {
-            ImGui.TextColored(new System.Numerics.Vector4(0.7f, 0.7f, 0.7f, 1.0f), 
-                "No overlay windows configured"u8);
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, 
+                "No overlay windows configured");
             ImGui.TextUnformatted("Go to the 'Overlay' tab to create overlay windows"u8);
         }
         else

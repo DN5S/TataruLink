@@ -426,6 +426,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         
         providerLock.Dispose();
         Service.PluginLog.Information("Translation service disposed");
+        
+        GC.SuppressFinalize(this);
     }
     
     public async ValueTask DisposeAsync()
@@ -463,5 +465,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         
         providerLock.Dispose();
         Service.PluginLog.Information("Translation service disposed asynchronously");
+        
+        GC.SuppressFinalize(this);
     }
 }

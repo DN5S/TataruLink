@@ -14,7 +14,7 @@ namespace TataruLink.UI.Windows;
 public class TranslationOverlay : Window, IDisposable
 {
     private readonly OverlayWindowConfig config;
-    private readonly List<OverlayMessage> messages = new();
+    private readonly List<OverlayMessage> messages = [];
     private readonly SemaphoreSlim messageLock = new(1, 1);
     private bool autoScroll;
     
@@ -28,28 +28,12 @@ public class TranslationOverlay : Window, IDisposable
         
         UpdateWindowFlags();
         
-        if (config.Position.HasValue)
-        {
-            Position = config.Position.Value;
-            PositionCondition = ImGuiCond.FirstUseEver;
-        }
-        else
-        {
-            Position = new Vector2(100, 100);
-            PositionCondition = ImGuiCond.FirstUseEver;
-        }
-        
-        if (config.Size.HasValue)
-        {
-            Size = config.Size.Value;
-            SizeCondition = ImGuiCond.FirstUseEver;
-        }
-        else
-        {
-            Size = new Vector2(400, 300);
-            SizeCondition = ImGuiCond.FirstUseEver;
-        }
-        
+        Position = config.Position ?? new Vector2(100, 100);
+        PositionCondition = ImGuiCond.FirstUseEver;
+
+        Size = config.Size ?? new Vector2(400, 300);
+        SizeCondition = ImGuiCond.FirstUseEver;
+
         IsOpen = config.IsEnabled;
     }
     
@@ -88,7 +72,7 @@ public class TranslationOverlay : Window, IDisposable
         
         if (config.ShowBorder)
         {
-            var bgColor = config.BackgroundColor ?? new Vector4(0.06f, 0.06f, 0.06f, 1.0f);
+            var bgColor = config.BackgroundColor ?? ImGuiUtils.Colors.WindowBackground;
             bgColor.W = config.Opacity / 100f;
             
             ImGui.PushStyleColor(ImGuiCol.WindowBg, bgColor);
@@ -323,6 +307,7 @@ public class TranslationOverlay : Window, IDisposable
         config.Position = Position;
         config.Size = Size;
         messageLock.Dispose();
+        GC.SuppressFinalize(this);
     }
     
     private class OverlayMessage

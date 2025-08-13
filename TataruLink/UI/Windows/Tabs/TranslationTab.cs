@@ -8,6 +8,7 @@ using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Translation.Providers;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -47,17 +48,17 @@ public class TranslationTab
             // Choose a color based on status
             Vector4 statusColor;
             if (!status.IsConfigured)
-                statusColor = new Vector4(0.7f, 0.7f, 0.7f, 1);  // Gray
+                statusColor = ImGuiUtils.Colors.TextMuted;
             else if (!status.IsHealthy)
-                statusColor = new Vector4(1, 0, 0, 1);  // Red
+                statusColor = ImGuiUtils.Colors.Error;
             else if (status.ConsecutiveFailures > 0)
-                statusColor = new Vector4(1, 1, 0, 1);  // Yellow
+                statusColor = ImGuiUtils.Colors.Warning;
             else
-                statusColor = new Vector4(0, 1, 0, 1);  // Green
+                statusColor = ImGuiUtils.Colors.Success;
                 
-            ImGui.TextColored(statusColor, status.GetStatusIndicator());
+            ImGuiUtils.TextColored(statusColor, status.GetStatusIndicator());
             ImGui.SameLine();
-            ImGui.TextColored(statusColor, status.GetStatusMessage());
+            ImGuiUtils.TextColored(statusColor, status.GetStatusMessage());
             
             // Show a detailed error on hover if there's an error
             if (status.LastError != null && ImGui.IsItemHovered())
@@ -74,7 +75,7 @@ public class TranslationTab
         }
         else
         {
-            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1), "[Status Unknown]");
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, "[Status Unknown]");
         }
         
         // Get available provider types
@@ -112,20 +113,14 @@ public class TranslationTab
             {
                 ImGui.TextUnformatted("DeepL API Key"u8);
                 ImGui.SameLine();
-                ImGui.TextDisabled("(?)"u8);
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.BeginTooltip();
-                    ImGui.TextUnformatted("Get your API key from https://www.deepl.com/pro-api"u8);
-                    ImGui.EndTooltip();
-                }
+                ImGuiUtils.HelpMarker("Get your API key from https://www.deepl.com/pro-api");
             
                 ImGui.InputText("##ApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
                 
                 // Show inline validation status
                 if (status is { LastError.Type: TranslationErrorType.InvalidApiKey })
                 {
-                    ImGui.TextColored(new Vector4(1, 0, 0, 1), "Invalid API key. Please check and re-enter."u8);
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "Invalid API key. Please check and re-enter.");
                 }
                 
                 ImGui.SameLine();
@@ -145,8 +140,8 @@ public class TranslationTab
             }
             case TranslationProviderType.Google:
                 ImGui.TextWrapped("Google Translate uses an unofficial API and doesn't require an API key."u8);
-                ImGui.TextColored(new Vector4(1, 0.8f, 0, 1), "WARNING: This uses an UNOFFICIAL API that may stop working at any time."u8);
-                ImGui.TextColored(new Vector4(1, 0.5f, 0, 1), "Consider DeepL or another official API for better reliability."u8);
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "WARNING: This uses an UNOFFICIAL API that may stop working at any time.");
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Orange, "Consider DeepL or another official API for better reliability.");
                 break;
                 
             case TranslationProviderType.Gemini:
@@ -278,10 +273,7 @@ public class TranslationTab
             var selectedIndex = Array.FindIndex(geminiModels, m => m.Name == currentModel);
             if (selectedIndex < 0) selectedIndex = 0;
             
-            var modelNames = geminiModels.Select(m => 
-            {
-                return m.DisplayName;
-            }).ToArray();
+            var modelNames = geminiModels.Select(m => m.DisplayName).ToArray();
             
             if (ImGui.Combo("##GeminiModel"u8, ref selectedIndex, modelNames, modelNames.Length))
             {

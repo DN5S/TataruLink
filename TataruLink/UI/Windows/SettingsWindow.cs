@@ -107,21 +107,22 @@ public class SettingsWindow : Window, IDisposable
             if (tab)
                 overlayTab.Draw();
         }
-            
-        using (var tab = ImRaii.TabItem("Debug"u8))
-        {
-            if (tab)
-                debugTab.Draw();
-        }
         
         using (var tab = ImRaii.TabItem("Cache"u8))
         {
             if (tab)
                 cacheTab.Draw();
         }
+            
+        using (var tab = ImRaii.TabItem("Debug"u8))
+        {
+            if (tab)
+                debugTab.Draw();
+        }
     }
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
     }
 }

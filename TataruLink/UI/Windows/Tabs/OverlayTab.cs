@@ -6,6 +6,7 @@ using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.Overlay;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -184,10 +185,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             {
                 overlay.ShowBorder = showBorder;
             }
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Toggle window background visibility"u8);
-            }
+            ImGuiUtils.HelpMarker("Toggle window background visibility");
             
             // Background color picker
             if (overlay.ShowBorder)
@@ -282,8 +280,8 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                 
                 foreach (var chatTypeValue in enabledChatTypes)
                 {
-                    var displayName = Utils.ChatTypeUtils.GetChannelName(chatTypeValue);
-                    var category = Utils.ChatTypeUtils.GetCategory(chatTypeValue);
+                    var displayName = ChatTypeUtils.GetChannelName(chatTypeValue);
+                    var category = ChatTypeUtils.GetCategory(chatTypeValue);
                     var isEnabled = overlay.EnabledChatTypes.Contains(chatTypeValue);
                     
                     // Checkbox for enabling this chat type in the overlay
@@ -308,15 +306,8 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                         {
                             // Try to get the default color from a new overlay config
                             var defaultConfig = new OverlayWindowConfig();
-                            if (defaultConfig.ChatTypeColors.TryGetValue(chatTypeValue, out var defaultColor))
-                            {
-                                color = defaultColor;
-                            }
-                            else
-                            {
-                                // Use default gray color if not in defaults
-                                color = new Vector4(0.8f, 0.8f, 0.8f, 1.0f);
-                            }
+                            color = defaultConfig.ChatTypeColors.TryGetValue(chatTypeValue, out var defaultColor) ? defaultColor :
+                                        new Vector4(0.8f, 0.8f, 0.8f, 1.0f); // Use the default gray color if not in defaults
                             overlay.ChatTypeColors[chatTypeValue] = color;
                         }
                         

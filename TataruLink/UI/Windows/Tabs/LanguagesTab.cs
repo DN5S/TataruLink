@@ -1,6 +1,7 @@
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
@@ -8,11 +9,13 @@ public class LanguagesTab(TataruConfig configuration)
 {
     private readonly string[] languageNames = 
     [
-        "Auto-Detect", "English", "Japanese", "German", "French", "Chinese", "Korean", "Spanish", "Portuguese", "Russian", "Italian", "Dutch", "Polish"
+        "Auto-Detect", "English", "Japanese", "German", "French", 
+        "Chinese", "Korean", "Spanish", "Portuguese", "Russian", "Italian", "Dutch", "Polish"
     ];
     private readonly string[] languageNamesNoAuto = 
     [
-        "English", "Japanese", "German", "French", "Chinese", "Korean", "Spanish", "Portuguese", "Russian", "Italian", "Dutch", "Polish"
+        "English", "Japanese", "German", "French", 
+        "Chinese", "Korean", "Spanish", "Portuguese", "Russian", "Italian", "Dutch", "Polish"
     ];
     private readonly string[] languageCodes =
     [
@@ -25,7 +28,7 @@ public class LanguagesTab(TataruConfig configuration)
 
     public void Draw()
     {
-        ImGui.TextUnformatted("Source Language"u8);
+        ImGuiUtils.AlignedLabel("Source Language", 150);
         var sourceIndex = GetLanguageIndex(configuration.Translation.SourceLanguage);
         if (ImGui.Combo("##SourceLang"u8, ref sourceIndex, languageNames, languageNames.Length))
         {
@@ -33,7 +36,7 @@ public class LanguagesTab(TataruConfig configuration)
             Service.Configuration.Save();
         }
         
-        ImGui.TextUnformatted("Target Language"u8);
+        ImGuiUtils.AlignedLabel("Target Language", 150);
         var targetIndex = GetLanguageIndexNoAuto(configuration.Translation.TargetLanguage);
         if (ImGui.Combo("##TargetLang"u8, ref targetIndex, languageNamesNoAuto, languageNamesNoAuto.Length))
         {
@@ -42,7 +45,8 @@ public class LanguagesTab(TataruConfig configuration)
         }
         
         ImGui.Separator();
-        ImGui.TextWrapped("Select 'Auto-Detect' as source language to automatically detect the language of incoming messages."u8);
+        ImGuiUtils.Spacing();
+        ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, "Tip: Select 'Auto-Detect' as source language to automatically detect the language of incoming messages.");
     }
 
     private int GetLanguageIndex(string code)

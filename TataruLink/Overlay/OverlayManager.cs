@@ -168,30 +168,6 @@ public class OverlayManager : IDisposable
             overlay.ClearMessages();
         }
     }
-    public void ClearAllOverlays()
-    {
-        foreach (var overlay in overlays.Values)
-        {
-            overlay.ClearMessages();
-        }
-    }
-    
-    public void UpdateOverlayConfig(Guid id, Action<OverlayWindowConfig> updateAction)
-    {
-        var config = configuration.Display.GetOverlayWindow(id);
-        if (config != null)
-        {
-            updateAction(config);
-            
-            // Update the overlay if it exists
-            if (overlays.TryGetValue(id, out var overlay))
-            {
-                overlay.UpdateConfig(config);
-            }
-            
-            Service.Configuration.Save();
-        }
-    }
 
     public void RenameOverlay(Guid id, string newName)
     {
@@ -210,29 +186,6 @@ public class OverlayManager : IDisposable
             Service.PluginLog.Information($"Renamed overlay to: {newName} (ID: {id})");
         }
     }
-
-    public OverlayWindowConfig? GetOverlayConfig(Guid id)
-    {
-        return configuration.Display.GetOverlayWindow(id);
-    }
-    
-    public IEnumerable<OverlayWindowConfig> GetAllOverlayConfigs()
-    {
-        return configuration.Display.OverlayWindows;
-    }
-    public void ReloadOverlays()
-    {
-        // Remove existing overlays
-        foreach (var overlay in overlays.Values)
-        {
-            windowSystem.RemoveWindow(overlay);
-            overlay.Dispose();
-        }
-        overlays.Clear();
-        
-        // Recreate from configuration
-        InitializeOverlays();
-    }
     
     public void Dispose()
     {
@@ -242,5 +195,6 @@ public class OverlayManager : IDisposable
             overlay.Dispose();
         }
         overlays.Clear();
+        GC.SuppressFinalize(this);
     }
 }
