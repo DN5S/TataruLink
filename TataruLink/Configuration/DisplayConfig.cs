@@ -26,6 +26,7 @@ public class DisplayConfig
             Name = name,
             IsEnabled = true
         };
+        overlay.EnsureDefaultColors();
         OverlayWindows.Add(overlay);
         return overlay;
     }

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Dalamud.Plugin;
 using Dalamud.Utility;
 using Microsoft.Extensions.Caching.Memory;
 using TataruLink.Configuration;
@@ -16,7 +16,6 @@ namespace TataruLink.Data;
 
 public class DataService : IDataService
 {
-    private readonly DatabaseContext context;
     private readonly IDataAccessFacade dataAccessFacade;
     private readonly CacheConfig config;
     private readonly MemoryCache l1Cache;
@@ -27,13 +26,10 @@ public class DataService : IDataService
     
     public event EventHandler<ChatHistoryEntry>? OnHistoryAdded;
     
-    public DataService(IDalamudPluginInterface pluginInterface)
+    public DataService(IDataAccessFacade dataAccessFacade, CacheConfig config)
     {
-        config = new CacheConfig();
-        
-        context = new DatabaseContext(pluginInterface, config);
-        
-        dataAccessFacade = new DataAccessFacade(context, config);
+        this.dataAccessFacade = dataAccessFacade ?? throw new ArgumentNullException(nameof(dataAccessFacade));
+        this.config = config ?? throw new ArgumentNullException(nameof(config));
         
         l1Cache = new MemoryCache(new MemoryCacheOptions 
         { 
@@ -54,8 +50,6 @@ public class DataService : IDataService
 
     public async Task InitializeAsync()
     {
-        await context.InitializeAsync().ConfigureAwait(false);
-        
         // NOTE: Preload hot cache for better performance
         await PreloadHotTranslationsAsync().ConfigureAwait(false);
         
@@ -235,12 +229,26 @@ public class DataService : IDataService
 
     public async Task VacuumDatabaseAsync()
     {
-        await context.VacuumAsync().ConfigureAwait(false);
+        // Note: Database vacuum needs to be implemented through a proper service
+        // For now, this is a no-op since DataService doesn't own the DatabaseContext
+        await Task.CompletedTask;
     }
 
     public async Task<long> GetDatabaseSizeAsync()
     {
-        return await context.GetDatabaseSizeAsync().ConfigureAwait(false);
+        // Get database file size directly from the file system
+        try
+        {
+            var configDir = Service.PluginInterface.GetPluginConfigDirectory();
+            var dbPath = Path.Combine(configDir, config.DatabaseFileName);
+            var fileInfo = new FileInfo(dbPath);
+            return await Task.FromResult(fileInfo.Exists ? fileInfo.Length : 0L);
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Failed to get database file size");
+            return 0L;
+        }
     }
 
     public CacheStatistics GetStatistics() => statistics;
@@ -525,7 +533,6 @@ public class DataService : IDataService
         // Add disposables to the finalizer
         finalizer.Add(l1Cache);
         finalizer.Add(dataAccessFacade);
-        finalizer.Add(context);
         finalizer.Add(cts);
         
         finalizer.Add(() => Service.PluginLog.Information("DataService disposed"));
@@ -583,16 +590,7 @@ public class DataService : IDataService
         
         // Dispose of resources asynchronously
         l1Cache.Dispose();
-        dataAccessFacade.Dispose();
-        
-        if (context is IAsyncDisposable asyncContext)
-        {
-            await asyncContext.DisposeAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            context.Dispose();
-        }
+        dataAccessFacade.Dispose(); 
         
         cts.Dispose();
         

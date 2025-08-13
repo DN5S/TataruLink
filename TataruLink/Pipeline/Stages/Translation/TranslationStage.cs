@@ -32,6 +32,24 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
         {
             Service.PluginLog.Debug($"Translation stage processing: {message.PlainTextContent}");
             
+            // Check for per-chat-type provider override
+            var chatTypeProvider = configuration.Chat.GetProviderForChatType(message.ChatType);
+            if (!string.IsNullOrEmpty(chatTypeProvider) && chatTypeProvider != "Default")
+            {
+                // Switch to the chat-type specific provider if different
+                if (translationService.ProviderName != chatTypeProvider)
+                {
+                    Service.PluginLog.Debug($"Switching to chat-type provider: {chatTypeProvider} for chat type {message.ChatType}");
+                    translationService.ChangeProvider(chatTypeProvider);
+                }
+            }
+            else if (translationService.ProviderName != configuration.Translation.Engine)
+            {
+                // Ensure we're using the default provider
+                Service.PluginLog.Debug($"Switching back to default provider: {configuration.Translation.Engine}");
+                translationService.ChangeProvider(configuration.Translation.Engine);
+            }
+            
             if (!translationService.IsConfigured)
             {
                 Service.PluginLog.Warning("Translation service not configured");

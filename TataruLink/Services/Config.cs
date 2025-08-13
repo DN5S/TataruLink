@@ -51,6 +51,12 @@ public class Config : IDisposable
                 var json = File.ReadAllText(configPath);
                 data = JsonSerializer.Deserialize<TataruConfig>(json, JsonOptions) ?? new TataruConfig();
                 Service.PluginLog.Information($"Configuration loaded from {configPath} (Version {data.Version})");
+                
+                // Ensure all overlay windows have default colors initialized
+                foreach (var overlay in data.Display.OverlayWindows)
+                {
+                    overlay.EnsureDefaultColors();
+                }
             }
             else
             {

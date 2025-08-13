@@ -57,7 +57,7 @@ public class ChatHistoryEntry
     public string? TranslatedContent { get; set; }
     
     [MaxLength(50)]
-    public string? TranslationCacheId { get; init; }
+    public string? TranslationCacheId { get; set; }
     
     public bool IsVisible { get; set; } = true;
 }

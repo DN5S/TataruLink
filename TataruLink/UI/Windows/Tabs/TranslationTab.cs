@@ -168,10 +168,23 @@ public class TranslationTab
             
                 ImGui.InputText("##ApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
                 
-                // Show inline validation status
-                if (status is { LastError.Type: TranslationErrorType.InvalidApiKey })
+                // Show configuration status
+                ImGui.SameLine();
+                if (translationService.IsConfigured && translationService.ProviderName == "DeepL")
                 {
-                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "Invalid API key. Please check and re-enter."u8);
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
+                }
+                else if (status is { LastError.Type: TranslationErrorType.InvalidApiKey })
+                {
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "[Invalid Key]"u8);
+                }
+                else if (!string.IsNullOrEmpty(tempApiKey))
+                {
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "[Not Saved]"u8);
+                }
+                else
+                {
+                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "[Not Configured]"u8);
                 }
                 
                 ImGui.SameLine();
@@ -179,6 +192,9 @@ public class TranslationTab
                 {
                     translationService.UpdateApiKey(configuration.Translation.Engine, tempApiKey);
                     Service.PluginLog.Information("API key saved and provider reinitialized");
+                    
+                    // Auto-test the connection after saving
+                    _ = TestProviderConnectionAsync();
                 }
                 
                 ImGui.SameLine();
@@ -284,17 +300,29 @@ public class TranslationTab
         
         ImGui.InputText("##GeminiApiKey"u8, ref tempApiKey, 100, ImGuiInputTextFlags.Password);
         
+        // Show configuration status
+        ImGui.SameLine();
+        if (translationService.IsConfigured && translationService.ProviderName == "Gemini")
+        {
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
+        }
+        else if (!string.IsNullOrEmpty(tempApiKey))
+        {
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "[Not Saved]"u8);
+        }
+        else
+        {
+            ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "[Not Configured]"u8);
+        }
+        
         ImGui.SameLine();
         if (ImGui.Button("Save Key"u8))
         {
             translationService.UpdateApiKey("Gemini", tempApiKey);
             Service.PluginLog.Information("Gemini API key saved and provider reinitialized");
             _ = LoadGeminiModelsAsync();
-        }
-        
-        ImGui.SameLine();
-        if (ImGui.Button("Test Connection"u8))
-        {
+            
+            // Auto-test the connection after saving
             _ = TestProviderConnectionAsync();
         }
         

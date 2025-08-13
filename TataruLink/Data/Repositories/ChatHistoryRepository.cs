@@ -9,20 +9,51 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) : IChatHistoryRepository
+public class ChatHistoryRepository : IChatHistoryRepository
 {
-    private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
-    private readonly CacheConfig.ValidationLimits validation = config.Validation;
+    private readonly DatabaseContext context;
+    private readonly CacheConfig.ValidationLimits validation;
+    private readonly SemaphoreSlim dbSemaphore;
+
+    public ChatHistoryRepository(DatabaseContext context, CacheConfig config, SemaphoreSlim dbSemaphore)
+    {
+        this.context = context ?? throw new ArgumentNullException(nameof(context));
+        validation = config.Validation ?? throw new ArgumentNullException(nameof(config));
+        this.dbSemaphore = dbSemaphore ?? throw new ArgumentNullException(nameof(dbSemaphore));
+    }
 
     public async Task<ChatHistoryEntry> AddAsync(ChatHistoryEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        context.ChatHistory.Add(entry);
-        await context.SaveChangesAsync(cancellationToken);
-        
-        return entry;
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            // Check if entry with this MessageId already exists
+            var existing = await context.ChatHistory
+                .FirstOrDefaultAsync(e => e.MessageId == entry.MessageId, cancellationToken);
+            
+            if (existing != null)
+            {
+                // Update existing entry instead of creating duplicate
+                if (!string.IsNullOrEmpty(entry.TranslatedContent))
+                    existing.TranslatedContent = entry.TranslatedContent;
+                if (!string.IsNullOrEmpty(entry.TranslationCacheId))
+                    existing.TranslationCacheId = entry.TranslationCacheId;
+                await context.SaveChangesAsync(cancellationToken);
+                return existing;
+            }
+            
+            context.ChatHistory.Add(entry);
+            await context.SaveChangesAsync(cancellationToken);
+            
+            return entry;
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> AddBatchAsync(IEnumerable<ChatHistoryEntry> entries, CancellationToken cancellationToken = default)
@@ -36,20 +67,58 @@ public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) 
             PrepareEntry(entry);
         }
         
-        context.ChatHistory.AddRange(entriesList);
-        return await context.SaveChangesAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var addedCount = 0;
+            foreach (var entry in entriesList)
+            {
+                // Check if entry with this MessageId already exists
+                var existing = await context.ChatHistory
+                    .FirstOrDefaultAsync(e => e.MessageId == entry.MessageId, cancellationToken);
+                
+                if (existing != null)
+                {
+                    // Update existing entry instead of creating duplicate
+                    if (!string.IsNullOrEmpty(entry.TranslatedContent))
+                        existing.TranslatedContent = entry.TranslatedContent;
+                    if (!string.IsNullOrEmpty(entry.TranslationCacheId))
+                        existing.TranslationCacheId = entry.TranslationCacheId;
+                }
+                else
+                {
+                    context.ChatHistory.Add(entry);
+                    addedCount++;
+                }
+            }
+            
+            await context.SaveChangesAsync(cancellationToken);
+            return addedCount;
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<IEnumerable<ChatHistoryEntry>> GetVisibleAsync(int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         ValidateQueryParameters(limit, offset);
         
-        return await context.ChatHistory
-            .Where(e => e.IsVisible)
-            .OrderByDescending(e => e.Timestamp)
-            .Skip(offset)
-            .Take(limit)
-            .ToListAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.ChatHistory
+                .Where(e => e.IsVisible)
+                .OrderByDescending(e => e.Timestamp)
+                .Skip(offset)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<ChatHistoryEntry?> GetByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default)
@@ -57,8 +126,16 @@ public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) 
         if (messageId == Guid.Empty)
             throw new ArgumentException("Message ID must not be empty", nameof(messageId));
             
-        return await context.ChatHistory
-            .FirstOrDefaultAsync(e => e.MessageId == messageId, cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.ChatHistory
+                .FirstOrDefaultAsync(e => e.MessageId == messageId, cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> HideAsync(IEnumerable<long>? ids, CancellationToken cancellationToken = default)
@@ -71,32 +148,56 @@ public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) 
         if (idsList.Any(id => id <= 0))
             throw new ArgumentException("All IDs must be positive", nameof(ids));
             
-        var entries = await context.ChatHistory
-            .Where(e => idsList.Contains(e.Id))
-            .ToListAsync(cancellationToken);
-            
-        foreach (var entry in entries)
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
         {
-            entry.IsVisible = false;
+            var entries = await context.ChatHistory
+                .Where(e => idsList.Contains(e.Id))
+                .ToListAsync(cancellationToken);
+                
+            foreach (var entry in entries)
+            {
+                entry.IsVisible = false;
+            }
+            
+            return await context.SaveChangesAsync(cancellationToken);
         }
-        
-        return await context.SaveChangesAsync(cancellationToken);
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> ClearAllAsync(CancellationToken cancellationToken = default)
     {
-        var allEntries = await context.ChatHistory.ToListAsync(cancellationToken);
-        context.ChatHistory.RemoveRange(allEntries);
-        return await context.SaveChangesAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var allEntries = await context.ChatHistory.ToListAsync(cancellationToken);
+            context.ChatHistory.RemoveRange(allEntries);
+            return await context.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> GetCountAsync(bool visibleOnly = true, CancellationToken cancellationToken = default)
     {
-        var query = visibleOnly 
-            ? context.ChatHistory.Where(e => e.IsVisible)
-            : context.ChatHistory;
-            
-        return await query.CountAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var query = visibleOnly 
+                ? context.ChatHistory.Where(e => e.IsVisible)
+                : context.ChatHistory;
+                
+            return await query.CountAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<bool> UpdateTranslationAsync(long id, string translatedContent, CancellationToken cancellationToken = default)
@@ -107,13 +208,21 @@ public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) 
         if (translatedContent != null && translatedContent.Length > validation.MaxTextLength)
             throw new ArgumentException($"Translated content exceeds maximum length of {validation.MaxTextLength}");
             
-        var entry = await context.ChatHistory.FindAsync([id], cancellationToken);
-        if (entry == null)
-            return false;
-            
-        entry.TranslatedContent = translatedContent;
-        await context.SaveChangesAsync(cancellationToken);
-        return true;
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var entry = await context.ChatHistory.FindAsync([id], cancellationToken);
+            if (entry == null)
+                return false;
+                
+            entry.TranslatedContent = translatedContent;
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     private void ValidateQueryParameters(int limit, int offset)

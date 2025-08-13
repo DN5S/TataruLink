@@ -54,14 +54,12 @@ public sealed class Plugin : IDalamudPlugin
     {
         var configuration = Service.Configuration.Data;
         
+        // Initialize database context first
+        databaseContext = new DatabaseContext(pluginInterface, configuration.Cache);
+        
         // Initialize the database synchronously to prevent race conditions
-        dataService = new DataService(pluginInterface);
         var initTask = Task.Run(async () =>
         {
-            await dataService.InitializeAsync();
-            
-            // Initialize database context for managers after dataService is ready
-            databaseContext = new DatabaseContext(pluginInterface, configuration.Cache);
             await databaseContext.InitializeAsync();
         });
         
@@ -72,15 +70,22 @@ public sealed class Plugin : IDalamudPlugin
             throw new TimeoutException("Failed to initialize database within timeout period");
         }
         
-        // Ensure database context was initialized successfully
-        if (databaseContext == null)
-        {
-            Service.PluginLog.Error("Database context initialization failed");
-            throw new InvalidOperationException("Database context is null after initialization");
-        }
-        
         // Create a unit of work after a database is initialized
         unitOfWork = new DataAccessFacade(databaseContext, configuration.Cache);
+        
+        // Initialize DataService with the shared unit of work
+        dataService = new DataService(unitOfWork, configuration.Cache);
+        var dataServiceInitTask = Task.Run(async () =>
+        {
+            await dataService.InitializeAsync();
+        });
+        
+        // Wait for DataService initialization
+        if (!dataServiceInitTask.Wait(TimeSpan.FromSeconds(5)))
+        {
+            Service.PluginLog.Error("DataService initialization timed out");
+            throw new TimeoutException("Failed to initialize DataService within timeout period");
+        }
         
         // Initialize managers with repositories
         glossaryManager = new GlossaryManager(unitOfWork.Glossary, configuration.Glossary);
