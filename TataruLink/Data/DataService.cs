@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Dapper;
 using Dalamud.Plugin;
 using Microsoft.Extensions.Caching.Memory;
 using TataruLink.Configuration;
@@ -25,12 +23,6 @@ public class DataService : IDataService
     private readonly CancellationTokenSource cts = new();
     private readonly CacheStatistics statistics = new();
     private readonly Task? batchWriterTask;
-    
-    static DataService()
-    {
-        // Register Dapper type handler for Guid
-        SqlMapper.AddTypeHandler(new GuidTypeHandler());
-    }
     
     public DataService(IDalamudPluginInterface pluginInterface)
     {
@@ -486,16 +478,6 @@ public class DataService : IDataService
             Service.PluginLog.Warning(ex, "Batch writer task did not complete cleanly");
         }
         
-        // Force clean up any lingering transaction before disposal
-        try
-        {
-            context.ForceCleanupTransactionAsync().Wait(TimeSpan.FromSeconds(1));
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Warning(ex, "Failed to cleanup transaction during disposal");
-        }
-        
         // Now flush any remaining items (a batch writer should be done)
         try
         {
@@ -557,16 +539,6 @@ public class DataService : IDataService
             }
         }
         
-        // Force clean up any lingering transaction before disposal
-        try
-        {
-            await context.ForceCleanupTransactionAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Warning(ex, "Failed to cleanup transaction during disposal");
-        }
-        
         // Now flush any remaining items (a batch writer should be done)
         try
         {
@@ -609,24 +581,5 @@ public class DataService : IDataService
         cts.Dispose();
         
         Service.PluginLog.Information("DataService disposed asynchronously");
-    }
-}
-
-// Dapper type handler for Guid to/from SQLite TEXT
-internal class GuidTypeHandler : SqlMapper.TypeHandler<Guid>
-{
-    public override void SetValue(IDbDataParameter parameter, Guid value)
-    {
-        parameter.Value = value.ToString();
-    }
-
-    public override Guid Parse(object value)
-    {
-        return value switch
-        {
-            string stringValue => Guid.Parse(stringValue),
-            Guid guidValue => guidValue,
-            _ => throw new InvalidCastException($"Cannot convert {value.GetType().Name} to Guid")
-        };
     }
 }

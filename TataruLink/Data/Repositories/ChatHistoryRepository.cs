@@ -3,52 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Dapper;
+using Microsoft.EntityFrameworkCore;
 using TataruLink.Configuration;
 using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-public class ChatHistoryRepository : IChatHistoryRepository
+public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) : IChatHistoryRepository
 {
-    private readonly DatabaseContext context;
-    private readonly CacheConfig.ValidationLimits validation;
-
-    public ChatHistoryRepository(DatabaseContext context, CacheConfig config)
-    {
-        this.context = context ?? throw new ArgumentNullException(nameof(context));
-        validation = config.Validation;
-    }
+    private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly CacheConfig.ValidationLimits validation = config.Validation;
 
     public async Task<ChatHistoryEntry> AddAsync(ChatHistoryEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                INSERT OR IGNORE INTO ChatHistory 
-                (MessageId, Timestamp, ChatType, ChatTypeName, SenderName, 
-                 OriginalContent, TranslatedContent, TranslationCacheId, IsVisible)
-                VALUES 
-                (@MessageId, @Timestamp, @ChatType, @ChatTypeName, @SenderName,
-                 @OriginalContent, @TranslatedContent, @TranslationCacheId, @IsVisible)
-                RETURNING Id";
-            
-            var id = await connection.QuerySingleOrDefaultAsync<long?>(sql, entry);
-            if (id.HasValue)
-            {
-                entry.Id = id.Value;
-            }
-            
-            return entry;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        context.ChatHistory.Add(entry);
+        await context.SaveChangesAsync(cancellationToken);
+        
+        return entry;
     }
 
     public async Task<int> AddBatchAsync(IEnumerable<ChatHistoryEntry> entries, CancellationToken cancellationToken = default)
@@ -62,47 +36,20 @@ public class ChatHistoryRepository : IChatHistoryRepository
             PrepareEntry(entry);
         }
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        var transaction = context.GetCurrentTransaction();
-        
-        try
-        {
-            const string sql = @"
-                INSERT OR IGNORE INTO ChatHistory 
-                (MessageId, Timestamp, ChatType, ChatTypeName, SenderName, 
-                 OriginalContent, TranslatedContent, TranslationCacheId, IsVisible)
-                VALUES 
-                (@MessageId, @Timestamp, @ChatType, @ChatTypeName, @SenderName,
-                 @OriginalContent, @TranslatedContent, @TranslationCacheId, @IsVisible)";
-            
-            var count = await connection.ExecuteAsync(sql, entriesList, transaction);
-            return count;
-        } 
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        context.ChatHistory.AddRange(entriesList);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IEnumerable<ChatHistoryEntry>> GetVisibleAsync(int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         ValidateQueryParameters(limit, offset);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                SELECT * FROM ChatHistory 
-                WHERE IsVisible = 1 
-                ORDER BY Timestamp DESC 
-                LIMIT @limit OFFSET @offset";
-            
-            return await connection.QueryAsync<ChatHistoryEntry>(sql, new { limit, offset });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.ChatHistory
+            .Where(e => e.IsVisible)
+            .OrderByDescending(e => e.Timestamp)
+            .Skip(offset)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<ChatHistoryEntry?> GetByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default)
@@ -110,16 +57,8 @@ public class ChatHistoryRepository : IChatHistoryRepository
         if (messageId == Guid.Empty)
             throw new ArgumentException("Message ID must not be empty", nameof(messageId));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT * FROM ChatHistory WHERE MessageId = @messageId";
-            return await connection.QuerySingleOrDefaultAsync<ChatHistoryEntry>(sql, new { messageId });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.ChatHistory
+            .FirstOrDefaultAsync(e => e.MessageId == messageId, cancellationToken);
     }
 
     public async Task<int> HideAsync(IEnumerable<long>? ids, CancellationToken cancellationToken = default)
@@ -128,51 +67,35 @@ public class ChatHistoryRepository : IChatHistoryRepository
         var idsList = ids.ToList();
         if (idsList.Count == 0) return 0;
         
-        // WARNING: Must validate all IDs
         if (idsList.Any(id => id <= 0))
             throw new ArgumentException("All IDs must be positive", nameof(ids));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
+        var entries = await context.ChatHistory
+            .Where(e => idsList.Contains(e.Id))
+            .ToListAsync(cancellationToken);
+            
+        foreach (var entry in entries)
         {
-            const string sql = "UPDATE ChatHistory SET IsVisible = 0 WHERE Id IN @ids";
-            return await connection.ExecuteAsync(sql, new { ids = idsList });
+            entry.IsVisible = false;
         }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> ClearAllAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "DELETE FROM ChatHistory";
-            return await connection.ExecuteAsync(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var allEntries = await context.ChatHistory.ToListAsync(cancellationToken);
+        context.ChatHistory.RemoveRange(allEntries);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> GetCountAsync(bool visibleOnly = true, CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            var sql = visibleOnly 
-                ? "SELECT COUNT(*) FROM ChatHistory WHERE IsVisible = 1"
-                : "SELECT COUNT(*) FROM ChatHistory";
+        var query = visibleOnly 
+            ? context.ChatHistory.Where(e => e.IsVisible)
+            : context.ChatHistory;
             
-            return await connection.ExecuteScalarAsync<int>(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await query.CountAsync(cancellationToken);
     }
 
     public async Task<bool> UpdateTranslationAsync(long id, string translatedContent, CancellationToken cancellationToken = default)
@@ -183,21 +106,13 @@ public class ChatHistoryRepository : IChatHistoryRepository
         if (translatedContent != null && translatedContent.Length > validation.MaxTextLength)
             throw new ArgumentException($"Translated content exceeds maximum length of {validation.MaxTextLength}");
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                UPDATE ChatHistory 
-                SET TranslatedContent = @TranslatedContent
-                WHERE Id = @Id";
+        var entry = await context.ChatHistory.FindAsync([id], cancellationToken);
+        if (entry == null)
+            return false;
             
-            var affected = await connection.ExecuteAsync(sql, new { Id = id, TranslatedContent = translatedContent });
-            return affected > 0;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        entry.TranslatedContent = translatedContent;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private void ValidateQueryParameters(int limit, int offset)
@@ -229,7 +144,7 @@ public class ChatHistoryRepository : IChatHistoryRepository
         if (entry.SenderName != null && entry.SenderName.Length > validation.MaxSenderNameLength)
             throw new ArgumentException($"Sender name exceeds maximum length of {validation.MaxSenderNameLength}");
             
-        if (entry.ChatTypeName != null && entry.ChatTypeName.Length > 50)
+        if (entry.ChatTypeName is { Length: > 50 })
             throw new ArgumentException("Chat type name exceeds maximum length of 50");
     }
 

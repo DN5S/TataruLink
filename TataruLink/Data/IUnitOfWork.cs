@@ -1,5 +1,4 @@
 using System;
-using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using TataruLink.Data.Repositories;
@@ -16,7 +15,7 @@ public interface IUnitOfWork : IDisposable
     
     IBlocklistRepository Blocklist { get; }
     
-    Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default);
+    Task BeginTransactionAsync(CancellationToken cancellationToken = default);
     
     Task CommitAsync(CancellationToken cancellationToken = default);
     

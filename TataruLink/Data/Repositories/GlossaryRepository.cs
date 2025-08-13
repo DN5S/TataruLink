@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Dapper;
+using Microsoft.EntityFrameworkCore;
 using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
@@ -17,23 +17,9 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                INSERT INTO GlossaryEntries 
-                (Original, Replacement, IsEnabled, CreatedAt, UpdatedAt)
-                VALUES 
-                (@Original, @Replacement, @IsEnabled, @CreatedAt, @UpdatedAt)
-                RETURNING Id";
-            
-            entry.Id = await connection.QuerySingleAsync<long>(sql, entry);
-            return entry;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        context.GlossaryEntries.Add(entry);
+        await context.SaveChangesAsync(cancellationToken);
+        return entry;
     }
 
     public async Task<GlossaryDbEntry?> UpdateAsync(GlossaryDbEntry entry, CancellationToken cancellationToken = default)
@@ -41,23 +27,16 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         ValidateEntry(entry);
         entry.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                UPDATE GlossaryEntries 
-                SET Replacement = @Replacement, 
-                    IsEnabled = @IsEnabled,
-                    UpdatedAt = @UpdatedAt
-                WHERE Id = @Id";
+        var existingEntry = await context.GlossaryEntries.FindAsync([entry.Id], cancellationToken);
+        if (existingEntry == null)
+            return null;
             
-            var affected = await connection.ExecuteAsync(sql, entry);
-            return affected > 0 ? entry : null;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        existingEntry.Replacement = entry.Replacement;
+        existingEntry.IsEnabled = entry.IsEnabled;
+        existingEntry.UpdatedAt = entry.UpdatedAt;
+        
+        await context.SaveChangesAsync(cancellationToken);
+        return existingEntry;
     }
 
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
@@ -65,17 +44,13 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "DELETE FROM GlossaryEntries WHERE Id = @id";
-            var affected = await connection.ExecuteAsync(sql, new { id });
-            return affected > 0;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var entry = await context.GlossaryEntries.FindAsync([id], cancellationToken);
+        if (entry == null)
+            return false;
+            
+        context.GlossaryEntries.Remove(entry);
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<GlossaryDbEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
@@ -83,16 +58,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT * FROM GlossaryEntries WHERE Id = @id";
-            return await connection.QuerySingleOrDefaultAsync<GlossaryDbEntry>(sql, new { id });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.GlossaryEntries.FindAsync([id], cancellationToken);
     }
 
     public async Task<GlossaryDbEntry?> GetByOriginalAsync(string original, CancellationToken cancellationToken = default)
@@ -100,64 +66,33 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (string.IsNullOrWhiteSpace(original))
             throw new ArgumentException("Original text cannot be empty", nameof(original));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT * FROM GlossaryEntries WHERE Original = @original COLLATE NOCASE";
-            return await connection.QuerySingleOrDefaultAsync<GlossaryDbEntry>(sql, new { original });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.GlossaryEntries
+            .FirstOrDefaultAsync(e => e.Original.Equals(original, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
     }
 
     public async Task<IEnumerable<GlossaryDbEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            var sql = enabledOnly
-                ? "SELECT * FROM GlossaryEntries WHERE IsEnabled = 1 ORDER BY Original"
-                : "SELECT * FROM GlossaryEntries ORDER BY Original";
+        var query = enabledOnly
+            ? context.GlossaryEntries.Where(e => e.IsEnabled)
+            : context.GlossaryEntries;
             
-            return await connection.QueryAsync<GlossaryDbEntry>(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await query.OrderBy(e => e.Original).ToListAsync(cancellationToken);
     }
 
     public async Task<int> GetCountAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            var sql = enabledOnly
-                ? "SELECT COUNT(*) FROM GlossaryEntries WHERE IsEnabled = 1"
-                : "SELECT COUNT(*) FROM GlossaryEntries";
+        var query = enabledOnly
+            ? context.GlossaryEntries.Where(e => e.IsEnabled)
+            : context.GlossaryEntries;
             
-            return await connection.ExecuteScalarAsync<int>(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await query.CountAsync(cancellationToken);
     }
 
     public async Task<int> ClearAllAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "DELETE FROM GlossaryEntries";
-            return await connection.ExecuteAsync(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var allEntries = await context.GlossaryEntries.ToListAsync(cancellationToken);
+        context.GlossaryEntries.RemoveRange(allEntries);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> AddBatchAsync(IEnumerable<GlossaryDbEntry> entries, CancellationToken cancellationToken = default)
@@ -171,23 +106,8 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
             PrepareEntry(entry);
         }
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        var transaction = context.GetCurrentTransaction();
-        
-        try
-        {
-            const string sql = @"
-                INSERT OR IGNORE INTO GlossaryEntries 
-                (Original, Replacement, IsEnabled, CreatedAt, UpdatedAt)
-                VALUES 
-                (@Original, @Replacement, @IsEnabled, @CreatedAt, @UpdatedAt)";
-            
-            return await connection.ExecuteAsync(sql, entriesList, transaction);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        context.GlossaryEntries.AddRange(entriesList);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> ToggleEnabledAsync(long id, CancellationToken cancellationToken = default)
@@ -195,32 +115,20 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                UPDATE GlossaryEntries 
-                SET IsEnabled = NOT IsEnabled,
-                    UpdatedAt = @UpdatedAt
-                WHERE Id = @id";
+        var entry = await context.GlossaryEntries.FindAsync([id], cancellationToken);
+        if (entry == null)
+            return 0;
             
-            return await connection.ExecuteAsync(sql, new 
-            { 
-                id, 
-                UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() 
-            });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        entry.IsEnabled = !entry.IsEnabled;
+        entry.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
-    private void ValidateEntry(GlossaryDbEntry entry)
+    private static void ValidateEntry(GlossaryDbEntry entry)
     {
-        if (entry == null)
-            throw new ArgumentNullException(nameof(entry));
-            
+        ArgumentNullException.ThrowIfNull(entry);
+
         if (string.IsNullOrWhiteSpace(entry.Original))
             throw new ArgumentException("Original text cannot be empty");
             
@@ -234,7 +142,7 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
             throw new ArgumentException("Replacement text exceeds maximum length of 200");
     }
 
-    private void PrepareEntry(GlossaryDbEntry entry)
+    private static void PrepareEntry(GlossaryDbEntry entry)
     {
         entry.Original = entry.Original.Trim();
         entry.Replacement = entry.Replacement.Trim();

@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Dapper;
+using Microsoft.EntityFrameworkCore;
 using TataruLink.Configuration;
 using TataruLink.Models;
 
@@ -21,38 +21,25 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
     {
         ValidateCacheKey(cacheKey);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT * FROM TranslationCache WHERE CacheKey = @cacheKey";
-            return await connection.QuerySingleOrDefaultAsync<TranslationCacheEntry>(sql, new { cacheKey });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.TranslationCache
+            .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
     }
 
     public async Task<TranslationCacheEntry?> GetAndUpdateAccessAsync(string cacheKey, CancellationToken cancellationToken = default)
     {
         ValidateCacheKey(cacheKey);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                UPDATE TranslationCache 
-                SET LastAccessedAt = @now, AccessCount = AccessCount + 1 
-                WHERE CacheKey = @cacheKey 
-                RETURNING *";
+        var entry = await context.TranslationCache
+            .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
             
-            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            return await connection.QuerySingleOrDefaultAsync<TranslationCacheEntry>(sql, new { cacheKey, now });
-        }
-        finally
+        if (entry != null)
         {
-            context.ReleaseConnection();
+            entry.LastAccessedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            entry.AccessCount++;
+            await context.SaveChangesAsync(cancellationToken);
         }
+        
+        return entry;
     }
 
     public async Task<TranslationCacheEntry> UpsertAsync(TranslationCacheEntry entry, CancellationToken cancellationToken = default)
@@ -60,26 +47,23 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                INSERT OR REPLACE INTO TranslationCache 
-                (Id, OriginalText, TranslatedText, SourceLanguage, DetectedLanguage, 
-                 TargetLanguage, Provider, CreatedAt, LastAccessedAt, AccessCount, 
-                 CharacterCount, TimeTakenMs, CacheKey)
-                VALUES 
-                (@Id, @OriginalText, @TranslatedText, @SourceLanguage, @DetectedLanguage,
-                 @TargetLanguage, @Provider, @CreatedAt, @LastAccessedAt, @AccessCount,
-                 @CharacterCount, @TimeTakenMs, @CacheKey)";
+        var existingEntry = await context.TranslationCache
+            .FirstOrDefaultAsync(e => e.CacheKey == entry.CacheKey, cancellationToken);
             
-            await connection.ExecuteAsync(sql, entry);
-            return entry;
-        }
-        finally
+        if (existingEntry != null)
         {
-            context.ReleaseConnection();
+            existingEntry.TranslatedText = entry.TranslatedText;
+            existingEntry.LastAccessedAt = entry.LastAccessedAt;
+            existingEntry.AccessCount = entry.AccessCount;
+            existingEntry.TimeTakenMs = entry.TimeTakenMs;
         }
+        else
+        {
+            context.TranslationCache.Add(entry);
+        }
+        
+        await context.SaveChangesAsync(cancellationToken);
+        return existingEntry ?? entry;
     }
 
     public async Task<int> UpsertBatchAsync(IEnumerable<TranslationCacheEntry> entries, CancellationToken cancellationToken = default)
@@ -93,58 +77,45 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             PrepareEntry(entry);
         }
 
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        var transaction = context.GetCurrentTransaction();
+        foreach (var entry in entriesList)
+        {
+            var existingEntry = await context.TranslationCache
+                .FirstOrDefaultAsync(e => e.CacheKey == entry.CacheKey, cancellationToken);
+                
+            if (existingEntry != null)
+            {
+                existingEntry.TranslatedText = entry.TranslatedText;
+                existingEntry.LastAccessedAt = entry.LastAccessedAt;
+                existingEntry.AccessCount = entry.AccessCount;
+                existingEntry.TimeTakenMs = entry.TimeTakenMs;
+            }
+            else
+            {
+                context.TranslationCache.Add(entry);
+            }
+        }
         
-        try
-        {
-            const string sql = $@"
-                INSERT OR REPLACE INTO TranslationCache 
-                (Id, OriginalText, TranslatedText, SourceLanguage, DetectedLanguage, 
-                 TargetLanguage, Provider, CreatedAt, LastAccessedAt, AccessCount, 
-                 CharacterCount, TimeTakenMs, CacheKey)
-                VALUES 
-                (@Id, @OriginalText, @TranslatedText, @SourceLanguage, @DetectedLanguage,
-                 @TargetLanguage, @Provider, @CreatedAt, @LastAccessedAt, @AccessCount,
-                 @CharacterCount, @TimeTakenMs, @CacheKey)";
-            
-            var count = await connection.ExecuteAsync(sql, entriesList, transaction);
-            return count;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> PruneOldEntriesAsync(DateTimeOffset cutoffTime, CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "DELETE FROM TranslationCache WHERE LastAccessedAt < @cutoffTime";
-            var cutoffTimestamp = cutoffTime.ToUnixTimeSeconds();
-            return await connection.ExecuteAsync(sql, new { cutoffTime = cutoffTimestamp });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var cutoffTimestamp = cutoffTime.ToUnixTimeSeconds();
+        var oldEntries = await context.TranslationCache
+            .Where(e => e.LastAccessedAt < cutoffTimestamp)
+            .ToListAsync(cancellationToken);
+            
+        context.TranslationCache.RemoveRange(oldEntries);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<long> GetTotalSizeAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT SUM(LENGTH(OriginalText) + LENGTH(TranslatedText)) FROM TranslationCache";
-            var result = await connection.ExecuteScalarAsync<long?>(sql);
-            return result ?? 0;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var entries = await context.TranslationCache
+            .Select(e => new { e.OriginalText, e.TranslatedText })
+            .ToListAsync(cancellationToken);
+            
+        return entries.Sum(e => e.OriginalText.Length  + e.TranslatedText.Length);
     }
 
     private static void ValidateCacheKey(string cacheKey)
@@ -187,13 +158,11 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
 
     private static void PrepareEntry(TranslationCacheEntry entry)
     {
-        // NOTE: Generate a cache key if not set
         if (string.IsNullOrWhiteSpace(entry.CacheKey))
         {
             entry.CacheKey = GenerateCacheKey(entry.OriginalText, entry.SourceLanguage, entry.TargetLanguage);
         }
         
-        // NOTE: Set timestamps if not set
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         if (entry.CreatedAt == 0)
         {
@@ -204,13 +173,11 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             entry.LastAccessedAt = now;
         }
         
-        // NOTE: Set character count if not set
         if (entry.CharacterCount == 0)
         {
             entry.CharacterCount = entry.OriginalText.Length;
         }
         
-        // NOTE: Ensure the access count is at least 1
         if (entry.AccessCount < 1)
         {
             entry.AccessCount = 1;
@@ -224,21 +191,12 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         if (minAccessCount < 1)
             throw new ArgumentException("Minimum access count must be at least 1", nameof(minAccessCount));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                SELECT * FROM TranslationCache 
-                WHERE AccessCount >= @minAccessCount 
-                ORDER BY AccessCount DESC, LastAccessedAt DESC 
-                LIMIT @limit";
-            
-            return await connection.QueryAsync<TranslationCacheEntry>(sql, new { minAccessCount, limit });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.TranslationCache
+            .Where(e => e.AccessCount >= minAccessCount)
+            .OrderByDescending(e => e.AccessCount)
+            .ThenByDescending(e => e.LastAccessedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
     }
     
     public async Task<IEnumerable<TranslationCacheEntry>> GetRecentlyAccessedAsync(int limit = 50, int withinHours = 1, CancellationToken cancellationToken = default)
@@ -248,22 +206,13 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         if (withinHours <= 0 || withinHours > 168) // Max 1 week
             throw new ArgumentException("Hours must be between 1 and 168", nameof(withinHours));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            var cutoffTime = DateTimeOffset.UtcNow.AddHours(-withinHours).ToUnixTimeSeconds();
-            const string sql = @"
-                SELECT * FROM TranslationCache 
-                WHERE LastAccessedAt >= @cutoffTime 
-                ORDER BY LastAccessedAt DESC 
-                LIMIT @limit";
-            
-            return await connection.QueryAsync<TranslationCacheEntry>(sql, new { cutoffTime, limit });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var cutoffTime = DateTimeOffset.UtcNow.AddHours(-withinHours).ToUnixTimeSeconds();
+        
+        return await context.TranslationCache
+            .Where(e => e.LastAccessedAt >= cutoffTime)
+            .OrderByDescending(e => e.LastAccessedAt)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
     }
 
     public static string GenerateCacheKey(string originalText, string sourceLanguage, string targetLanguage)
@@ -277,7 +226,6 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             
         var normalized = $"{originalText.Trim()}|{sourceLanguage.ToLowerInvariant()}|{targetLanguage.ToLowerInvariant()}";
         
-        // NOTE: Use ArrayPool for performance optimization
         var byteCount = Encoding.UTF8.GetByteCount(normalized);
         var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
         try

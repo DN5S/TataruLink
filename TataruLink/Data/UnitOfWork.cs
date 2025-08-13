@@ -1,7 +1,7 @@
 using System;
-using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.Storage;
 using TataruLink.Configuration;
 using TataruLink.Data.Repositories;
 
@@ -16,6 +16,7 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
     private IChatHistoryRepository? chatHistory;
     private IGlossaryRepository? glossary;
     private IBlocklistRepository? blocklist;
+    private IDbContextTransaction? currentTransaction;
 
     public ITranslationCacheRepository TranslationCache =>
         translationCache ??= new TranslationCacheRepository(context, config);
@@ -29,35 +30,55 @@ public class UnitOfWork(DatabaseContext context, CacheConfig config) : IUnitOfWo
     public IBlocklistRepository Blocklist =>
         blocklist ??= new BlocklistRepository(context);
 
-    public async Task<IDbTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, CancellationToken cancellationToken = default)
+    public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        var transaction = await context.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        return transaction;
+        if (currentTransaction != null)
+            throw new InvalidOperationException("A transaction is already in progress");
+            
+        currentTransaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CommitAsync(CancellationToken cancellationToken = default)
     {
-        await context.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
+        if (currentTransaction == null)
+            throw new InvalidOperationException("No transaction is in progress");
+            
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await currentTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await currentTransaction.DisposeAsync().ConfigureAwait(false);
+            currentTransaction = null;
+        }
     }
 
     public async Task RollbackAsync(CancellationToken cancellationToken = default)
-    { 
-        await context.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+    {
+        if (currentTransaction == null)
+            throw new InvalidOperationException("No transaction is in progress");
+            
+        try
+        {
+            await currentTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await currentTransaction.DisposeAsync().ConfigureAwait(false);
+            currentTransaction = null;
+        }
     }
 
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        if (context.GetCurrentTransaction() != null)
-        {
-            await CommitAsync(cancellationToken).ConfigureAwait(false);
-            return 1;
-        }
-        
-        return 0;
+        return await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public void Dispose()
     {
+        currentTransaction?.Dispose();
         GC.SuppressFinalize(this);
     }
 }

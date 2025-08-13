@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Dapper;
+using Microsoft.EntityFrameworkCore;
 using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
@@ -17,23 +17,9 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                INSERT INTO BlocklistKeywords 
-                (Keyword, IsEnabled, CreatedAt)
-                VALUES 
-                (@Keyword, @IsEnabled, @CreatedAt)
-                RETURNING Id";
-            
-            entry.Id = await connection.QuerySingleAsync<long>(sql, entry);
-            return entry;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        context.BlocklistKeywords.Add(entry);
+        await context.SaveChangesAsync(cancellationToken);
+        return entry;
     }
 
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
@@ -41,17 +27,13 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "DELETE FROM BlocklistKeywords WHERE Id = @id";
-            var affected = await connection.ExecuteAsync(sql, new { id });
-            return affected > 0;
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var entry = await context.BlocklistKeywords.FindAsync([id], cancellationToken);
+        if (entry == null)
+            return false;
+            
+        context.BlocklistKeywords.Remove(entry);
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     public async Task<BlocklistDbEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
@@ -59,16 +41,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT * FROM BlocklistKeywords WHERE Id = @id";
-            return await connection.QuerySingleOrDefaultAsync<BlocklistDbEntry>(sql, new { id });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.BlocklistKeywords.FindAsync([id], cancellationToken);
     }
 
     public async Task<BlocklistDbEntry?> GetByKeywordAsync(string keyword, CancellationToken cancellationToken = default)
@@ -76,64 +49,33 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         if (string.IsNullOrWhiteSpace(keyword))
             throw new ArgumentException("Keyword cannot be empty", nameof(keyword));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT * FROM BlocklistKeywords WHERE Keyword = @keyword COLLATE NOCASE";
-            return await connection.QuerySingleOrDefaultAsync<BlocklistDbEntry>(sql, new { keyword });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await context.BlocklistKeywords
+            .FirstOrDefaultAsync(e => e.Keyword.Equals(keyword, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
     }
 
     public async Task<IEnumerable<BlocklistDbEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            var sql = enabledOnly
-                ? "SELECT * FROM BlocklistKeywords WHERE IsEnabled = 1 ORDER BY Keyword"
-                : "SELECT * FROM BlocklistKeywords ORDER BY Keyword";
+        var query = enabledOnly
+            ? context.BlocklistKeywords.Where(e => e.IsEnabled)
+            : context.BlocklistKeywords;
             
-            return await connection.QueryAsync<BlocklistDbEntry>(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await query.OrderBy(e => e.Keyword).ToListAsync(cancellationToken);
     }
 
     public async Task<int> GetCountAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            var sql = enabledOnly
-                ? "SELECT COUNT(*) FROM BlocklistKeywords WHERE IsEnabled = 1"
-                : "SELECT COUNT(*) FROM BlocklistKeywords";
+        var query = enabledOnly
+            ? context.BlocklistKeywords.Where(e => e.IsEnabled)
+            : context.BlocklistKeywords;
             
-            return await connection.ExecuteScalarAsync<int>(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        return await query.CountAsync(cancellationToken);
     }
 
     public async Task<int> ClearAllAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "DELETE FROM BlocklistKeywords";
-            return await connection.ExecuteAsync(sql);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var allEntries = await context.BlocklistKeywords.ToListAsync(cancellationToken);
+        context.BlocklistKeywords.RemoveRange(allEntries);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> AddBatchAsync(IEnumerable<BlocklistDbEntry> entries, CancellationToken cancellationToken = default)
@@ -147,23 +89,8 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
             PrepareEntry(entry);
         }
         
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        var transaction = context.GetCurrentTransaction();
-        
-        try
-        {
-            const string sql = @"
-                INSERT OR IGNORE INTO BlocklistKeywords 
-                (Keyword, IsEnabled, CreatedAt)
-                VALUES 
-                (@Keyword, @IsEnabled, @CreatedAt)";
-            
-            return await connection.ExecuteAsync(sql, entriesList, transaction);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        context.BlocklistKeywords.AddRange(entriesList);
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> ToggleEnabledAsync(long id, CancellationToken cancellationToken = default)
@@ -171,42 +98,28 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = @"
-                UPDATE BlocklistKeywords 
-                SET IsEnabled = NOT IsEnabled
-                WHERE Id = @id";
+        var entry = await context.BlocklistKeywords.FindAsync([id], cancellationToken);
+        if (entry == null)
+            return 0;
             
-            return await connection.ExecuteAsync(sql, new { id });
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        entry.IsEnabled = !entry.IsEnabled;
+        return await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<HashSet<string>> GetEnabledKeywordsAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await context.GetConnectionAsync(cancellationToken);
-        try
-        {
-            const string sql = "SELECT Keyword FROM BlocklistKeywords WHERE IsEnabled = 1";
-            var keywords = await connection.QueryAsync<string>(sql);
-            return new HashSet<string>(keywords, StringComparer.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            context.ReleaseConnection();
-        }
+        var keywords = await context.BlocklistKeywords
+            .Where(e => e.IsEnabled)
+            .Select(e => e.Keyword)
+            .ToListAsync(cancellationToken);
+            
+        return new HashSet<string>(keywords, StringComparer.OrdinalIgnoreCase);
     }
 
-    private void ValidateEntry(BlocklistDbEntry entry)
+    private static void ValidateEntry(BlocklistDbEntry entry)
     {
-        if (entry == null)
-            throw new ArgumentNullException(nameof(entry));
-            
+        ArgumentNullException.ThrowIfNull(entry);
+
         if (string.IsNullOrWhiteSpace(entry.Keyword))
             throw new ArgumentException("Keyword cannot be empty");
             
@@ -214,7 +127,7 @@ public class BlocklistRepository(DatabaseContext context) : IBlocklistRepository
             throw new ArgumentException("Keyword exceeds maximum length of 100");
     }
 
-    private void PrepareEntry(BlocklistDbEntry entry)
+    private static void PrepareEntry(BlocklistDbEntry entry)
     {
         entry.Keyword = entry.Keyword.Trim();
         
