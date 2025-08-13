@@ -29,7 +29,7 @@ public class ChatConfig
     
     public string? GetProviderForChatType(ushort chatTypeId)
     {
-        // First check if there's a specific provider for this exact type
+        // Check if there's a specific provider for this exact type
         var provider = ChatTypeProviders.GetValueOrDefault(chatTypeId);
         if (provider != null)
             return provider;

@@ -17,7 +17,9 @@ public class HistoryWindow : Window, IDisposable
 {
     private readonly IDataService dataService;
     private List<ChatHistoryEntry> historyItems = [];
+    private List<ChatHistoryEntry> filteredHistoryItems = [];
     private string searchText = string.Empty;
+    private string lastSearchText = string.Empty;
     private List<long> selectedIds = [];
     private bool isLoading;
     private int currentOffset;
@@ -52,11 +54,15 @@ public class HistoryWindow : Window, IDisposable
     private void DrawControls()
     {
         ImGui.SetNextItemWidth(300f);
-        ImGui.InputTextWithHint("##search"u8, "Search..."u8, ref searchText, 256);
+        if (ImGui.InputTextWithHint("##search"u8, "Search..."u8, ref searchText, 256))
+        {
+            UpdateFilteredItems();
+        }
         
         ImGui.SameLine();
         if (ImGui.Button("Search"u8))
         {
+            UpdateFilteredItems();
             _ = LoadHistoryAsync();
         }
         
@@ -115,7 +121,12 @@ public class HistoryWindow : Window, IDisposable
 
     private void DrawHistoryTable()
     {
-        var filteredItems = GetFilteredItems();
+        // Check if a search text changed
+        if (lastSearchText != searchText)
+        {
+            lastSearchText = searchText;
+            UpdateFilteredItems();
+        }
         
         if (!ImGui.BeginTable("HistoryTable"u8, 9, TableFlags, new Vector2(0, -1)))
             return;
@@ -132,7 +143,7 @@ public class HistoryWindow : Window, IDisposable
         
         ImGui.TableHeadersRow();
 
-        foreach (var item in filteredItems)
+        foreach (var item in filteredHistoryItems)
         {
             DrawHistoryRow(item);
         }
@@ -297,13 +308,16 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TextUnformatted($"Page: {(currentOffset / PageSize) + 1}");
     }
 
-    private List<ChatHistoryEntry> GetFilteredItems()
+    private void UpdateFilteredItems()
     {
         if (string.IsNullOrWhiteSpace(searchText))
-            return historyItems;
+        {
+            filteredHistoryItems = historyItems;
+            return;
+        }
         
         // NOTE: StringComparison avoids ToLowerInvariant overhead
-        return historyItems.Where(item =>
+        filteredHistoryItems = historyItems.Where(item =>
             item.OriginalContent.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) ||
             (item.TranslatedContent?.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) == true) ||
             (item.SenderName?.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) == true) ||
@@ -319,6 +333,7 @@ public class HistoryWindow : Window, IDisposable
         try
         {
             historyItems = await dataService.GetHistoryAsync(PageSize, currentOffset);
+            UpdateFilteredItems();
             Service.PluginLog.Debug($"Loaded {historyItems.Count} history items");
         }
         catch (Exception ex)
@@ -417,6 +432,8 @@ public class HistoryWindow : Window, IDisposable
         {
             historyItems.RemoveAt(historyItems.Count - 1);
         }
+        
+        UpdateFilteredItems();
         
         Service.PluginLog.Debug($"History auto-updated with new entry: {entry.MessageId}");
     }

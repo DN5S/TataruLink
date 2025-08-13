@@ -3,13 +3,14 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.DtrBar;
+using TataruLink.Filter;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class GeneralTab(TataruConfig configuration, ITranslationService translationService, DtrBarManager? dtrBarManager)
+public class GeneralTab(TataruConfig configuration, ITranslationService translationService, BlocklistManager blocklistManager, DtrBarManager? dtrBarManager)
 {
     public void Draw()
     {
@@ -143,8 +144,8 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         ImGui.TextUnformatted($"Enabled Chat Types: {enabledChatTypes}");
         
         // Filters
-        var filterCount = configuration.Filter.KeywordBlocklist.Count;
-        ImGui.TextUnformatted($"Keyword Filters: {filterCount}");
+        var (totalFilters, enabledFilters) = blocklistManager.GetStatistics();
+        ImGui.TextUnformatted($"Keyword Filters: {enabledFilters} active ({totalFilters} total)");
         
         // Performance
         ImGui.TextUnformatted($"Translation Rate: {configuration.Performance.TranslationsPerSecond}/sec");

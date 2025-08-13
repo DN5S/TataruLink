@@ -20,6 +20,7 @@ public class TranslationTab
     private string tempApiKey = string.Empty;
     private GeminiProvider.ModelInfo[] geminiModels = [];
     private bool isLoadingModels;
+    private bool isTestingConnection;
     
     // Language settings
     private readonly string[] languageNames = 
@@ -181,9 +182,15 @@ public class TranslationTab
                 }
                 
                 ImGui.SameLine();
-                if (ImGui.Button("Test Connection"u8))
+                if (isTestingConnection)
                 {
-                    TestProviderConnection();
+                    ImGui.BeginDisabled();
+                    ImGui.Button("Testing..."u8);
+                    ImGui.EndDisabled();
+                }
+                else if (ImGui.Button("Test Connection"u8))
+                {
+                    _ = TestProviderConnectionAsync();
                 }
 
                 break;
@@ -197,6 +204,10 @@ public class TranslationTab
             case TranslationProviderType.Gemini:
                 DrawGeminiSettings();
                 break;
+            case TranslationProviderType.Mock:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
         
         ImGui.Separator();
@@ -233,8 +244,11 @@ public class TranslationTab
         tempApiKey = configuration.Translation.GetApiKey(configuration.Translation.Engine) ?? string.Empty;
     }
     
-    private async void TestProviderConnection()
+    private async Task TestProviderConnectionAsync()
     {
+        if (isTestingConnection) return;
+        
+        isTestingConnection = true;
         try
         {
             var result = await translationService.TranslateAsync(
@@ -255,6 +269,10 @@ public class TranslationTab
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Provider test failed");
+        }
+        finally
+        {
+            isTestingConnection = false;
         }
     }
     
@@ -277,7 +295,7 @@ public class TranslationTab
         ImGui.SameLine();
         if (ImGui.Button("Test Connection"u8))
         {
-            TestProviderConnection();
+            _ = TestProviderConnectionAsync();
         }
         
         ImGui.Separator();

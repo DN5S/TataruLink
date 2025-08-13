@@ -9,6 +9,8 @@ namespace TataruLink.Utils;
 
 public static class SecureStorage
 {
+    private const string DpapiPrefix = "dpapi_:";
+    
     // WARNING: Machine/user-specific entropy prevents cross-user decryption
     private static byte[] GetAdditionalEntropy()
     {
@@ -74,7 +76,7 @@ public static class SecureStorage
                 DataProtectionScope.CurrentUser
             );
             
-            return Convert.ToBase64String(encryptedBytes);
+            return DpapiPrefix + Convert.ToBase64String(encryptedBytes);
         }
         catch (Exception ex)
         {
@@ -83,18 +85,26 @@ public static class SecureStorage
         }
     }
 
-    public static string? Unprotect(string? encryptedText)
+    public static string? Unprotect(string? protectedText)
     {
-        if (string.IsNullOrEmpty(encryptedText))
-            return encryptedText;
+        if (string.IsNullOrEmpty(protectedText))
+            return protectedText;
             
         try
         {
+            if (!protectedText.StartsWith(DpapiPrefix))
+            {
+                Service.PluginLog.Warning("Data is not DPAPI-protected. Returning as is.");
+                return protectedText;
+            }
+            
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Service.PluginLog.Debug("DPAPI decryption skipped on non-Windows platform.");
-                return encryptedText;
+                Service.PluginLog.Error("DPAPI-protected data cannot be decrypted on non-Windows platforms.");
+                return null;
             }
+            
+            var encryptedText = protectedText.Substring(DpapiPrefix.Length);
             
             byte[] encryptedBytes;
             try
@@ -124,7 +134,7 @@ public static class SecureStorage
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Unexpected error during decryption.");
-            return encryptedText;
+            return protectedText;
         }
     }
 }

@@ -218,37 +218,45 @@ public sealed class Plugin : IDalamudPlugin
         
         Service.PluginLog.Info("Disposing TataruLink...");
         
-        chatCaptureStage?.Dispose();
-        messagePipeline?.Dispose();
-
-        overlayManager?.Dispose();
-        dtrBarManager?.Dispose();
-        
-        if (windowSystem != null)
+        try
         {
-            pluginInterface.UiBuilder.Draw -= DrawUI;
-            pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
-            pluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
-            windowSystem.RemoveAllWindows();
-        }
-        settingsWindow?.Dispose();
-        historyWindow?.Dispose();
-        
-        Service.CommandManager.RemoveHandler("/tatarulink");
-        Service.CommandManager.RemoveHandler("/tataruhistory");
-        Service.CommandManager.RemoveHandler("/tl");
+            Service.CommandManager.RemoveHandler("/tatarulink");
+            Service.CommandManager.RemoveHandler("/tataruhistory");
+            Service.CommandManager.RemoveHandler("/tl");
 
-        Service.Configuration.SaveImmediately();
-        
-        dataService?.Dispose();
-        glossaryManager?.Dispose();
-        blocklistManager?.Dispose();
-        translationService?.Dispose();
-        unitOfWork?.Dispose();
-        databaseContext?.Dispose();
-        Service.PipelineDebug.Dispose();
-        
-        isDisposed = true;
-        Service.PluginLog.Info("TataruLink disposed successfully");
+            if (windowSystem != null)
+            {
+                pluginInterface.UiBuilder.Draw -= DrawUI;
+                pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
+                pluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
+            }
+
+            chatCaptureStage?.Dispose();
+            messagePipeline?.Dispose();
+
+            windowSystem?.RemoveAllWindows();
+            settingsWindow?.Dispose();
+            historyWindow?.Dispose();
+
+            dtrBarManager?.Dispose();
+            overlayManager?.Dispose();
+
+            Service.Configuration.SaveImmediately();
+            
+            translationService?.Dispose();
+            glossaryManager?.Dispose();
+            blocklistManager?.Dispose();
+
+            unitOfWork?.Dispose();
+            databaseContext?.Dispose();
+            dataService?.Dispose();
+
+            Service.PipelineDebug.Dispose();
+        }
+        finally
+        {
+            isDisposed = true;
+            Service.PluginLog.Info("TataruLink disposed successfully");
+        }
     }
 }

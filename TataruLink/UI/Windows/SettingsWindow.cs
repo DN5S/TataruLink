@@ -27,17 +27,19 @@ public class SettingsWindow : Window, IDisposable
     private readonly CacheTab cacheTab;
     private readonly TataruConfig configuration;
     private readonly ITranslationService translationService;
+    private readonly BlocklistManager blocklistManager;
 
     public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, BlocklistManager blocklistManager, IDataService dataService) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
         this.configuration = configuration;
         this.translationService = translationService;
+        this.blocklistManager = blocklistManager;
         
         Size = new Vector2(600, 400);
         SizeCondition = ImGuiCond.FirstUseEver;
         
-        generalTab = new GeneralTab(configuration, translationService, null);
+        generalTab = new GeneralTab(configuration, translationService, blocklistManager, null);
         translationTab = new TranslationTab(configuration, translationService);
         chatTypesTab = new ChatTypesTab(configuration);
         filtersTab = new FiltersTab(configuration, blocklistManager);
@@ -50,7 +52,7 @@ public class SettingsWindow : Window, IDisposable
     
     public void SetDtrBarManager(DtrBarManager? dtrBarManager)
     {
-        generalTab = new GeneralTab(configuration, translationService, dtrBarManager);
+        generalTab = new GeneralTab(configuration, translationService, blocklistManager, dtrBarManager);
         debugTab = new DebugTab(configuration, translationService, dtrBarManager);
     }
 
