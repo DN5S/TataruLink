@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Utility;
 using TataruLink.Configuration;
 using TataruLink.Services;
 using TataruLink.Translation.Providers;
@@ -208,7 +209,9 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 {
                     retryCount++;
                     // Exponential backoff between retries
-                    await Task.Delay(TimeSpan.FromMilliseconds(500 * Math.Pow(2, retryCount - 1)), cancellationToken).ConfigureAwait(false);
+                    var delayMs = (int)(500 * Math.Pow(2, retryCount - 1));
+                    await AsyncUtils.CancellableDelay(delayMs, cancellationToken).ConfigureAwait(false);
+                    if (cancellationToken.IsCancellationRequested) return null;
                 }
                 else
                 {

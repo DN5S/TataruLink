@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Dalamud.Plugin;
+using Dalamud.Utility;
 using Microsoft.Extensions.Caching.Memory;
 using TataruLink.Configuration;
 using TataruLink.Data.Repositories;
@@ -323,14 +324,8 @@ public class DataService : IDataService
                 lastWriteTime = DateTime.UtcNow;
                 
                 // Add a small delay before retrying to prevent tight loop on persistent errors
-                try
-                {
-                    await Task.Delay(1000, token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
+                await AsyncUtils.CancellableDelay(1000, token).ConfigureAwait(false);
+                if (token.IsCancellationRequested) break;
             }
         }
         
@@ -468,61 +463,66 @@ public class DataService : IDataService
 
     public void Dispose()
     {
+        using var finalizer = new DisposeSafety.ScopedFinalizer();
+        
         // Signal cancellation and complete the writing queue
         cts.Cancel();
         writeQueue.Writer.TryComplete();
         
         // Wait for the batch writer task to complete with a proper timeout
-        try
+        finalizer.Add(() =>
         {
-            if (batchWriterTask is { IsCompleted: false })
+            try
             {
-                if (!batchWriterTask.Wait(TimeSpan.FromSeconds(5)))
+                if (batchWriterTask is { IsCompleted: false })
                 {
-                    Service.PluginLog.Warning("Batch writer task did not complete within timeout");
+                    if (!batchWriterTask.Wait(TimeSpan.FromSeconds(5)))
+                    {
+                        Service.PluginLog.Warning("Batch writer task did not complete within timeout");
+                    }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Warning(ex, "Batch writer task did not complete cleanly");
-        }
-        
-        // Now flush any remaining items (a batch writer should be done)
-        try
-        {
-            var remaining = new List<object>();
-            while (writeQueue.Reader.TryRead(out var item))
+            catch (Exception ex)
             {
-                remaining.Add(item);
+                Service.PluginLog.Warning(ex, "Batch writer task did not complete cleanly");
             }
-            
-            if (remaining.Count > 0)
+        });
+        
+        // Flush any remaining items
+        finalizer.Add(() =>
+        {
+            try
             {
-                // Use synchronous write to avoid transaction conflicts
-                var cacheEntries = remaining.OfType<TranslationCacheEntry>().ToList();
-                var historyEntries = remaining.OfType<ChatHistoryEntry>().ToList();
+                var remaining = new List<object>();
+                while (writeQueue.Reader.TryRead(out var item))
+                {
+                    remaining.Add(item);
+                }
                 
-                if (cacheEntries.Count > 0 || historyEntries.Count > 0)
+                if (remaining.Count > 0)
                 {
-                    Service.PluginLog.Information($"Flushing {cacheEntries.Count} cache and {historyEntries.Count} history entries during disposal");
-                    // Don't write during disposal to avoid transaction conflicts
-                    // Data loss is acceptable here since we're shutting down
+                    var cacheEntries = remaining.OfType<TranslationCacheEntry>().ToList();
+                    var historyEntries = remaining.OfType<ChatHistoryEntry>().ToList();
+                    
+                    if (cacheEntries.Count > 0 || historyEntries.Count > 0)
+                    {
+                        Service.PluginLog.Information($"Flushing {cacheEntries.Count} cache and {historyEntries.Count} history entries during disposal");
+                    }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Error during disposal flush");
-        }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Error(ex, "Error during disposal flush");
+            }
+        });
         
-        // Dispose resources
-        l1Cache.Dispose();
-        unitOfWork.Dispose();
-        context.Dispose();
-        cts.Dispose();
+        // Add disposables to the finalizer
+        finalizer.Add(l1Cache);
+        finalizer.Add(unitOfWork);
+        finalizer.Add(context);
+        finalizer.Add(cts);
         
-        Service.PluginLog.Information("DataService disposed");
+        finalizer.Add(() => Service.PluginLog.Information("DataService disposed"));
     }
     
     public async ValueTask DisposeAsync()

@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin;
+using Dalamud.Utility;
 using TataruLink.Configuration;
 
 namespace TataruLink.Services;
@@ -44,7 +45,7 @@ public class Config : IDisposable
         {
             TataruConfig data;
             
-            // Try to load from custom location first
+            // Try to load from a custom location first
             if (File.Exists(configPath))
             {
                 var json = File.ReadAllText(configPath);
@@ -93,7 +94,7 @@ public class Config : IDisposable
         }
     }
     
-    // NOTE: Call this when plugin shuts down to flush pending saves
+    // NOTE: Call this when the plugin shuts down to flush pending saves
     public void SaveImmediately()
     {
         saveLock.Wait();
@@ -108,9 +109,9 @@ public class Config : IDisposable
                 if (!string.IsNullOrEmpty(dir))
                     Directory.CreateDirectory(dir);
                 
-                // Save to custom location
+                // Save to a custom location using atomic write
                 var json = JsonSerializer.Serialize(Data, JsonOptions);
-                File.WriteAllText(configFilePath, json);
+                FilesystemUtil.WriteAllTextSafe(configFilePath, json);
                 
                 isDirty = false;
                 Service.PluginLog.Debug($"Configuration saved to {configFilePath}");
@@ -176,5 +177,6 @@ public class Config : IDisposable
         saveDebounceTokenSource?.Cancel();
         saveDebounceTokenSource?.Dispose();
         saveLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

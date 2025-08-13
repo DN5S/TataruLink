@@ -210,7 +210,7 @@ public static partial class SeStringUtils
             }
         }
         
-        // WARNING: Fallback - remove XML tags and return as single segment
+        // WARNING: Fallback - remove XML tags and return as a single segment
         var sanitized = XmlTagRemover().Replace(translatedText, "").Trim();
         return [sanitized];
     }
