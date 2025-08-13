@@ -37,6 +37,8 @@ public class HistoryWindow : Window, IDisposable
         Size = new Vector2(1200, 800);
         SizeCondition = ImGuiCond.FirstUseEver;
         
+        dataService.OnHistoryAdded += OnHistoryAdded;
+        
         _ = LoadHistoryAsync();
     }
 
@@ -404,9 +406,24 @@ public class HistoryWindow : Window, IDisposable
             Service.PluginLog.Error(ex, $"Failed to save translation edit for item {id}");
         }
     }
+    
+    private void OnHistoryAdded(object? sender, ChatHistoryEntry entry)
+    {
+        if (!IsOpen || currentOffset > 0) return;
+
+        historyItems.Insert(0, entry);
+
+        if (historyItems.Count > PageSize)
+        {
+            historyItems.RemoveAt(historyItems.Count - 1);
+        }
+        
+        Service.PluginLog.Debug($"History auto-updated with new entry: {entry.MessageId}");
+    }
 
     public void Dispose()
     {
+        dataService.OnHistoryAdded -= OnHistoryAdded;
         GC.SuppressFinalize(this); 
     }
 }

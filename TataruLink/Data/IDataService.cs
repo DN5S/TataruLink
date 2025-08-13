@@ -7,6 +7,8 @@ namespace TataruLink.Data;
 
 public interface IDataService : IDisposable, IAsyncDisposable
 {
+    event EventHandler<ChatHistoryEntry>? OnHistoryAdded;
+    
     Task InitializeAsync();
     
     Task<TranslationCacheEntry?> GetCacheAsync(string key);

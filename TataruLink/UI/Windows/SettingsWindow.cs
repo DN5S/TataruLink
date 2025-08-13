@@ -6,6 +6,7 @@ using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Data;
 using TataruLink.DtrBar;
+using TataruLink.Filter;
 using TataruLink.Glossary;
 using TataruLink.Overlay;
 using TataruLink.Translation;
@@ -27,7 +28,7 @@ public class SettingsWindow : Window, IDisposable
     private readonly TataruConfig configuration;
     private readonly ITranslationService translationService;
 
-    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, IDataService dataService) 
+    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, BlocklistManager blocklistManager, IDataService dataService) 
         : base("TataruLink Settings###TataruLinkSettings")
     {
         this.configuration = configuration;
@@ -39,7 +40,7 @@ public class SettingsWindow : Window, IDisposable
         generalTab = new GeneralTab(configuration, translationService, null);
         translationTab = new TranslationTab(configuration, translationService);
         chatTypesTab = new ChatTypesTab(configuration);
-        filtersTab = new FiltersTab(configuration);
+        filtersTab = new FiltersTab(configuration, blocklistManager);
         glossaryTab = new GlossaryTab(glossaryManager);
         displayTab = new DisplayTab(configuration);
         overlayTab = new OverlayTab(configuration, overlayManager);

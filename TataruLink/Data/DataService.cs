@@ -25,6 +25,8 @@ public class DataService : IDataService
     private readonly CacheStatistics statistics = new();
     private readonly Task? batchWriterTask;
     
+    public event EventHandler<ChatHistoryEntry>? OnHistoryAdded;
+    
     public DataService(IDalamudPluginInterface pluginInterface)
     {
         config = new CacheConfig();
@@ -388,6 +390,12 @@ public class DataService : IDataService
                     {
                         await unitOfWork.ChatHistory.AddBatchAsync(historyEntries, token).ConfigureAwait(false);
                         Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries");
+                        
+                        // Fire event for each successfully written history entry
+                        foreach (var historyEntry in historyEntries)
+                        {
+                            OnHistoryAdded?.Invoke(this, historyEntry);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -450,6 +458,9 @@ public class DataService : IDataService
             try
             {
                 await unitOfWork.ChatHistory.AddAsync(entry, cancellationToken).ConfigureAwait(false);
+                
+                // Fire event for successfully written entry
+                OnHistoryAdded?.Invoke(this, entry);
             }
             catch (Exception ex)
             {

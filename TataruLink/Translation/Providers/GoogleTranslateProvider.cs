@@ -135,11 +135,8 @@ public class GoogleTranslateProvider : ITranslationProvider
         var response = await TranslateAsync(text, "auto", "en", cancellationToken).ConfigureAwait(false);
         return response.DetectedSourceLanguage;
     }
-
-    /// <summary>
-    /// Parse the Google Translate JSON response
+    
     /// format: [[["translated text", "source text",null,null,0]],null,"detected_lang"]
-    /// </summary>
     private (string? TranslatedText, string? DetectedLanguage) ParseGoogleResponse(string jsonResponse)
     {
         try

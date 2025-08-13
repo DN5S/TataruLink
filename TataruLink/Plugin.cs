@@ -111,7 +111,7 @@ public sealed class Plugin : IDalamudPlugin
         windowSystem = new WindowSystem("TataruLink");
         overlayManager = new OverlayManager(Service.Configuration.Data, windowSystem);
         
-        settingsWindow = new SettingsWindow(Service.Configuration.Data, translationService!, overlayManager, glossaryManager!, dataService!);
+        settingsWindow = new SettingsWindow(Service.Configuration.Data, translationService!, overlayManager, glossaryManager!, blocklistManager!, dataService!);
         windowSystem.AddWindow(settingsWindow);
         
         historyWindow = new HistoryWindow(dataService!);

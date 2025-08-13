@@ -3,16 +3,17 @@ using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
+using TataruLink.Filter;
 using TataruLink.Services;
 using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class FiltersTab(TataruConfig configuration)
+public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistManager)
 {
     private string newKeyword = string.Empty;
     private string searchFilter = string.Empty;
-    private string? keywordToRemove;
+    private long? keywordToRemove;
 
     public void Draw()
     {
@@ -22,9 +23,10 @@ public class FiltersTab(TataruConfig configuration)
         if (ImGui.CollapsingHeader("Keyword Filtering"u8, ImGuiTreeNodeFlags.DefaultOpen))
         {
             // Enable/Disable keyword filtering
-            var enableKeywordFilter = configuration.Filter.EnableKeywordFilter;
+            var enableKeywordFilter = blocklistManager.IsEnabled;
             if (ImGui.Checkbox("Enable Keyword Filter"u8, ref enableKeywordFilter))
             {
+                blocklistManager.IsEnabled = enableKeywordFilter;
                 configuration.Filter.EnableKeywordFilter = enableKeywordFilter;
                 Service.Configuration.Save();
             }
@@ -46,13 +48,9 @@ public class FiltersTab(TataruConfig configuration)
             if (ImGui.Button("Add Entry"u8, new Vector2(-1, 0)))
             {
                 var trimmedKeyword = newKeyword.Trim();
-                if (configuration.Filter.KeywordBlocklist.Add(trimmedKeyword))
-                {
-                    Service.Configuration.Save();
-                    Service.PluginLog.Information($"Added keyword to blocklist: {trimmedKeyword}");
-                    newKeyword = string.Empty;
-                    searchFilter = string.Empty; // Clear search when adding
-                }
+                _ = blocklistManager.AddKeywordAsync(trimmedKeyword);
+                newKeyword = string.Empty;
+                searchFilter = string.Empty; // Clear search when adding
             }
             if (!canAdd) ImGui.EndDisabled();
             
@@ -74,14 +72,14 @@ public class FiltersTab(TataruConfig configuration)
             
             if (ImGuiUtils.ConfirmationButton("Remove All"u8, "Are you sure you want to remove all keywords?\nThis action cannot be undone."u8))
             {
-                configuration.Filter.KeywordBlocklist.Clear();
-                Service.Configuration.Save();
+                _ = blocklistManager.ClearAllAsync();
             }
             
             ImGui.Separator();
             
             // Keyword table
-            ImGui.TextUnformatted($"Blocked Keywords ({configuration.Filter.KeywordBlocklist.Count})");
+            var (totalKeywords, enabledKeywords) = blocklistManager.GetStatistics();
+            ImGui.TextUnformatted($"Blocked Keywords (Total: {totalKeywords} | Enabled: {enabledKeywords})");
             
             if (ImGui.BeginTable("KeywordTable"u8, 2,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable |
@@ -93,25 +91,36 @@ public class FiltersTab(TataruConfig configuration)
                 ImGui.TableSetupScrollFreeze(0, 1);
                 ImGui.TableHeadersRow();
                 
-                // Filter keywords
-                var filteredKeywords = string.IsNullOrWhiteSpace(searchFilter)
-                    ? configuration.Filter.KeywordBlocklist.ToList()
-                    : configuration.Filter.KeywordBlocklist
-                        .Where(k => k.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
+                // Get cached entries from blocklist manager
+                var blocklistEntries = blocklistManager.GetCachedEntries();
+                
+                // Filter entries
+                var filteredEntries = string.IsNullOrWhiteSpace(searchFilter)
+                    ? blocklistEntries
+                    : blocklistEntries
+                        .Where(e => e.Keyword.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
                         .ToList();
                 
-                foreach (var keyword in filteredKeywords.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+                foreach (var entry in filteredEntries.OrderBy(e => e.Keyword, StringComparer.OrdinalIgnoreCase))
                 {
-                    ImGui.PushID(keyword.GetHashCode());
+                    ImGui.PushID(entry.GetHashCode());
                     ImGui.TableNextRow();
                     
                     ImGui.TableNextColumn();
-                    ImGui.TextUnformatted(keyword);
+                    if (!entry.IsEnabled)
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Text, ImGuiUtils.Colors.TextMuted);
+                    }
+                    ImGui.TextUnformatted(entry.Keyword);
+                    if (!entry.IsEnabled)
+                    {
+                        ImGui.PopStyleColor();
+                    }
                     
                     ImGui.TableNextColumn();
                     if (ImGui.Button("Delete"u8))
                     {
-                        keywordToRemove = keyword;
+                        keywordToRemove = entry.Id;
                     }
                     
                     ImGui.PopID();
@@ -120,11 +129,9 @@ public class FiltersTab(TataruConfig configuration)
                 ImGui.EndTable();
                 
                 // Remove keyword after iteration to avoid collection modification
-                if (keywordToRemove != null)
+                if (keywordToRemove.HasValue)
                 {
-                    configuration.Filter.KeywordBlocklist.Remove(keywordToRemove);
-                    Service.Configuration.Save();
-                    Service.PluginLog.Information($"Removed keyword from blocklist: {keywordToRemove}");
+                    _ = blocklistManager.DeleteKeywordAsync(keywordToRemove.Value);
                     keywordToRemove = null;
                 }
             }

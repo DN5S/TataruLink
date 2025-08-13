@@ -68,9 +68,9 @@ public class DeepLProvider : ITranslationProvider, IDisposable, IAsyncDisposable
         
         try
         {
-            string? sourceLang = sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase) 
-                ? null 
-                : sourceLanguage.ToUpperInvariant();
+            var sourceLang = sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase) 
+                                 ? null 
+                                 : sourceLanguage.ToUpperInvariant();
             
             var targetLang = targetLanguage.ToUpperInvariant();
             
