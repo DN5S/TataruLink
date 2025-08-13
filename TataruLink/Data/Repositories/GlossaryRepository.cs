@@ -8,18 +8,27 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
+public class GlossaryRepository(DatabaseContext context, SemaphoreSlim dbSemaphore) : IGlossaryRepository
 {
     private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly SemaphoreSlim dbSemaphore = dbSemaphore ?? throw new ArgumentNullException(nameof(dbSemaphore));
 
     public async Task<GlossaryEntry> AddAsync(GlossaryEntry entry, CancellationToken cancellationToken = default)
     {
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        context.GlossaryEntries.Add(entry);
-        await context.SaveChangesAsync(cancellationToken);
-        return entry;
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            context.GlossaryEntries.Add(entry);
+            await context.SaveChangesAsync(cancellationToken);
+            return entry;
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<GlossaryEntry?> UpdateAsync(GlossaryEntry entry, CancellationToken cancellationToken = default)
@@ -27,16 +36,24 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         ValidateEntry(entry);
         entry.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         
-        var existingEntry = await context.GlossaryEntries.FindAsync([entry.Id], cancellationToken);
-        if (existingEntry == null)
-            return null;
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var existingEntry = await context.GlossaryEntries.FindAsync([entry.Id], cancellationToken);
+            if (existingEntry == null)
+                return null;
+                
+            existingEntry.Replacement = entry.Replacement;
+            existingEntry.IsEnabled = entry.IsEnabled;
+            existingEntry.UpdatedAt = entry.UpdatedAt;
             
-        existingEntry.Replacement = entry.Replacement;
-        existingEntry.IsEnabled = entry.IsEnabled;
-        existingEntry.UpdatedAt = entry.UpdatedAt;
-        
-        await context.SaveChangesAsync(cancellationToken);
-        return existingEntry;
+            await context.SaveChangesAsync(cancellationToken);
+            return existingEntry;
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
@@ -44,13 +61,21 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var entry = await context.GlossaryEntries.FindAsync([id], cancellationToken);
-        if (entry == null)
-            return false;
-            
-        context.GlossaryEntries.Remove(entry);
-        await context.SaveChangesAsync(cancellationToken);
-        return true;
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var entry = await context.GlossaryEntries.FindAsync([id], cancellationToken);
+            if (entry == null)
+                return false;
+                
+            context.GlossaryEntries.Remove(entry);
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<GlossaryEntry?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
@@ -58,7 +83,15 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        return await context.GlossaryEntries.FindAsync([id], cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.GlossaryEntries.FindAsync([id], cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<GlossaryEntry?> GetByOriginalAsync(string original, CancellationToken cancellationToken = default)
@@ -66,33 +99,65 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (string.IsNullOrWhiteSpace(original))
             throw new ArgumentException("Original text cannot be empty", nameof(original));
             
-        return await context.GlossaryEntries
-            .FirstOrDefaultAsync(e => e.Original.Equals(original, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.GlossaryEntries
+                .FirstOrDefaultAsync(e => e.Original.Equals(original, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<IEnumerable<GlossaryEntry>> GetAllAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
-        var query = enabledOnly
-            ? context.GlossaryEntries.Where(e => e.IsEnabled)
-            : context.GlossaryEntries;
-            
-        return await query.OrderBy(e => e.Original).ToListAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var query = enabledOnly
+                ? context.GlossaryEntries.Where(e => e.IsEnabled)
+                : context.GlossaryEntries;
+                
+            return await query.OrderBy(e => e.Original).ToListAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> GetCountAsync(bool enabledOnly = false, CancellationToken cancellationToken = default)
     {
-        var query = enabledOnly
-            ? context.GlossaryEntries.Where(e => e.IsEnabled)
-            : context.GlossaryEntries;
-            
-        return await query.CountAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var query = enabledOnly
+                ? context.GlossaryEntries.Where(e => e.IsEnabled)
+                : context.GlossaryEntries;
+                
+            return await query.CountAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> ClearAllAsync(CancellationToken cancellationToken = default)
     {
-        var allEntries = await context.GlossaryEntries.ToListAsync(cancellationToken);
-        context.GlossaryEntries.RemoveRange(allEntries);
-        return await context.SaveChangesAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var allEntries = await context.GlossaryEntries.ToListAsync(cancellationToken);
+            context.GlossaryEntries.RemoveRange(allEntries);
+            return await context.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> AddBatchAsync(IEnumerable<GlossaryEntry> entries, CancellationToken cancellationToken = default)
@@ -106,8 +171,16 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
             PrepareEntry(entry);
         }
         
-        context.GlossaryEntries.AddRange(entriesList);
-        return await context.SaveChangesAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            context.GlossaryEntries.AddRange(entriesList);
+            return await context.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> ToggleEnabledAsync(long id, CancellationToken cancellationToken = default)
@@ -115,14 +188,22 @@ public class GlossaryRepository(DatabaseContext context) : IGlossaryRepository
         if (id <= 0)
             throw new ArgumentException("ID must be positive", nameof(id));
             
-        var entry = await context.GlossaryEntries.FindAsync([id], cancellationToken);
-        if (entry == null)
-            return 0;
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var entry = await context.GlossaryEntries.FindAsync([id], cancellationToken);
+            if (entry == null)
+                return 0;
+                
+            entry.IsEnabled = !entry.IsEnabled;
+            entry.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             
-        entry.IsEnabled = !entry.IsEnabled;
-        entry.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        
-        return await context.SaveChangesAsync(cancellationToken);
+            return await context.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     private static void ValidateEntry(GlossaryEntry entry)

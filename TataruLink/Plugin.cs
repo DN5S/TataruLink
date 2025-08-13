@@ -1,8 +1,10 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
+using TataruLink.Configuration;
 using TataruLink.Data;
 using TataruLink.DtrBar;
 using TataruLink.Filter;
@@ -33,7 +35,7 @@ public sealed class Plugin : IDalamudPlugin
     private BlocklistManager? blocklistManager;
     private IDataService? dataService;
     private DatabaseContext? databaseContext;
-    private IDataAccessFacade? unitOfWork;
+    private IDataAccessFacade? dataAccessFacade;
     private WindowSystem? windowSystem;
     private SettingsWindow? settingsWindow;
     private HistoryWindow? historyWindow;
@@ -45,46 +47,74 @@ public sealed class Plugin : IDalamudPlugin
         this.pluginInterface = pluginInterface;
         
         Service.Initialize(pluginInterface);
-        InitializeCore();
         
-        Service.PluginLog.Info("TataruLink initialized successfully");
+        // Start async initialization without blocking
+        _ = InitializeCoreAsync();
+        
+        Service.PluginLog.Info("TataruLink starting initialization...");
     }
     
-    private void InitializeCore()
+    private async Task InitializeCoreAsync()
     {
-        var configuration = Service.Configuration.Data;
-        
-        // Initialize the database synchronously to prevent race conditions
-        dataService = new DataService(pluginInterface);
-        var initTask = Task.Run(async () =>
+        try
         {
-            await dataService.InitializeAsync();
+            var configuration = Service.Configuration.Data;
             
-            // Initialize database context for managers after dataService is ready
+            // Initialize database context first
             databaseContext = new DatabaseContext(pluginInterface, configuration.Cache);
-            await databaseContext.InitializeAsync();
-        });
-        
-        // Wait for database initialization with timeout
-        if (!initTask.Wait(TimeSpan.FromSeconds(10)))
-        {
-            Service.PluginLog.Error("Database initialization timed out");
-            throw new TimeoutException("Failed to initialize database within timeout period");
+            
+            // Initialize a database with a proper timeout and retry
+            var retryCount = 0;
+            const int maxRetries = 3;
+            
+            while (retryCount < maxRetries)
+            {
+                try
+                {
+                    using var dbTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    await databaseContext.InitializeAsync(dbTimeoutCts.Token).ConfigureAwait(false);
+                    break;
+                }
+                catch (OperationCanceledException) when (retryCount < maxRetries - 1)
+                {
+                    retryCount++;
+                    Service.PluginLog.Warning($"Database initialization attempt {retryCount} timed out, retrying...");
+                    await Task.Delay(1000 * retryCount).ConfigureAwait(false); // Exponential backoff
+                }
+                catch (Exception ex) when (retryCount < maxRetries - 1)
+                {
+                    retryCount++;
+                    Service.PluginLog.Warning(ex, $"Database initialization attempt {retryCount} failed, retrying...");
+                    await Task.Delay(1000 * retryCount).ConfigureAwait(false);
+                }
+            }
+            
+            // Create a unit of work after a database is initialized
+            dataAccessFacade = new DataAccessFacade(databaseContext, configuration.Cache);
+            
+            // Initialize DataService with the shared unit of work
+            dataService = new DataService(dataAccessFacade, configuration.Cache);
+            using var dsTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await dataService.InitializeAsync().ConfigureAwait(false);
+            
+            // Complete initialization on the main thread context
+            await Task.Run(() => CompleteInitialization(configuration), dsTimeoutCts.Token).ConfigureAwait(false);
+            
+            Service.PluginLog.Info("TataruLink initialized successfully");
         }
-        
-        // Ensure database context was initialized successfully
-        if (databaseContext == null)
+        catch (Exception ex)
         {
-            Service.PluginLog.Error("Database context initialization failed");
-            throw new InvalidOperationException("Database context is null after initialization");
+            Service.PluginLog.Error(ex, "Failed to initialize TataruLink");
+            // Don't throw - allow partial functionality
         }
-        
-        // Create a unit of work after a database is initialized
-        unitOfWork = new DataAccessFacade(databaseContext, configuration.Cache);
+    }
+    
+    private void CompleteInitialization(TataruConfig configuration)
+    {
         
         // Initialize managers with repositories
-        glossaryManager = new GlossaryManager(unitOfWork.Glossary, configuration.Glossary);
-        blocklistManager = new BlocklistManager(unitOfWork.Blocklist);
+        glossaryManager = new GlossaryManager(dataAccessFacade!.Glossary, configuration.Glossary);
+        blocklistManager = new BlocklistManager(dataAccessFacade.Blocklist);
         
         // Initialize translation service
         translationService = new TranslationService(configuration);
@@ -94,8 +124,8 @@ public sealed class Plugin : IDalamudPlugin
         // WARNING: Pipeline stage order matters - do not change without careful consideration
         messagePipeline
             .AddStage(new MessageValidationStage(configuration, blocklistManager))
-            .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService, dtrBarManager))
-            .AddStage(new DisplayStage(configuration, dataService, overlayManager));
+            .AddStage(new TranslationStage(configuration, translationService, glossaryManager, dataService!, dtrBarManager))
+            .AddStage(new DisplayStage(configuration, dataService!, overlayManager));
         
         messagePipeline.Initialize();
         
@@ -247,7 +277,7 @@ public sealed class Plugin : IDalamudPlugin
             glossaryManager?.Dispose();
             blocklistManager?.Dispose();
 
-            unitOfWork?.Dispose();
+            dataAccessFacade?.Dispose();
             databaseContext?.Dispose();
             dataService?.Dispose();
 

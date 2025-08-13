@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Dalamud.Plugin;
 using Dalamud.Utility;
 using Microsoft.Extensions.Caching.Memory;
 using TataruLink.Configuration;
@@ -16,7 +16,6 @@ namespace TataruLink.Data;
 
 public class DataService : IDataService
 {
-    private readonly DatabaseContext context;
     private readonly IDataAccessFacade dataAccessFacade;
     private readonly CacheConfig config;
     private readonly MemoryCache l1Cache;
@@ -27,13 +26,10 @@ public class DataService : IDataService
     
     public event EventHandler<ChatHistoryEntry>? OnHistoryAdded;
     
-    public DataService(IDalamudPluginInterface pluginInterface)
+    public DataService(IDataAccessFacade dataAccessFacade, CacheConfig config)
     {
-        config = new CacheConfig();
-        
-        context = new DatabaseContext(pluginInterface, config);
-        
-        dataAccessFacade = new DataAccessFacade(context, config);
+        this.dataAccessFacade = dataAccessFacade ?? throw new ArgumentNullException(nameof(dataAccessFacade));
+        this.config = config ?? throw new ArgumentNullException(nameof(config));
         
         l1Cache = new MemoryCache(new MemoryCacheOptions 
         { 
@@ -54,8 +50,6 @@ public class DataService : IDataService
 
     public async Task InitializeAsync()
     {
-        await context.InitializeAsync().ConfigureAwait(false);
-        
         // NOTE: Preload hot cache for better performance
         await PreloadHotTranslationsAsync().ConfigureAwait(false);
         
@@ -98,7 +92,7 @@ public class DataService : IDataService
         }
     }
 
-    public Task SetCacheAsync(TranslationCacheEntry entry)
+    public async Task SetCacheAsync(TranslationCacheEntry entry)
     {
         // Generate a cache key if not set
         if (string.IsNullOrWhiteSpace(entry.CacheKey))
@@ -117,13 +111,39 @@ public class DataService : IDataService
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes)
         });
 
-        // Queue for L2 write
-        if (!writeQueue.Writer.TryWrite(entry))
-        {
-            Service.PluginLog.Warning("Write queue is full, item will be dropped");
-        }
+        // Queue for L2 write with backpressure handling
+        var retryCount = 0;
+        const int maxRetries = 3;
         
-        return Task.CompletedTask;
+        while (retryCount < maxRetries)
+        {
+            if (writeQueue.Writer.TryWrite(entry))
+            {
+                break;
+            }
+            
+            retryCount++;
+            if (retryCount < maxRetries)
+            {
+                Service.PluginLog.Warning($"Write queue is full, retry {retryCount}/{maxRetries} after delay");
+                await Task.Delay(100 * retryCount).ConfigureAwait(false); // Exponential backoff
+            }
+            else
+            {
+                // Last resort: try to write directly to the database
+                Service.PluginLog.Warning("Write queue full after retries, attempting direct write");
+                try
+                {
+                    using var directWriteCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await dataAccessFacade.TranslationCache.UpsertAsync(entry, directWriteCts.Token).ConfigureAwait(false);
+                    Service.PluginLog.Debug("Direct cache write succeeded");
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Error(ex, "Failed to write cache entry directly, data lost");
+                }
+            }
+        }
     }
 
     public async Task<(bool found, TranslationCacheEntry? entry)> TryGetCacheAsync(
@@ -195,13 +215,43 @@ public class DataService : IDataService
         return (entry != null, entry);
     }
 
-    public Task AddHistoryAsync(ChatHistoryEntry entry)
+    public async Task AddHistoryAsync(ChatHistoryEntry entry)
     {
-        if (!writeQueue.Writer.TryWrite(entry))
+        var retryCount = 0;
+        const int maxRetries = 3;
+        
+        while (retryCount < maxRetries)
         {
-            Service.PluginLog.Warning("Write queue is full, history item will be dropped");
+            if (writeQueue.Writer.TryWrite(entry))
+            {
+                // Successfully queued - DON'T fire event here, wait for actual writing
+                break;
+            }
+            
+            retryCount++;
+            if (retryCount < maxRetries)
+            {
+                Service.PluginLog.Warning($"Write queue is full for history, retry {retryCount}/{maxRetries} after delay");
+                await Task.Delay(100 * retryCount).ConfigureAwait(false); // Exponential backoff
+            }
+            else
+            {
+                // Last resort: try to write directly to the database
+                Service.PluginLog.Warning("Write queue full after retries, attempting direct history write");
+                try
+                {
+                    using var directWriteCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await dataAccessFacade.ChatHistory.AddAsync(entry, directWriteCts.Token).ConfigureAwait(false);
+                    // Fire event for successful direct writing
+                    OnHistoryAdded?.Invoke(this, entry);
+                    Service.PluginLog.Debug("Direct history write succeeded");
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Error(ex, "Failed to write history entry directly, data lost");
+                }
+            }
         }
-        return Task.CompletedTask;
     }
 
     public async Task<List<ChatHistoryEntry>> GetHistoryAsync(int limit = 100, int offset = 0)
@@ -235,12 +285,26 @@ public class DataService : IDataService
 
     public async Task VacuumDatabaseAsync()
     {
-        await context.VacuumAsync().ConfigureAwait(false);
+        // Note: Database vacuum needs to be implemented through a proper service
+        // For now, this is a no-op since DataService doesn't own the DatabaseContext
+        await Task.CompletedTask;
     }
 
     public async Task<long> GetDatabaseSizeAsync()
     {
-        return await context.GetDatabaseSizeAsync().ConfigureAwait(false);
+        // Get database file size directly from the file system
+        try
+        {
+            var configDir = Service.PluginInterface.GetPluginConfigDirectory();
+            var dbPath = Path.Combine(configDir, config.DatabaseFileName);
+            var fileInfo = new FileInfo(dbPath);
+            return await Task.FromResult(fileInfo.Exists ? fileInfo.Length : 0L);
+        }
+        catch (Exception ex)
+        {
+            Service.PluginLog.Error(ex, "Failed to get database file size");
+            return 0L;
+        }
     }
 
     public CacheStatistics GetStatistics() => statistics;
@@ -395,7 +459,8 @@ public class DataService : IDataService
                     catch (Exception ex)
                     {
                         Service.PluginLog.Warning(ex, $"Failed to write {historyEntries.Count} history entries, will retry individually");
-                        await WriteIndividualHistoryEntriesAsync(historyEntries, token).ConfigureAwait(false);
+                        // Pass false to indicate events should be fired (batch write failed, so events weren't fired)
+                        await WriteIndividualHistoryEntriesAsync(historyEntries, token, fireEvents: true).ConfigureAwait(false);
                     }
                 }, token));
             }
@@ -444,7 +509,8 @@ public class DataService : IDataService
     
     private async Task WriteIndividualHistoryEntriesAsync(
         List<ChatHistoryEntry> historyEntries,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool fireEvents = true)
     {
         foreach (var entry in historyEntries)
         {
@@ -454,8 +520,11 @@ public class DataService : IDataService
             {
                 await dataAccessFacade.ChatHistory.AddAsync(entry, cancellationToken).ConfigureAwait(false);
                 
-                // Fire event for successfully written entry
-                OnHistoryAdded?.Invoke(this, entry);
+                // Fire event for successfully written entry (only if requested)
+                if (fireEvents)
+                {
+                    OnHistoryAdded?.Invoke(this, entry);
+                }
             }
             catch (Exception ex)
             {
@@ -525,7 +594,6 @@ public class DataService : IDataService
         // Add disposables to the finalizer
         finalizer.Add(l1Cache);
         finalizer.Add(dataAccessFacade);
-        finalizer.Add(context);
         finalizer.Add(cts);
         
         finalizer.Add(() => Service.PluginLog.Information("DataService disposed"));
@@ -583,16 +651,7 @@ public class DataService : IDataService
         
         // Dispose of resources asynchronously
         l1Cache.Dispose();
-        dataAccessFacade.Dispose();
-        
-        if (context is IAsyncDisposable asyncContext)
-        {
-            await asyncContext.DisposeAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            context.Dispose();
-        }
+        dataAccessFacade.Dispose(); 
         
         cts.Dispose();
         

@@ -40,7 +40,7 @@ public class TranslationCacheEntry
 public class ChatHistoryEntry
 {
     public long Id { get; init; }
-    public Guid MessageId { get; init; }
+    public long MessageId { get; init; }
     public long Timestamp { get; set; }
     public ushort ChatType { get; init; }
     
@@ -57,7 +57,7 @@ public class ChatHistoryEntry
     public string? TranslatedContent { get; set; }
     
     [MaxLength(50)]
-    public string? TranslationCacheId { get; init; }
+    public string? TranslationCacheId { get; set; }
     
     public bool IsVisible { get; set; } = true;
 }

@@ -29,6 +29,8 @@ public class OverlayManager : IDisposable
     {
         foreach (var overlayConfig in configuration.Display.OverlayWindows)
         {
+            // Ensure colors are initialized before creating overlay
+            overlayConfig.EnsureDefaultColors();
             CreateOverlay(overlayConfig);
         }
         
@@ -56,6 +58,9 @@ public class OverlayManager : IDisposable
     {
         if (overlays.ContainsKey(config.Id))
             return;
+        
+        // Ensure default colors are present (important when loading from saved config)
+        config.EnsureDefaultColors();
         
         var overlay = new TranslationOverlay(config);
         overlays[config.Id] = overlay;
@@ -164,8 +169,27 @@ public class OverlayManager : IDisposable
     {
         foreach (var overlay in overlays.Values)
         {
-            windowSystem.RemoveWindow(overlay);
-            overlay.Dispose();
+            try
+            {
+                // Only remove if the window is still registered
+                if (windowSystem.Windows.Contains(overlay))
+                {
+                    windowSystem.RemoveWindow(overlay);
+                }
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Warning(ex, $"Failed to remove overlay window during disposal: {overlay.WindowName}");
+            }
+            
+            try
+            {
+                overlay.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Service.PluginLog.Warning(ex, $"Failed to dispose overlay window: {overlay.WindowName}");
+            }
         }
         overlays.Clear();
         GC.SuppressFinalize(this);

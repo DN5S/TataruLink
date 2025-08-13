@@ -12,34 +12,58 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-public class TranslationCacheRepository(DatabaseContext context, CacheConfig config) : ITranslationCacheRepository
+public class TranslationCacheRepository : ITranslationCacheRepository
 {
-    private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
-    private readonly CacheConfig.ValidationLimits validation = config.Validation;
+    private readonly DatabaseContext context;
+    private readonly CacheConfig.ValidationLimits validation;
+    private readonly SemaphoreSlim dbSemaphore;
+
+    public TranslationCacheRepository(DatabaseContext context, CacheConfig config, SemaphoreSlim dbSemaphore)
+    {
+        this.context = context ?? throw new ArgumentNullException(nameof(context));
+        this.validation = config.Validation ?? throw new ArgumentNullException(nameof(config));
+        this.dbSemaphore = dbSemaphore ?? throw new ArgumentNullException(nameof(dbSemaphore));
+    }
 
     public async Task<TranslationCacheEntry?> GetByKeyAsync(string cacheKey, CancellationToken cancellationToken = default)
     {
         ValidateCacheKey(cacheKey);
         
-        return await context.TranslationCache
-            .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.TranslationCache
+                .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<TranslationCacheEntry?> GetAndUpdateAccessAsync(string cacheKey, CancellationToken cancellationToken = default)
     {
         ValidateCacheKey(cacheKey);
         
-        var entry = await context.TranslationCache
-            .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
-            
-        if (entry != null)
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
         {
-            entry.LastAccessedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            entry.AccessCount++;
-            await context.SaveChangesAsync(cancellationToken);
+            var entry = await context.TranslationCache
+                .FirstOrDefaultAsync(e => e.CacheKey == cacheKey, cancellationToken);
+                
+            if (entry != null)
+            {
+                entry.LastAccessedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                entry.AccessCount++;
+                await context.SaveChangesAsync(cancellationToken);
+            }
+            
+            return entry;
         }
-        
-        return entry;
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<TranslationCacheEntry> UpsertAsync(TranslationCacheEntry entry, CancellationToken cancellationToken = default)
@@ -47,37 +71,8 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         ValidateEntry(entry);
         PrepareEntry(entry);
         
-        var existingEntry = await context.TranslationCache
-            .FirstOrDefaultAsync(e => e.CacheKey == entry.CacheKey, cancellationToken);
-            
-        if (existingEntry != null)
-        {
-            existingEntry.TranslatedText = entry.TranslatedText;
-            existingEntry.LastAccessedAt = entry.LastAccessedAt;
-            existingEntry.AccessCount = entry.AccessCount;
-            existingEntry.TimeTakenMs = entry.TimeTakenMs;
-        }
-        else
-        {
-            context.TranslationCache.Add(entry);
-        }
-        
-        await context.SaveChangesAsync(cancellationToken);
-        return existingEntry ?? entry;
-    }
-
-    public async Task<int> UpsertBatchAsync(IEnumerable<TranslationCacheEntry> entries, CancellationToken cancellationToken = default)
-    {
-        var entriesList = entries.ToList() ?? throw new ArgumentNullException(nameof(entries));
-        if (entriesList.Count == 0) return 0;
-        
-        foreach (var entry in entriesList)
-        {
-            ValidateEntry(entry);
-            PrepareEntry(entry);
-        }
-
-        foreach (var entry in entriesList)
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
         {
             var existingEntry = await context.TranslationCache
                 .FirstOrDefaultAsync(e => e.CacheKey == entry.CacheKey, cancellationToken);
@@ -93,29 +88,90 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             {
                 context.TranslationCache.Add(entry);
             }
+            
+            await context.SaveChangesAsync(cancellationToken);
+            return existingEntry ?? entry;
         }
+        finally
+        {
+            dbSemaphore.Release();
+        }
+    }
+
+    public async Task<int> UpsertBatchAsync(IEnumerable<TranslationCacheEntry> entries, CancellationToken cancellationToken = default)
+    {
+        var entriesList = entries.ToList() ?? throw new ArgumentNullException(nameof(entries));
+        if (entriesList.Count == 0) return 0;
         
-        return await context.SaveChangesAsync(cancellationToken);
+        foreach (var entry in entriesList)
+        {
+            ValidateEntry(entry);
+            PrepareEntry(entry);
+        }
+
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            foreach (var entry in entriesList)
+            {
+                var existingEntry = await context.TranslationCache
+                    .FirstOrDefaultAsync(e => e.CacheKey == entry.CacheKey, cancellationToken);
+                    
+                if (existingEntry != null)
+                {
+                    existingEntry.TranslatedText = entry.TranslatedText;
+                    existingEntry.LastAccessedAt = entry.LastAccessedAt;
+                    existingEntry.AccessCount = entry.AccessCount;
+                    existingEntry.TimeTakenMs = entry.TimeTakenMs;
+                }
+                else
+                {
+                    context.TranslationCache.Add(entry);
+                }
+            }
+            
+            return await context.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<int> PruneOldEntriesAsync(DateTimeOffset cutoffTime, CancellationToken cancellationToken = default)
     {
-        var cutoffTimestamp = cutoffTime.ToUnixTimeSeconds();
-        var oldEntries = await context.TranslationCache
-            .Where(e => e.LastAccessedAt < cutoffTimestamp)
-            .ToListAsync(cancellationToken);
-            
-        context.TranslationCache.RemoveRange(oldEntries);
-        return await context.SaveChangesAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var cutoffTimestamp = cutoffTime.ToUnixTimeSeconds();
+            var oldEntries = await context.TranslationCache
+                .Where(e => e.LastAccessedAt < cutoffTimestamp)
+                .ToListAsync(cancellationToken);
+                
+            context.TranslationCache.RemoveRange(oldEntries);
+            return await context.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public async Task<long> GetTotalSizeAsync(CancellationToken cancellationToken = default)
     {
-        var entries = await context.TranslationCache
-            .Select(e => new { e.OriginalText, e.TranslatedText })
-            .ToListAsync(cancellationToken);
-            
-        return entries.Sum(e => e.OriginalText.Length  + e.TranslatedText.Length);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var entries = await context.TranslationCache
+                .Select(e => new { e.OriginalText, e.TranslatedText })
+                .ToListAsync(cancellationToken);
+                
+            return entries.Sum(e => e.OriginalText.Length  + e.TranslatedText.Length);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     private static void ValidateCacheKey(string cacheKey)
@@ -191,12 +247,20 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
         if (minAccessCount < 1)
             throw new ArgumentException("Minimum access count must be at least 1", nameof(minAccessCount));
             
-        return await context.TranslationCache
-            .Where(e => e.AccessCount >= minAccessCount)
-            .OrderByDescending(e => e.AccessCount)
-            .ThenByDescending(e => e.LastAccessedAt)
-            .Take(limit)
-            .ToListAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.TranslationCache
+                .Where(e => e.AccessCount >= minAccessCount)
+                .OrderByDescending(e => e.AccessCount)
+                .ThenByDescending(e => e.LastAccessedAt)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
     
     public async Task<IEnumerable<TranslationCacheEntry>> GetRecentlyAccessedAsync(int limit = 50, int withinHours = 1, CancellationToken cancellationToken = default)
@@ -208,11 +272,19 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
             
         var cutoffTime = DateTimeOffset.UtcNow.AddHours(-withinHours).ToUnixTimeSeconds();
         
-        return await context.TranslationCache
-            .Where(e => e.LastAccessedAt >= cutoffTime)
-            .OrderByDescending(e => e.LastAccessedAt)
-            .Take(limit)
-            .ToListAsync(cancellationToken);
+        await dbSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await context.TranslationCache
+                .Where(e => e.LastAccessedAt >= cutoffTime)
+                .OrderByDescending(e => e.LastAccessedAt)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+        }
+        finally
+        {
+            dbSemaphore.Release();
+        }
     }
 
     public static string GenerateCacheKey(string originalText, string sourceLanguage, string targetLanguage)

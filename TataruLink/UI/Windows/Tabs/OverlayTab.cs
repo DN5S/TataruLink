@@ -104,6 +104,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                         duplicate.MessageSpacing = overlay.MessageSpacing;
                         duplicate.EnabledChatTypes = new HashSet<ushort>(overlay.EnabledChatTypes);
                         duplicate.ChatTypeColors = new Dictionary<ushort, Vector4>(overlay.ChatTypeColors);
+                        duplicate.EnsureDefaultColors(); // Ensure all colors are present
                         
                         overlayManager.CreateOverlay(duplicate);
                         selectedOverlay = duplicate;

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,9 +13,8 @@ public interface IChatHistoryRepository
     
     Task<IEnumerable<ChatHistoryEntry>> GetVisibleAsync(int limit, int offset = 0, CancellationToken cancellationToken = default);
     
-    Task<ChatHistoryEntry?> GetByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default);
+    Task<ChatHistoryEntry?> GetByMessageIdAsync(long messageId, CancellationToken cancellationToken = default);
     
-    // Soft delete (mark as invisible)
     Task<int> HideAsync(IEnumerable<long>? ids, CancellationToken cancellationToken = default);
     
     Task<int> ClearAllAsync(CancellationToken cancellationToken = default);
