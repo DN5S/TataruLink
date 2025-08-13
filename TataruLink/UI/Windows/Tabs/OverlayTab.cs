@@ -190,7 +190,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             // Background color picker
             if (overlay.ShowBorder)
             {
-                var bgColor = overlay.BackgroundColor ?? new Vector4(0.06f, 0.06f, 0.06f, 1.0f);
+                var bgColor = overlay.BackgroundColor ?? ImGuiUtils.Colors.WindowBackground;
                 if (ImGui.ColorEdit4("Background Color"u8, ref bgColor, 
                     ImGuiColorEditFlags.NoAlpha | ImGuiColorEditFlags.NoInputs))
                 {
@@ -307,7 +307,7 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                             // Try to get the default color from a new overlay config
                             var defaultConfig = new OverlayWindowConfig();
                             color = defaultConfig.ChatTypeColors.TryGetValue(chatTypeValue, out var defaultColor) ? defaultColor :
-                                        new Vector4(0.8f, 0.8f, 0.8f, 1.0f); // Use the default gray color if not in defaults
+                                        ImGuiUtils.Colors.Gray80; // Use the default gray color if not in defaults
                             overlay.ChatTypeColors[chatTypeValue] = color;
                         }
                         

@@ -261,7 +261,7 @@ public class TranslationTab
         
         if (isLoadingModels)
         {
-            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Loading available models..."u8);
+            ImGui.TextColored(ImGuiUtils.Colors.Warning, "Loading available models..."u8);
         }
         else if (geminiModels.Length == 0)
         {

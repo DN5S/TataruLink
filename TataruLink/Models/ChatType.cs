@@ -45,6 +45,14 @@ public static class ChatType
     
     // Cross-world Types  
     public const ushort CrossParty = 32;
+    public const ushort CrossWorldLinkshell1 = 37;  // CWLS1 - XivChatType
+    public const ushort CrossWorldLinkshell2 = 101; // CWLS2
+    public const ushort CrossWorldLinkshell3 = 102; // CWLS3
+    public const ushort CrossWorldLinkshell4 = 103; // CWLS4
+    public const ushort CrossWorldLinkshell5 = 104; // CWLS5
+    public const ushort CrossWorldLinkshell6 = 105; // CWLS6
+    public const ushort CrossWorldLinkshell7 = 106; // CWLS7
+    public const ushort CrossWorldLinkshell8 = 107; // CWLS8
     
     // System/Other Types
     public const ushort Debug = 1;

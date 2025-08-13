@@ -12,6 +12,20 @@ namespace TataruLink.UI.Windows.Tabs;
 
 public class ChatTypesTab(TataruConfig configuration)
 {
+    private static HashSet<ushort> GetAllPresetChatTypes()
+    {
+        var allPresetChatTypes = new HashSet<ushort>();
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.PublicChat);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.PartyChat);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.PrivateChat);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.Linkshells);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.CrossWorldLinkshells);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.Community);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.System);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.Npc);
+        allPresetChatTypes.UnionWith(ChatTypeUtils.Presets.Emotes);
+        return allPresetChatTypes;
+    }
     
     public void Draw()
     {
@@ -182,7 +196,7 @@ public class ChatTypesTab(TataruConfig configuration)
         // Master controls
         if (ImGui.Button("Enable All"u8))
         {
-            foreach (var chatType in ChatTypeUtils.GetAllTranslatableChatTypes())
+            foreach (var chatType in GetAllPresetChatTypes())
             {
                 configuration.Chat.SetChatTypeEnabled(chatType, true);
             }
@@ -213,7 +227,8 @@ public class ChatTypesTab(TataruConfig configuration)
             ImGui.TableSetupScrollFreeze(0, 1);
             ImGui.TableHeadersRow();
             
-            foreach (var chatType in ChatTypeUtils.GetAllTranslatableChatTypes())
+            // Get all chat types from presets (excluding GM)
+            foreach (var chatType in GetAllPresetChatTypes())
             {
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
@@ -286,8 +301,10 @@ public class ChatTypesTab(TataruConfig configuration)
             currentDefault = "None";
         }
 
+        ImGui.TextUnformatted("Default Provider:"u8);
+        ImGui.SameLine();
         ImGui.SetNextItemWidth(200);
-        if (ImGui.BeginCombo("Default Provider"u8, currentDefault))
+        if (ImGui.BeginCombo("##DefaultProvider", currentDefault))
         {
             foreach (var provider in providers)
             {

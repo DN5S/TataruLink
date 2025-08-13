@@ -212,7 +212,7 @@ public class TranslationOverlay : Window, IDisposable
         
         if (config.ShowOriginalText && !string.IsNullOrEmpty(message.OriginalText))
         {
-            using (ImRaii.PushColor(ImGuiCol.Text, new Vector4(0.6f, 0.6f, 0.6f, 1.0f)))
+            using (ImRaii.PushColor(ImGuiCol.Text, ImGuiUtils.Colors.TextMuted))
             {
                 ImGui.TextWrapped($"  > {message.OriginalText}");
             }
@@ -231,7 +231,7 @@ public class TranslationOverlay : Window, IDisposable
         if (parentType != chatType && config.ChatTypeColors.TryGetValue(parentType, out color))
             return color;
         
-        return config.ChatTypeColors.GetValueOrDefault((ushort)0, new Vector4(0.8f, 0.8f, 0.8f, 1.0f));
+        return config.ChatTypeColors.GetValueOrDefault((ushort)0, ImGuiUtils.Colors.Gray80);
     }
     
     public void AddMessage(Message message)

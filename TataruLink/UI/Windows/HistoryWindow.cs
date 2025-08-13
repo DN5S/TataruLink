@@ -9,6 +9,7 @@ using Dalamud.Interface.Windowing;
 using TataruLink.Data;
 using TataruLink.Models;
 using TataruLink.Services;
+using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows;
 
@@ -223,7 +224,7 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TableNextColumn();
         if (!string.IsNullOrEmpty(item.TranslationCacheId))
         {
-            ImGui.TextColored(new Vector4(0, 1, 0, 1), "Yes"u8);
+            ImGui.TextColored(ImGuiUtils.Colors.Success, "Yes"u8);
         }
         else
         {

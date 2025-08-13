@@ -49,6 +49,10 @@ public static class ChatTypeUtils
     private static readonly HashSet<ushort> AdditionalTranslatableChannels =
     [
         ChatType.CrossParty,                                                    // 32
+        ChatType.CrossWorldLinkshell2, ChatType.CrossWorldLinkshell3,           // 101-102
+        ChatType.CrossWorldLinkshell4, ChatType.CrossWorldLinkshell5,           // 103-104
+        ChatType.CrossWorldLinkshell6, ChatType.CrossWorldLinkshell7,           // 105-106
+        ChatType.CrossWorldLinkshell8,                                          // 107
         ChatType.GmTell, ChatType.GmSay, ChatType.GmShout, ChatType.GmYell,     // 80-83
         ChatType.GmParty, ChatType.GmFreeCompany,                               // 84-85
         ChatType.GmLs1, ChatType.GmLs2, ChatType.GmLs3, ChatType.GmLs4,         // 86-89
@@ -128,18 +132,20 @@ public static class ChatTypeUtils
         
         public static readonly ushort[] CrossWorldLinkshells = 
         [
-            (ushort)XivChatType.CrossLinkShell1, (ushort)XivChatType.CrossLinkShell2,
-            (ushort)XivChatType.CrossLinkShell3, (ushort)XivChatType.CrossLinkShell4,
-            (ushort)XivChatType.CrossLinkShell5, (ushort)XivChatType.CrossLinkShell6,
-            (ushort)XivChatType.CrossLinkShell7, (ushort)XivChatType.CrossLinkShell8
+            ChatType.CrossWorldLinkshell1, // 37
+            ChatType.CrossWorldLinkshell2, // 101
+            ChatType.CrossWorldLinkshell3, // 102
+            ChatType.CrossWorldLinkshell4, // 103
+            ChatType.CrossWorldLinkshell5, // 104
+            ChatType.CrossWorldLinkshell6, // 105
+            ChatType.CrossWorldLinkshell7, // 106
+            ChatType.CrossWorldLinkshell8  // 107
         ];
         
         public static readonly ushort[] Npc = 
         [
             (ushort)XivChatType.NPCDialogue, 
-            (ushort)XivChatType.NPCDialogueAnnouncements,
-            ChatType.NpcDialogue, 
-            ChatType.NpcAnnouncement
+            (ushort)XivChatType.NPCDialogueAnnouncements
         ];
         
         public static readonly ushort[] Emotes = 
@@ -252,6 +258,10 @@ public static class ChatTypeUtils
     
     public static bool IsCrossLinkshell(ushort typeValue)
     {
+        // Check for the actual numeric values
+        if (typeValue is 37 or >= 101 and <= 107)
+            return true;
+            
         return Enum.IsDefined(typeof(XivChatType), typeValue) && IsCrossLinkshell((XivChatType)typeValue);
     }
     
@@ -296,13 +306,16 @@ public static class ChatTypeUtils
             XivChatType.Say => "Say",
             XivChatType.Shout => "Shout",
             XivChatType.Yell => "Yell",
-            XivChatType.TellIncoming or XivChatType.TellOutgoing => "Tell",
+            XivChatType.TellIncoming => "Tell (In)",
+            XivChatType.TellOutgoing => "Tell (Out)",
             XivChatType.Party => "Party",
             XivChatType.Alliance => "Alliance",
             XivChatType.FreeCompany => "Free Company",
             XivChatType.NoviceNetwork => "Novice Network",
-            XivChatType.CustomEmote or XivChatType.StandardEmote => "Emote",
-            XivChatType.NPCDialogue or XivChatType.NPCDialogueAnnouncements => "NPC",
+            XivChatType.CustomEmote => "Custom Emote",
+            XivChatType.StandardEmote => "Standard Emote",
+            XivChatType.NPCDialogue => "NPC Dialogue",
+            XivChatType.NPCDialogueAnnouncements => "NPC Announcement",
             XivChatType.PvPTeam => "PvP",
             XivChatType.CrossParty => "Cross-Party",
             XivChatType.Ls1 => "Linkshell1",
@@ -360,11 +373,22 @@ public static class ChatTypeUtils
             ChatType.Error => "Error",
             ChatType.RetainerSale => "Retainer",
             
-            // NPC types
-            ChatType.NpcDialogue or ChatType.NpcAnnouncement => "NPC",
+            // NPC types (these should never be reached from => in XivChatType)
+            ChatType.NpcDialogue => "NPC Dialogue",
+            ChatType.NpcAnnouncement => "NPC Announcement",
             
             // Cross-party
             ChatType.CrossParty => "Cross-Party",
+            
+            // Cross-World Linkshells
+            ChatType.CrossWorldLinkshell1 => "CWLS1",
+            ChatType.CrossWorldLinkshell2 => "CWLS2",
+            ChatType.CrossWorldLinkshell3 => "CWLS3",
+            ChatType.CrossWorldLinkshell4 => "CWLS4",
+            ChatType.CrossWorldLinkshell5 => "CWLS5",
+            ChatType.CrossWorldLinkshell6 => "CWLS6",
+            ChatType.CrossWorldLinkshell7 => "CWLS7",
+            ChatType.CrossWorldLinkshell8 => "CWLS8",
             
             _ => "Unknown"
         };
@@ -394,24 +418,5 @@ public static class ChatTypeUtils
         if (IsTranslatable(typeValue)) return ChatCategory.Player;
         
         return ChatCategory.Other;
-    }
-    
-    public static IEnumerable<ushort> GetAllTranslatableChatTypes()
-    {
-        var types = new HashSet<ushort>();
-        
-        // Add all XivChatType values that are translatable
-        foreach (var type in Enum.GetValues<XivChatType>())
-        {
-            if (IsTranslatable(type))
-            {
-                types.Add((ushort)type);
-            }
-        }
-        
-        // Add additional numeric chat types
-        types.UnionWith(AdditionalTranslatableChannels);
-        
-        return types.OrderBy(x => x);
     }
 }
