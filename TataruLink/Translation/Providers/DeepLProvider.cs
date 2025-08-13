@@ -156,35 +156,7 @@ public class DeepLProvider : ITranslationProvider, IDisposable, IAsyncDisposable
             };
         }
     }
-
-    public async Task<string?> DetectLanguageAsync(
-        string text,
-        CancellationToken cancellationToken = default)
-    {
-        if (translator == null)
-        {
-            Service.PluginLog.Warning("DeepL provider not initialized for language detection");
-            return null;
-        }
-
-        try
-        {
-            // NOTE: DeepL lacks standalone detection API - using translation to detect
-            var result = await translator.TranslateTextAsync(
-                text,
-                null,  // Auto-detect source
-                "EN-US",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-            
-            return result.DetectedSourceLanguageCode.ToLowerInvariant();
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Failed to detect language with DeepL");
-            return null;
-        }
-    }
-
+    
     public void Dispose()
     {
         translator = null;

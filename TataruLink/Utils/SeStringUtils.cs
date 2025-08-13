@@ -349,6 +349,11 @@ public static partial class SeStringUtils
         return true;
     }
 
+    public static bool ShouldSkipAutoTranslate(this SeString seString, bool skipAutoTranslate)
+    {
+        return skipAutoTranslate && seString.HasAutoTranslate();
+    }
+
     private static bool IsOnlyPunctuation(string text)
     {
         return text.All(c => char.IsPunctuation(c) || char.IsWhiteSpace(c));

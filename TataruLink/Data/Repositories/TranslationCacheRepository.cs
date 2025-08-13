@@ -201,9 +201,9 @@ public class TranslationCacheRepository(DatabaseContext context, CacheConfig con
     
     public async Task<IEnumerable<TranslationCacheEntry>> GetRecentlyAccessedAsync(int limit = 50, int withinHours = 1, CancellationToken cancellationToken = default)
     {
-        if (limit <= 0 || limit > 1000)
+        if (limit is <= 0 or > 1000)
             throw new ArgumentException("Limit must be between 1 and 1000", nameof(limit));
-        if (withinHours <= 0 || withinHours > 168) // Max 1 week
+        if (withinHours is <= 0 or > 168) // Max 1 week
             throw new ArgumentException("Hours must be between 1 and 168", nameof(withinHours));
             
         var cutoffTime = DateTimeOffset.UtcNow.AddHours(-withinHours).ToUnixTimeSeconds();

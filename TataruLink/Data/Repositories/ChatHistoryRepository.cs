@@ -63,7 +63,8 @@ public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) 
 
     public async Task<int> HideAsync(IEnumerable<long>? ids, CancellationToken cancellationToken = default)
     {
-        if (ids == null) throw new ArgumentNullException(nameof(ids));
+        ArgumentNullException.ThrowIfNull(ids);
+        
         var idsList = ids.ToList();
         if (idsList.Count == 0) return 0;
         
@@ -127,9 +128,8 @@ public class ChatHistoryRepository(DatabaseContext context, CacheConfig config) 
 
     private void ValidateEntry(ChatHistoryEntry entry)
     {
-        if (entry == null)
-            throw new ArgumentNullException(nameof(entry));
-            
+        ArgumentNullException.ThrowIfNull(entry);
+
         if (entry.MessageId == Guid.Empty)
             throw new ArgumentException("Message ID must not be empty");
             

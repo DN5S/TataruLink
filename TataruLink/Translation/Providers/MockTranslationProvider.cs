@@ -38,16 +38,4 @@ public class MockTranslationProvider : ITranslationProvider
             CharactersConsumed = text.Length
         };
     }
-
-    public async Task<string?> DetectLanguageAsync(
-        string text,
-        CancellationToken cancellationToken = default)
-    {
-        // NOTE: Most APIs handle detection internally when a source is 'auto'
-        
-        await Task.Delay(50, cancellationToken);
-        
-        // NOTE: Mock always returns Japanese (common in FFXIV)
-        return "ja";
-    }
 }

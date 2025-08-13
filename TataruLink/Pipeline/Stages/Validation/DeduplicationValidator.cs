@@ -89,5 +89,6 @@ public class DeduplicationValidator : IMessageValidator, IDisposable
         cleanupTimer.Dispose();
         recentMessageHashes.Clear();
         isDisposed = true;
+        GC.SuppressFinalize(this);
     }
 }

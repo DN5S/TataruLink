@@ -17,7 +17,7 @@ namespace TataruLink.Data;
 public class DataService : IDataService
 {
     private readonly DatabaseContext context;
-    private readonly IUnitOfWork unitOfWork;
+    private readonly IDataAccessFacade dataAccessFacade;
     private readonly CacheConfig config;
     private readonly MemoryCache l1Cache;
     private readonly Channel<object> writeQueue;
@@ -33,7 +33,7 @@ public class DataService : IDataService
         
         context = new DatabaseContext(pluginInterface, config);
         
-        unitOfWork = new UnitOfWork(context, config);
+        dataAccessFacade = new DataAccessFacade(context, config);
         
         l1Cache = new MemoryCache(new MemoryCacheOptions 
         { 
@@ -67,7 +67,7 @@ public class DataService : IDataService
         try
         {
             // Load frequently accessed translations into L1 cache
-            var hotTranslations = await unitOfWork.TranslationCache.GetHotTranslationsAsync(
+            var hotTranslations = await dataAccessFacade.TranslationCache.GetHotTranslationsAsync(
                 limit: config.MaxHotCacheEntries, 
                 minAccessCount: config.MinAccessCountForHot);
             
@@ -98,8 +98,41 @@ public class DataService : IDataService
         }
     }
 
-    public async Task<TranslationCacheEntry?> GetCacheAsync(string key)
+    public Task SetCacheAsync(TranslationCacheEntry entry)
     {
+        // Generate a cache key if not set
+        if (string.IsNullOrWhiteSpace(entry.CacheKey))
+        {
+            entry.CacheKey = TranslationCacheRepository.GenerateCacheKey(
+                entry.OriginalText, 
+                entry.SourceLanguage, 
+                entry.TargetLanguage);
+        }
+        
+        // Set in L1 immediately
+        l1Cache.Set(entry.CacheKey, entry, new MemoryCacheEntryOptions
+        {
+            Size = 1,
+            SlidingExpiration = TimeSpan.FromMinutes(config.L1CacheSlidingExpirationMinutes),
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes)
+        });
+
+        // Queue for L2 write
+        if (!writeQueue.Writer.TryWrite(entry))
+        {
+            Service.PluginLog.Warning("Write queue is full, item will be dropped");
+        }
+        
+        return Task.CompletedTask;
+    }
+
+    public async Task<(bool found, TranslationCacheEntry? entry)> TryGetCacheAsync(
+        string originalText, 
+        string sourceLanguage, 
+        string targetLanguage)
+    {
+        var key = TranslationCacheRepository.GenerateCacheKey(originalText, sourceLanguage, targetLanguage);
+        
         // L1 cache check
         if (l1Cache.TryGetValue(key, out TranslationCacheEntry? entry))
         {
@@ -115,11 +148,11 @@ public class DataService : IDataService
             {
                 Service.PluginLog.Debug($"L1 Cache HIT: {key}");
             }
-            return entry;
+            return (entry != null, entry);
         }
 
         // L2 cache check via repository
-        entry = await unitOfWork.TranslationCache.GetAndUpdateAccessAsync(key).ConfigureAwait(false);
+        entry = await dataAccessFacade.TranslationCache.GetAndUpdateAccessAsync(key).ConfigureAwait(false);
         
         if (entry != null)
         {
@@ -159,44 +192,6 @@ public class DataService : IDataService
             Service.PluginLog.Debug($"Cache MISS: {key}");
         }
 
-        return entry;
-    }
-
-    public Task SetCacheAsync(TranslationCacheEntry entry)
-    {
-        // Generate a cache key if not set
-        if (string.IsNullOrWhiteSpace(entry.CacheKey))
-        {
-            entry.CacheKey = TranslationCacheRepository.GenerateCacheKey(
-                entry.OriginalText, 
-                entry.SourceLanguage, 
-                entry.TargetLanguage);
-        }
-        
-        // Set in L1 immediately
-        l1Cache.Set(entry.CacheKey, entry, new MemoryCacheEntryOptions
-        {
-            Size = 1,
-            SlidingExpiration = TimeSpan.FromMinutes(config.L1CacheSlidingExpirationMinutes),
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(config.L1CacheAbsoluteExpirationMinutes)
-        });
-
-        // Queue for L2 write
-        if (!writeQueue.Writer.TryWrite(entry))
-        {
-            Service.PluginLog.Warning("Write queue is full, item will be dropped");
-        }
-        
-        return Task.CompletedTask;
-    }
-
-    public async Task<(bool found, TranslationCacheEntry? entry)> TryGetCacheAsync(
-        string originalText, 
-        string sourceLanguage, 
-        string targetLanguage)
-    {
-        var key = TranslationCacheRepository.GenerateCacheKey(originalText, sourceLanguage, targetLanguage);
-        var entry = await GetCacheAsync(key).ConfigureAwait(false);
         return (entry != null, entry);
     }
 
@@ -211,7 +206,7 @@ public class DataService : IDataService
 
     public async Task<List<ChatHistoryEntry>> GetHistoryAsync(int limit = 100, int offset = 0)
     {
-        var entries = await unitOfWork.ChatHistory.GetVisibleAsync(limit, offset).ConfigureAwait(false);
+        var entries = await dataAccessFacade.ChatHistory.GetVisibleAsync(limit, offset).ConfigureAwait(false);
         return entries.ToList();
     }
 
@@ -219,23 +214,23 @@ public class DataService : IDataService
     {
         if (ids.Length == 0) return 0;
         
-        return await unitOfWork.ChatHistory.HideAsync(ids).ConfigureAwait(false);
+        return await dataAccessFacade.ChatHistory.HideAsync(ids).ConfigureAwait(false);
     }
 
     public async Task<int> ClearHistoryAsync()
     {
-        return await unitOfWork.ChatHistory.ClearAllAsync().ConfigureAwait(false);
+        return await dataAccessFacade.ChatHistory.ClearAllAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> UpdateHistoryTranslationAsync(long id, string translatedContent)
     {
-        return await unitOfWork.ChatHistory.UpdateTranslationAsync(id, translatedContent).ConfigureAwait(false);
+        return await dataAccessFacade.ChatHistory.UpdateTranslationAsync(id, translatedContent).ConfigureAwait(false);
     }
 
     public async Task<int> PruneOldCacheEntriesAsync(TimeSpan maxAge)
     {
         var cutoffTime = DateTimeOffset.UtcNow.Subtract(maxAge);
-        return await unitOfWork.TranslationCache.PruneOldEntriesAsync(cutoffTime).ConfigureAwait(false);
+        return await dataAccessFacade.TranslationCache.PruneOldEntriesAsync(cutoffTime).ConfigureAwait(false);
     }
 
     public async Task VacuumDatabaseAsync()
@@ -369,7 +364,7 @@ public class DataService : IDataService
                 {
                     try
                     {
-                        await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries, token).ConfigureAwait(false);
+                        await dataAccessFacade.TranslationCache.UpsertBatchAsync(cacheEntries, token).ConfigureAwait(false);
                         Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries");
                     }
                     catch (Exception ex)
@@ -388,7 +383,7 @@ public class DataService : IDataService
                 {
                     try
                     {
-                        await unitOfWork.ChatHistory.AddBatchAsync(historyEntries, token).ConfigureAwait(false);
+                        await dataAccessFacade.ChatHistory.AddBatchAsync(historyEntries, token).ConfigureAwait(false);
                         Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries");
                         
                         // Fire event for each successfully written history entry
@@ -435,7 +430,7 @@ public class DataService : IDataService
             
             try
             {
-                await unitOfWork.TranslationCache.UpsertAsync(entry, cancellationToken).ConfigureAwait(false);
+                await dataAccessFacade.TranslationCache.UpsertAsync(entry, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -457,7 +452,7 @@ public class DataService : IDataService
             
             try
             {
-                await unitOfWork.ChatHistory.AddAsync(entry, cancellationToken).ConfigureAwait(false);
+                await dataAccessFacade.ChatHistory.AddAsync(entry, cancellationToken).ConfigureAwait(false);
                 
                 // Fire event for successfully written entry
                 OnHistoryAdded?.Invoke(this, entry);
@@ -529,7 +524,7 @@ public class DataService : IDataService
         
         // Add disposables to the finalizer
         finalizer.Add(l1Cache);
-        finalizer.Add(unitOfWork);
+        finalizer.Add(dataAccessFacade);
         finalizer.Add(context);
         finalizer.Add(cts);
         
@@ -588,7 +583,7 @@ public class DataService : IDataService
         
         // Dispose of resources asynchronously
         l1Cache.Dispose();
-        unitOfWork.Dispose();
+        dataAccessFacade.Dispose();
         
         if (context is IAsyncDisposable asyncContext)
         {

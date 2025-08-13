@@ -378,24 +378,6 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
     
-    public CircuitState? GetProviderCircuitState(string providerName)
-    {
-        if (circuitBreakers.TryGetValue(providerName, out var circuitBreaker))
-        {
-            return circuitBreaker.State;
-        }
-        return null;
-    }
-    
-    public void ResetProviderCircuitBreaker(string providerName)
-    {
-        if (circuitBreakers.TryGetValue(providerName, out var circuitBreaker))
-        {
-            circuitBreaker.Reset();
-            Service.PluginLog.Information($"Circuit breaker reset for provider {providerName}");
-        }
-    }
-    
     public void Dispose()
     {
         if (!providerLock.Wait(TimeSpan.FromSeconds(10)))

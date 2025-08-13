@@ -173,5 +173,6 @@ public class MessagePipeline : IDisposable
         Clear();
         isInitialized = false;
         @lock.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

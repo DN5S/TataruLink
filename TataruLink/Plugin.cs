@@ -33,7 +33,7 @@ public sealed class Plugin : IDalamudPlugin
     private BlocklistManager? blocklistManager;
     private IDataService? dataService;
     private DatabaseContext? databaseContext;
-    private IUnitOfWork? unitOfWork;
+    private IDataAccessFacade? unitOfWork;
     private WindowSystem? windowSystem;
     private SettingsWindow? settingsWindow;
     private HistoryWindow? historyWindow;
@@ -80,7 +80,7 @@ public sealed class Plugin : IDalamudPlugin
         }
         
         // Create a unit of work after a database is initialized
-        unitOfWork = new UnitOfWork(databaseContext, configuration.Cache);
+        unitOfWork = new DataAccessFacade(databaseContext, configuration.Cache);
         
         // Initialize managers with repositories
         glossaryManager = new GlossaryManager(unitOfWork.Glossary, configuration.Glossary);

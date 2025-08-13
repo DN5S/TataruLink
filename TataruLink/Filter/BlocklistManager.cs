@@ -3,15 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using TataruLink.Data.Repositories;
+using TataruLink.Glossary;
 using TataruLink.Models;
 using TataruLink.Services;
 
 namespace TataruLink.Filter;
 
+// ReSharper disable FieldCanBeMadeReadOnly.Local
 public class BlocklistManager : IDisposable
 {
     private readonly IBlocklistRepository repository;
-    private HashSet<string> cachedKeywords = new(StringComparer.OrdinalIgnoreCase);
+    private readonly AhoCorasickTrie trie = new();
     private List<BlocklistEntry> cachedEntries = [];
     private bool isEnabled = true;
 
@@ -35,7 +37,9 @@ public class BlocklistManager : IDisposable
     }
 
     public List<BlocklistEntry> GetCachedEntries() => [..cachedEntries];
-    public HashSet<string> GetEnabledKeywords() => new(cachedKeywords, StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> GetEnabledKeywords() => new(
+        cachedEntries.Where(e => e.IsEnabled).Select(e => e.Keyword), 
+        StringComparer.OrdinalIgnoreCase);
 
     public async Task LoadFromDatabaseAsync()
     {
@@ -49,34 +53,36 @@ public class BlocklistManager : IDisposable
         {
             Service.PluginLog.Error(ex, "Failed to load blocklist from database");
             cachedEntries.Clear();
-            cachedKeywords.Clear();
+            RebuildCache();
         }
     }
 
     private void RebuildCache()
     {
-        cachedKeywords.Clear();
+        trie.Clear();
         
         var enabledKeywords = cachedEntries
             .Where(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.Keyword))
-            .Select(e => e.Keyword);
+            .Select(e => e.Keyword.ToLowerInvariant());
         
         foreach (var keyword in enabledKeywords)
         {
-            cachedKeywords.Add(keyword);
+            trie.Add(keyword);
         }
         
-        Service.PluginLog.Information($"Blocklist cache rebuilt with {cachedKeywords.Count} keywords");
+        trie.Build();
+        
+        var keywordCount = cachedEntries.Count(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.Keyword));
+        Service.PluginLog.Information($"Blocklist cache rebuilt with {keywordCount} keywords");
     }
 
     public bool ContainsBlockedKeyword(string text)
     {
-        if (!isEnabled || cachedKeywords.Count == 0 || string.IsNullOrEmpty(text))
+        if (!isEnabled || string.IsNullOrEmpty(text) || 
+            !cachedEntries.Any(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.Keyword)))
             return false;
-
-        // Check if any blocklisted keyword is contained in the text
-        return cachedKeywords.Any(keyword => 
-            text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        
+        return trie.FindAll(text).Any();
     }
 
     public async Task<BlocklistEntry?> AddKeywordAsync(string keyword)
@@ -91,9 +97,9 @@ public class BlocklistManager : IDisposable
             
             var added = await repository.AddAsync(entry);
             
-            // Add to memory cache
+            // Add to the memory cache and rebuild trie
             cachedEntries.Add(added);
-            cachedKeywords.Add(added.Keyword);
+            RebuildCache();
             
             Service.PluginLog.Information($"Added blocklist keyword: '{keyword}'");
             return added;
@@ -115,9 +121,9 @@ public class BlocklistManager : IDisposable
             var deleted = await repository.DeleteAsync(id);
             if (deleted)
             {
-                // Remove from memory cache
+                // Remove from the memory cache and rebuild trie
                 cachedEntries.Remove(cached);
-                cachedKeywords.Remove(cached.Keyword);
+                RebuildCache();
                 
                 Service.PluginLog.Information($"Deleted blocklist keyword: '{cached.Keyword}'");
                 return true;
@@ -142,13 +148,9 @@ public class BlocklistManager : IDisposable
             var toggled = await repository.ToggleEnabledAsync(id);
             if (toggled > 0)
             {
-                // Update memory cache
+                // Update memory cache and rebuild trie
                 cached.IsEnabled = !cached.IsEnabled;
-                
-                if (cached.IsEnabled)
-                    cachedKeywords.Add(cached.Keyword);
-                else
-                    cachedKeywords.Remove(cached.Keyword);
+                RebuildCache();
                 
                 Service.PluginLog.Information($"Toggled blocklist keyword {id}: enabled = {cached.IsEnabled}");
                 return true;
@@ -171,7 +173,7 @@ public class BlocklistManager : IDisposable
             
             // Clear memory cache
             cachedEntries.Clear();
-            cachedKeywords.Clear();
+            trie.Clear();
             
             Service.PluginLog.Information($"Cleared all blocklist keywords: {deleted} deleted");
             return deleted;
@@ -198,7 +200,7 @@ public class BlocklistManager : IDisposable
             
             var added = await repository.AddBatchAsync(entries);
             
-            // Reload from database to get all entries with IDs
+            // Reload from the database to get all entries with IDs
             await LoadFromDatabaseAsync();
             
             Service.PluginLog.Information($"Imported {added} blocklist keywords");
@@ -214,13 +216,14 @@ public class BlocklistManager : IDisposable
     public (int TotalKeywords, int EnabledKeywords) GetStatistics()
     {
         var total = cachedEntries.Count;
-        var enabled = cachedKeywords.Count;
+        var enabled = cachedEntries.Count(e => e.IsEnabled && !string.IsNullOrWhiteSpace(e.Keyword));
         return (total, enabled);
     }
 
     public void Dispose()
     {
         cachedEntries.Clear();
-        cachedKeywords.Clear();
+        trie.Clear();
+        GC.SuppressFinalize(this);
     }
 }

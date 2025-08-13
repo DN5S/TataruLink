@@ -129,5 +129,6 @@ public class DtrBarManager : IDisposable
         
         isDisposed = true;
         Service.PluginLog.Info("DTR Bar entry disposed");
+        GC.SuppressFinalize(this);
     }
 }

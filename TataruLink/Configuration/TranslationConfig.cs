@@ -36,8 +36,6 @@ public class TranslationConfig
         }
     }
     
-    public bool ShowOriginalText { get; set; } = true;
-    
     public int TimeoutMs { get; set; } = 5000;
     
     public bool RetryFailedTranslations { get; set; }

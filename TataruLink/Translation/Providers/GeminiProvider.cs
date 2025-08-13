@@ -132,45 +132,6 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
         }
     }
 
-    public async Task<string?> DetectLanguageAsync(string text, CancellationToken cancellationToken = default)
-    {
-        if (!IsConfigured)
-            return null;
-
-        try
-        {
-            var prompt = "Detect the language of this text and respond with ONLY the ISO 639-1 language code (e.g., 'en', 'ja', 'de'). Text: " + text;
-            var requestBody = CreateRequestBody(prompt);
-            var url = string.Format(ApiUrlTemplate, config.SelectedModel, apiKey);
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-
-            var response = await HttpClient.SendAsync(request, cancellationToken);
-            
-            if (!response.IsSuccessStatusCode)
-                return null;
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var doc = JsonDocument.Parse(json);
-            
-            var detectedLang = ExtractTranslatedText(doc.RootElement)?.Trim().ToLowerInvariant();
-            
-            if (!string.IsNullOrWhiteSpace(detectedLang) && detectedLang.Length == 2)
-            {
-                Service.PluginLog.Debug($"Detected language: {detectedLang}");
-                return detectedLang;
-            }
-            
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Language detection failed");
-            return null;
-        }
-    }
-
     public static async Task<List<ModelInfo>> GetAvailableModelsAsync(string apiKey, CancellationToken cancellationToken = default)
     {
         var availableModels = new List<ModelInfo>();
@@ -335,8 +296,19 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
 
     private string BuildTranslationPrompt(string text, string sourceLanguage, string targetLanguage)
     {
-        return config.CustomPrompt
-            .Replace("{source_lang}", sourceLanguage, StringComparison.OrdinalIgnoreCase)
+        var prompt = config.CustomPrompt;
+        
+        if (sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            prompt = prompt.Replace("{source_lang}", "auto-detected language", StringComparison.OrdinalIgnoreCase);
+            prompt += " First detect the source language, then translate accordingly. ONLY the ISO 639-1 language code (e.g., 'en', 'ja', 'de').";
+        }
+        else
+        {
+            prompt = prompt.Replace("{source_lang}", sourceLanguage, StringComparison.OrdinalIgnoreCase);
+        }
+        
+        return prompt
             .Replace("{target_lang}", targetLanguage, StringComparison.OrdinalIgnoreCase)
             .Replace("{text}", text, StringComparison.OrdinalIgnoreCase);
     }

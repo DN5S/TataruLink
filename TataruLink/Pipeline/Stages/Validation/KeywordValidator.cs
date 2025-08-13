@@ -26,12 +26,9 @@ public class KeywordValidator(BlocklistManager blocklistManager)
         }
 
         // Check message content
-        if (blocklistManager.ContainsBlockedKeyword(plainTextContent))
-        {
-            return new ValueTask<ValidationResult>(ValidationResult.Failure($"Message blocked by content filter"));
-        }
-
-        return new ValueTask<ValidationResult>(ValidationResult.Success());
+        return blocklistManager.ContainsBlockedKeyword(plainTextContent) ? 
+                   new ValueTask<ValidationResult>(ValidationResult.Failure($"Message blocked by content filter")) : 
+                   new ValueTask<ValidationResult>(ValidationResult.Success());
     }
 
     public void Dispose() { }

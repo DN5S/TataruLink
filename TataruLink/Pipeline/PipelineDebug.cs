@@ -159,5 +159,6 @@ public class PipelineDebug : IDisposable
     public void Dispose()
     {
         ClearFailures();
+        GC.SuppressFinalize(this);
     }
 }

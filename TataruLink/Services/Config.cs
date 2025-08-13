@@ -148,28 +148,6 @@ public class Config : IDisposable
         Service.PluginLog.Information("Configuration reset to defaults");
     }
     
-    public void Reload()
-    {
-        try
-        {
-            if (File.Exists(configFilePath))
-            {
-                var json = File.ReadAllText(configFilePath);
-                var newData = JsonSerializer.Deserialize<TataruConfig>(json, JsonOptions);
-                if (newData != null)
-                {
-                    Data = newData;
-                    isDirty = false;
-                    Service.PluginLog.Information($"Configuration reloaded from {configFilePath}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Failed to reload configuration");
-        }
-    }
-    
     public void Dispose()
     {
         SaveImmediately();

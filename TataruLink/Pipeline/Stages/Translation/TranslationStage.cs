@@ -73,7 +73,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 var (text, segments, template) = SeStringUtils.PrepareForProviderWithGlossary(
                     message.OriginalContent, 
                     useXmlTags, 
-                    segment => glossaryManager.Apply(segment));
+                    glossaryManager.Apply);
                 return (text, segments, template);
             });
             
@@ -137,7 +137,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                         CharacterCount = textToTranslate.Length,
                     };
                     
-                    // Fire and forget cache save to avoid blocking pipeline
+                    // Fire and forget cache save to avoid blocking a pipeline
                     _ = Task.Run(async () => 
                     {
                         try

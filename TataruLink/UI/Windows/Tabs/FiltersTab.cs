@@ -177,6 +177,24 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
         
         ImGuiUtils.Spacing(2);
         
+        // Content Filters Section
+        ImGuiUtils.Section("Content Filters"u8);
+        ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, 
+            "Filter specific message content types to avoid unnecessary translations"u8);
+        ImGuiUtils.Spacing();
+        
+        // Auto-translate filter
+        var skipAutoTranslate = configuration.Filter.SkipAutoTranslate;
+        if (ImGui.Checkbox("Skip auto-translate terms"u8, ref skipAutoTranslate))
+        {
+            configuration.Filter.SkipAutoTranslate = skipAutoTranslate;
+            Service.Configuration.Save();
+            Service.PluginLog.Information($"Skip auto-translate: {skipAutoTranslate}");
+        }
+        ImGuiUtils.HelpMarker("When enabled, messages containing auto-translate terms are skipped.\\nAuto-translate terms are already localized game content (job names, actions, etc.)."u8);
+        
+        ImGuiUtils.Spacing(2);
+        
         // Validation Settings Section
         ImGuiUtils.Section("Validation Settings"u8);
         

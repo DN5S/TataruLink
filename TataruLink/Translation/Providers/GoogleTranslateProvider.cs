@@ -126,15 +126,6 @@ public class GoogleTranslateProvider : ITranslationProvider
             };
         }
     }
-
-    public async Task<string?> DetectLanguageAsync(
-        string text,
-        CancellationToken cancellationToken = default)
-    {
-        // Use the translation API with source="auto" and parse the detected language
-        var response = await TranslateAsync(text, "auto", "en", cancellationToken).ConfigureAwait(false);
-        return response.DetectedSourceLanguage;
-    }
     
     /// format: [[["translated text", "source text",null,null,0]],null,"detected_lang"]
     private (string? TranslatedText, string? DetectedLanguage) ParseGoogleResponse(string jsonResponse)

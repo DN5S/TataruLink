@@ -17,10 +17,6 @@ public interface ITranslationProvider
         string targetLanguage,
         CancellationToken cancellationToken = default);
 
-    Task<string?> DetectLanguageAsync(
-        string text,
-        CancellationToken cancellationToken = default);
-
     void Initialize(string? apiKey = null);
 }
 

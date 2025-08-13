@@ -113,15 +113,8 @@ public class TranslationOverlay : Window, IDisposable
     
     public override void PostDraw()
     {
-        if (config.ShowBorder)
-        {
-            ImGui.PopStyleColor(); // WindowBg
-            ImGui.PopStyleVar(2); // WindowRounding and WindowPadding
-        }
-        else
-        {
-            ImGui.PopStyleVar(2); // WindowPadding and WindowBorderSize
-        }
+        if (config.ShowBorder) ImGui.PopStyleColor(); // WindowBg
+        ImGui.PopStyleVar(2); // WindowPadding and WindowBorderSize
         
         // WARNING: Only save when changed to reduce config writes
         if (!lastSavedPosition.HasValue || lastSavedPosition.Value != Position || 
@@ -293,11 +286,6 @@ public class TranslationOverlay : Window, IDisposable
         {
             messageLock.Release();
         }
-    }
-    
-    public void UpdateConfig(OverlayWindowConfig newConfig)
-    {
-        // NOTE: Config reference shared, changes automatic
     }
     
     public void Dispose()

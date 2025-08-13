@@ -11,7 +11,6 @@ public interface IDataService : IDisposable, IAsyncDisposable
     
     Task InitializeAsync();
     
-    Task<TranslationCacheEntry?> GetCacheAsync(string key);
     Task SetCacheAsync(TranslationCacheEntry entry);
     Task<(bool found, TranslationCacheEntry? entry)> TryGetCacheAsync(string originalText, string sourceLanguage, string targetLanguage);
     

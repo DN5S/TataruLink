@@ -13,6 +13,7 @@ using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows;
 
+// ReSharper disable FieldCanBeMadeReadOnly.Local
 public class HistoryWindow : Window, IDisposable
 {
     private readonly IDataService dataService;

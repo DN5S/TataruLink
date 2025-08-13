@@ -4,6 +4,8 @@ public class FilterConfig
 {
     public bool EnableKeywordFilter { get; set; }
     
+    public bool SkipAutoTranslate { get; set; } = true;
+    
     // WARNING: Player messages are skipped during cutscenes, but NPC dialogue is still translated
     public bool SkipInCutscene { get; set; }
     

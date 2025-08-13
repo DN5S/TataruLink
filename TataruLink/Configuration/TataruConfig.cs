@@ -2,6 +2,7 @@ using Dalamud.Configuration;
 
 namespace TataruLink.Configuration;
 
+// ReSharper disable PropertyCanBeMadeInitOnly.Global
 public class TataruConfig : IPluginConfiguration
 {
     public int Version { get; set; } = 1;

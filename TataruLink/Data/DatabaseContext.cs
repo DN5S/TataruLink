@@ -113,7 +113,7 @@ public class DatabaseContext : DbContext
         Service.PluginLog.Information("Database vacuum completed");
     }
 
-    public Task<long> GetDatabaseSizeAsync(CancellationToken cancellationToken = default)
+    public Task<long> GetDatabaseSizeAsync()
     {
         var fileInfo = new FileInfo(dbPath); // Alternative: Use the file system to get database size without SQL
         return Task.FromResult(fileInfo.Exists ? fileInfo.Length : 0L);

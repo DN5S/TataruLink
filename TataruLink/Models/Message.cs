@@ -15,8 +15,6 @@ public sealed class Message
     public string PlainTextContent { get; }
     public string? TranslatedContent { get; set; }
     public TranslationStatus Status { get; set; }
-    public string? SourceLanguage { get; set; }
-    public string? TargetLanguage { get; set; }
     public string? TranslationEngine { get; set; }
     public TimeSpan? TranslationTime { get; set; }
     public bool IsFromCache { get; set; }
@@ -35,11 +33,14 @@ public sealed class Message
         Status = TranslationStatus.Pending;
     }
 
-    public bool NeedsTranslation()
-        => Status == TranslationStatus.Pending && !string.IsNullOrWhiteSpace(PlainTextContent);
-
     public bool IsTranslated()
         => Status == TranslationStatus.Completed && !string.IsNullOrWhiteSpace(TranslatedContent);
+    
+    public void Skip(string reason = "Skipped")
+    {
+        Status = TranslationStatus.Skipped;
+        TranslatedContent = reason;
+    }
 
     public void SetTranslation(string translatedText, string engine, TimeSpan translationTime, bool isFromCache = false)
     {
@@ -50,42 +51,12 @@ public sealed class Message
         Status = isFromCache ? TranslationStatus.Cached : TranslationStatus.Completed;
     }
 
-    public void SetError(string errorMessage)
-    {
-        ErrorMessage = errorMessage;
-        TranslatedContent = null;
-        Status = TranslationStatus.Failed;
-    }
-
-    public void Skip(string reason = "Skipped")
-    {
-        Status = TranslationStatus.Skipped;
-        TranslatedContent = reason;
-    }
-
-    public string GetDisplayText()
-        => IsTranslated() ? TranslatedContent! : PlainTextContent;
-
     public string GetChannelName()
         => ChatTypeUtils.GetChannelName(ChatType);
-
-    public ChatCategory GetCategory()
-        => ChatTypeUtils.GetCategory(ChatType);
-    
-    public bool IsSuccessful()
-        => Status == TranslationStatus.Completed && 
-           !string.IsNullOrWhiteSpace(TranslatedContent) &&
-           !TranslatedContent.Equals(PlainTextContent, StringComparison.Ordinal);
     
     public bool ShouldSkip()
     {
-        if (string.IsNullOrWhiteSpace(PlainTextContent))
-            return true;
-        
-        if (IsPureSymbols(PlainTextContent))
-            return true;
-        
-        return false;
+        return string.IsNullOrWhiteSpace(PlainTextContent) || IsPureSymbols(PlainTextContent);
     }
     
     private static bool IsPureSymbols(string text)
@@ -97,9 +68,6 @@ public sealed class Message
         }
         return true;
     }
-    
-    public bool IsExpired(TimeSpan timeout)
-        => DateTime.Now - Timestamp > timeout;
 }
 
 public enum TranslationStatus

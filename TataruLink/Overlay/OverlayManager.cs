@@ -29,7 +29,7 @@ public class OverlayManager : IDisposable
     {
         foreach (var overlayConfig in configuration.Display.OverlayWindows)
         {
-            CreateOverlayWindow(overlayConfig);
+            CreateOverlay(overlayConfig);
         }
         
         if (configuration.Display.OverlayWindows.Count == 0)
@@ -49,10 +49,10 @@ public class OverlayManager : IDisposable
         };
         
         configuration.Display.OverlayWindows.Add(defaultConfig);
-        CreateOverlayWindow(defaultConfig);
+        CreateOverlay(defaultConfig);
     }
     
-    private void CreateOverlayWindow(OverlayWindowConfig config)
+    public void CreateOverlay(OverlayWindowConfig config)
     {
         if (overlays.ContainsKey(config.Id))
             return;
@@ -64,18 +64,6 @@ public class OverlayManager : IDisposable
         Service.PluginLog.Information($"Created overlay window: {config.Name} (ID: {config.Id})");
     }
 
-    public TranslationOverlay AddOverlay(string name)
-    {
-        var config = configuration.Display.AddOverlayWindow(name);
-        CreateOverlayWindow(config);
-        Service.Configuration.Save();
-        return overlays[config.Id];
-    }
-
-    public void CreateOverlay(OverlayWindowConfig config)
-    {
-        CreateOverlayWindow(config);
-    }
     
     public void ShowOverlay(Guid id)
     {
@@ -108,21 +96,6 @@ public class OverlayManager : IDisposable
         }
         
         return false;
-    }
-
-    public void ToggleOverlay(Guid id, bool? visible = null)
-    {
-        if (overlays.TryGetValue(id, out var overlay))
-        {
-            overlay.IsOpen = visible ?? !overlay.IsOpen;
-            
-            var config = configuration.Display.GetOverlayWindow(id);
-            if (config != null)
-            {
-                config.IsEnabled = overlay.IsOpen;
-                Service.Configuration.Save();
-            }
-        }
     }
 
     public void SendMessage(Message message)

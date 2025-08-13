@@ -109,17 +109,14 @@ public class TranslationProviderStatus
             return $"[Error: {LastError.UserFriendlyMessage ?? LastError.Message}]";
         }
         
-        if (ConsecutiveFailures > 0)
-            return $"[Warning: {ConsecutiveFailures} recent failures]";
-            
-        return "[Ready]";
+        return ConsecutiveFailures > 0 ? $"[Warning: {ConsecutiveFailures} recent failures]" : "[Ready]";
     }
     
     public string GetStatusIndicator()
     {
-        if (!IsConfigured) return "[-]"; // Not configured
-        if (!IsHealthy) return "[X]"; // Error state
-        if (ConsecutiveFailures > 0) return "[!]"; // Warning state
-        return "[OK]"; // Healthy state
+        if (!IsConfigured) return "[-]";         // Not configured
+        if (!IsHealthy) return "[X]";            // Error state
+        return ConsecutiveFailures > 0 ? "[!]" : // Warning state
+                   "[OK]";                       // Healthy state
     }
 }
