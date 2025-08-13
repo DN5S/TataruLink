@@ -22,7 +22,7 @@ public class ChatCaptureStage : IPipelineStage
     private bool isInitialized;
     
     // WARNING: Limits concurrent processing to prevent thread pool exhaustion
-    private const int MaxConcurrentProcessing = 1;
+    private static readonly int MaxConcurrentProcessing = Math.Min(Environment.ProcessorCount, 4);
     private readonly SemaphoreSlim processingThrottle = new(MaxConcurrentProcessing);
 
     public string Name => "Chat Capture";
@@ -33,7 +33,7 @@ public class ChatCaptureStage : IPipelineStage
         this.pipeline = pipeline;
         this.configuration = configuration;
         
-        // WARNING: Bounded channel prevents memory growth during chat floods
+        // WARNING: The bounded channel prevents memory growth during chat floods
         var queueSize = configuration.Performance.MaxQueueSize > 0 ? configuration.Performance.MaxQueueSize : 1000;
         var options = new BoundedChannelOptions(queueSize)
         {

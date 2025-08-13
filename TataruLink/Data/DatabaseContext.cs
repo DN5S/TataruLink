@@ -95,13 +95,11 @@ public class DatabaseContext : DbContext
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        // EF Core handles database creation and migration
         await Database.EnsureCreatedAsync(cancellationToken);
         
         if (config.EnableWal)
         {
             // SQLite-specific: Enable Write-Ahead Logging for better concurrency
-            // These are admin commands with no user input - safe from injection
             await Database.ExecuteSqlAsync(
                 $"PRAGMA journal_mode=WAL; PRAGMA busy_timeout={config.ConnectionTimeoutSeconds * 1000};", 
                 cancellationToken);
@@ -111,7 +109,6 @@ public class DatabaseContext : DbContext
     public async Task VacuumAsync(CancellationToken cancellationToken = default)
     {
         // SQLite-specific: Rebuild a database file to reclaim space
-        // Admin command with no user input - safe from injection
         await Database.ExecuteSqlRawAsync("VACUUM;", cancellationToken);
         Service.PluginLog.Information("Database vacuum completed");
     }

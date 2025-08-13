@@ -356,78 +356,80 @@ public class DataService : IDataService
         if (cacheEntries.Count == 0 && historyEntries.Count == 0)
             return;
 
-        // Use a timeout to prevent holding the connection forever
-        using var writeTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        // Create a timeout token but don't dispose until tasks complete
+        var writeTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         
         try
         {
-            // Use a single transaction with proper timeout handling
-            var timeoutTask = Task.Delay(Timeout.Infinite, writeTimeoutCts.Token);
+            // Write operations in parallel but without transaction to avoid conflicts
+            var tasks = new List<Task>();
             
-            // Try to begin transaction with timeout
-            var transactionTask = unitOfWork.BeginTransactionAsync(cancellationToken: writeTimeoutCts.Token);
-            var completedTask = await Task.WhenAny(transactionTask, timeoutTask).ConfigureAwait(false);
-            
-            if (completedTask == timeoutTask)
+            if (cacheEntries.Count != 0)
             {
-                Service.PluginLog.Warning("Failed to acquire transaction within timeout, writing individually");
-                await WriteIndividuallyAsync(cacheEntries, historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
-                return;
+                // Capture the token value, not the source
+                var token = writeTimeoutCts.Token;
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries, token).ConfigureAwait(false);
+                        Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries");
+                    }
+                    catch (Exception ex)
+                    {
+                        Service.PluginLog.Warning(ex, $"Failed to write {cacheEntries.Count} cache entries, will retry individually");
+                        await WriteIndividualCacheEntriesAsync(cacheEntries, token).ConfigureAwait(false);
+                    }
+                }, token));
             }
             
-            await transactionTask.ConfigureAwait(false);
-            
-            try
+            if (historyEntries.Count != 0)
             {
-                // Batch write within transaction
-                if (cacheEntries.Count != 0)
+                // Capture the token value, not the source
+                var token = writeTimeoutCts.Token;
+                tasks.Add(Task.Run(async () =>
                 {
-                    await unitOfWork.TranslationCache.UpsertBatchAsync(cacheEntries, writeTimeoutCts.Token).ConfigureAwait(false);
-                }
-                
-                if (historyEntries.Count != 0)
-                {
-                    await unitOfWork.ChatHistory.AddBatchAsync(historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
-                }
-                
-                await unitOfWork.CommitAsync(writeTimeoutCts.Token).ConfigureAwait(false);
-                
-                if (cacheEntries.Count > 0)
-                    Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries");
-                if (historyEntries.Count > 0)
-                    Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries");
+                    try
+                    {
+                        await unitOfWork.ChatHistory.AddBatchAsync(historyEntries, token).ConfigureAwait(false);
+                        Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries");
+                    }
+                    catch (Exception ex)
+                    {
+                        Service.PluginLog.Warning(ex, $"Failed to write {historyEntries.Count} history entries, will retry individually");
+                        await WriteIndividualHistoryEntriesAsync(historyEntries, token).ConfigureAwait(false);
+                    }
+                }, token));
             }
-            catch
+            
+            if (tasks.Count > 0)
             {
-                await unitOfWork.RollbackAsync(writeTimeoutCts.Token).ConfigureAwait(false);
-                throw;
+                await Task.WhenAll(tasks).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
             Service.PluginLog.Warning($"Batch write timed out for {batch.Count} items");
-            await WriteIndividuallyAsync(cacheEntries, historyEntries, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("transaction"))
-        {
-            Service.PluginLog.Warning($"Transaction conflict, writing individually: {ex.Message}");
-            await WriteIndividuallyAsync(cacheEntries, historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Error(ex, $"Batch write failed for {batch.Count} items, attempting individual writes");
-            await WriteIndividuallyAsync(cacheEntries, historyEntries, writeTimeoutCts.Token).ConfigureAwait(false);
+            Service.PluginLog.Error(ex, $"Batch write failed for {batch.Count} items");
+        }
+        finally
+        {
+            // Dispose after all tasks complete
+            writeTimeoutCts.Dispose();
         }
     }
     
-    private async Task WriteIndividuallyAsync(
-        List<TranslationCacheEntry> cacheEntries, 
-        List<ChatHistoryEntry> historyEntries,
+    private async Task WriteIndividualCacheEntriesAsync(
+        List<TranslationCacheEntry> cacheEntries,
         CancellationToken cancellationToken)
     {
-        // Fallback to individual writes without transaction
         foreach (var entry in cacheEntries)
         {
+            if (cancellationToken.IsCancellationRequested) break;
+            
             try
             {
                 await unitOfWork.TranslationCache.UpsertAsync(entry, cancellationToken).ConfigureAwait(false);
@@ -438,8 +440,18 @@ public class DataService : IDataService
             }
         }
         
+        if (cacheEntries.Count > 0)
+            Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries individually");
+    }
+    
+    private async Task WriteIndividualHistoryEntriesAsync(
+        List<ChatHistoryEntry> historyEntries,
+        CancellationToken cancellationToken)
+    {
         foreach (var entry in historyEntries)
         {
+            if (cancellationToken.IsCancellationRequested) break;
+            
             try
             {
                 await unitOfWork.ChatHistory.AddAsync(entry, cancellationToken).ConfigureAwait(false);
@@ -450,8 +462,6 @@ public class DataService : IDataService
             }
         }
         
-        if (cacheEntries.Count > 0)
-            Service.PluginLog.Debug($"Wrote {cacheEntries.Count} cache entries individually");
         if (historyEntries.Count > 0)
             Service.PluginLog.Debug($"Wrote {historyEntries.Count} history entries individually");
     }

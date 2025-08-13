@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Dalamud.Game.Command;
 using Dalamud.Plugin;
@@ -52,14 +53,33 @@ public sealed class Plugin : IDalamudPlugin
     {
         var configuration = Service.Configuration.Data;
         
-        // Initialize database and repositories
+        // Initialize the database synchronously to prevent race conditions
         dataService = new DataService(pluginInterface);
-        _ = Task.Run(async () => await dataService.InitializeAsync());
+        var initTask = Task.Run(async () =>
+        {
+            await dataService.InitializeAsync();
+            
+            // Initialize database context for managers after dataService is ready
+            databaseContext = new DatabaseContext(pluginInterface, configuration.Cache);
+            await databaseContext.InitializeAsync();
+        });
         
-        // Create database context and unit of work for managers
-        databaseContext = new DatabaseContext(pluginInterface, configuration.Cache);
+        // Wait for database initialization with timeout
+        if (!initTask.Wait(TimeSpan.FromSeconds(10)))
+        {
+            Service.PluginLog.Error("Database initialization timed out");
+            throw new TimeoutException("Failed to initialize database within timeout period");
+        }
+        
+        // Ensure database context was initialized successfully
+        if (databaseContext == null)
+        {
+            Service.PluginLog.Error("Database context initialization failed");
+            throw new InvalidOperationException("Database context is null after initialization");
+        }
+        
+        // Create a unit of work after a database is initialized
         unitOfWork = new UnitOfWork(databaseContext, configuration.Cache);
-        _ = Task.Run(async () => await databaseContext.InitializeAsync());
         
         // Initialize managers with repositories
         glossaryManager = new GlossaryManager(unitOfWork.Glossary);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Dalamud.Game.Text;
@@ -38,53 +39,74 @@ public class DisplayStage(TataruConfig configuration, IDataService dataService, 
             return message;
         }
 
+        // Execute all display operations concurrently
+        var displayTasks = new List<Task>();
+
+        // Task 1: Display in game chat
         if (configuration.Display.ShowInChat)
         {
-            try
+            displayTasks.Add(Task.Run(() =>
             {
-                DisplayInGameChat(message, configuration);
-                Service.PluginLog.Debug($"Displayed translation in game chat for message {message.Id}");
-            }
-            catch (Exception ex)
-            {
-                Service.PluginLog.Error(ex, "Failed to display translation in game chat");
-            }
+                try
+                {
+                    DisplayInGameChat(message, configuration);
+                    Service.PluginLog.Debug($"Displayed translation in game chat for message {message.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Error(ex, "Failed to display translation in game chat");
+                }
+            }));
         }
 
+        // Task 2: Send to overlay windows
         if (overlayManager != null && configuration.Display.GetActiveOverlays().Any())
         {
+            displayTasks.Add(Task.Run(() =>
+            {
+                try
+                {
+                    overlayManager.SendMessage(message);
+                    Service.PluginLog.Debug($"Sent message to overlay windows for message {message.Id}");
+                }
+                catch (Exception ex)
+                {
+                    Service.PluginLog.Error(ex, "Failed to send message to overlay windows");
+                }
+            }));
+        }
+
+        // Task 3: Save to the history database
+        var cacheId = context.Get<string>("translation.cache_id");
+        var historyEntry = new ChatHistoryEntry
+        {
+            MessageId = message.Id,
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            ChatType = message.ChatType,
+            ChatTypeName = message.GetChannelName(),
+            SenderName = message.SenderName,
+            OriginalContent = message.PlainTextContent,
+            TranslatedContent = message.TranslatedContent,
+            TranslationCacheId = cacheId
+        };
+        
+        displayTasks.Add(Task.Run(async () =>
+        {
             try
             {
-                overlayManager.SendMessage(message);
-                Service.PluginLog.Debug($"Sent message to overlay windows for message {message.Id}");
+                await dataService.AddHistoryAsync(historyEntry);
+                Service.PluginLog.Debug($"Chat history saved for message {message.Id}");
             }
             catch (Exception ex)
             {
-                Service.PluginLog.Error(ex, "Failed to send message to overlay windows");
+                Service.PluginLog.Error(ex, "Failed to save chat history");
             }
-        }
+        }));
 
-        try
+        // Wait for all display operations to complete
+        if (displayTasks.Count > 0)
         {
-            var cacheId = context.Get<string>("translation.cache_id");
-            var historyEntry = new ChatHistoryEntry
-            {
-                MessageId = message.Id,
-                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                ChatType = message.ChatType,
-                ChatTypeName = message.GetChannelName(),
-                SenderName = message.SenderName,
-                OriginalContent = message.PlainTextContent,
-                TranslatedContent = message.TranslatedContent,
-                TranslationCacheId = cacheId
-            };
-            
-            await dataService.AddHistoryAsync(historyEntry);
-            Service.PluginLog.Debug($"Chat history saved for message {message.Id}");
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Failed to save chat history");
+            await Task.WhenAll(displayTasks);
         }
 
         context.Set("display.completed", true);

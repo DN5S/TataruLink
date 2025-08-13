@@ -1,36 +1,64 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Threading;
 
 namespace TataruLink.Models;
 
 public class TranslationCacheEntry
 {
+    [MaxLength(50)]
     public string Id { get; init; } = Guid.NewGuid().ToString();
-    public string OriginalText { get; set; } = string.Empty;
+    
+    [MaxLength(4000)]
+    public string OriginalText { get; init; } = string.Empty;
+    
+    [MaxLength(4000)]
     public string TranslatedText { get; set; } = string.Empty;
-    public string SourceLanguage { get; set; } = string.Empty;
-    public string? DetectedLanguage { get; set; }
-    public string TargetLanguage { get; set; } = string.Empty;
-    public string Provider { get; set; } = string.Empty;
+    
+    [MaxLength(10)] // Language codes are short (e.g., "en", "ja", "de")
+    public string SourceLanguage { get; init; } = string.Empty;
+    
+    [MaxLength(10)]
+    public string? DetectedLanguage { get; init; }
+    
+    [MaxLength(10)]
+    public string TargetLanguage { get; init; } = string.Empty;
+    
+    [MaxLength(50)] // Provider names are short
+    public string Provider { get; init; } = string.Empty;
+    
     public long CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public long LastAccessedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public int AccessCount { get; set; } = 1;
     public int CharacterCount { get; set; }
     public int? TimeTakenMs { get; set; }
+    
+    [MaxLength(100)]
     public string CacheKey { get; set; } = string.Empty;
 }
 
 public class ChatHistoryEntry
 {
-    public long Id { get; set; }
-    public Guid MessageId { get; set; }
+    public long Id { get; init; }
+    public Guid MessageId { get; init; }
     public long Timestamp { get; set; }
-    public ushort ChatType { get; set; }
-    public string? ChatTypeName { get; set; }
-    public string? SenderName { get; set; }
-    public string OriginalContent { get; set; } = string.Empty;
+    public ushort ChatType { get; init; }
+    
+    [MaxLength(50)] // Chat type names are short
+    public string? ChatTypeName { get; init; }
+    
+    [MaxLength(100)] // Character names in FFXIV have a limit
+    public string? SenderName { get; init; }
+    
+    [MaxLength(4000)]
+    public string OriginalContent { get; init; } = string.Empty;
+    
+    [MaxLength(4000)]
     public string? TranslatedContent { get; set; }
-    public string? TranslationCacheId { get; set; }
+    
+    [MaxLength(50)]
+    public string? TranslationCacheId { get; init; }
+    
     public bool IsVisible { get; set; } = true;
 }
 
@@ -68,9 +96,14 @@ public class CacheStatistics
 
 public class GlossaryDbEntry
 {
-    public long Id { get; set; }
+    public long Id { get; init; }
+    
+    [MaxLength(500)]
     public string Original { get; set; } = string.Empty;
+    
+    [MaxLength(500)]
     public string Replacement { get; set; } = string.Empty;
+    
     public bool IsEnabled { get; set; } = true;
     public long CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     public long UpdatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -78,8 +111,11 @@ public class GlossaryDbEntry
 
 public class BlocklistDbEntry
 {
-    public long Id { get; set; }
+    public long Id { get; init; }
+    
+    [MaxLength(200)]
     public string Keyword { get; set; } = string.Empty;
+    
     public bool IsEnabled { get; set; } = true;
     public long CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 }

@@ -66,13 +66,24 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             // WARNING: Google Translate breaks XML structure
             var useXmlTags = translationService.SupportsStructuredTranslation;
             
-            // NOTE: Segment-wise glossary preserves SeString structure
-            var (textToTranslate, segmentCount, payloadTemplate) = SeStringUtils.PrepareForProviderWithGlossary(
-                message.OriginalContent, 
-                useXmlTags, 
-                segment => glossaryManager.Apply(segment));
+            // Start parallel operations
+            var glossaryTask = Task.Run(() =>
+            {
+                // NOTE: Segment-wise glossary preserves SeString structure
+                var (text, segments, template) = SeStringUtils.PrepareForProviderWithGlossary(
+                    message.OriginalContent, 
+                    useXmlTags, 
+                    segment => glossaryManager.Apply(segment));
+                return (text, segments, template);
+            });
             
-            var originalPrepared = SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags);
+            var originalPreparedTask = Task.Run(() => 
+                SeStringUtils.PrepareForProvider(message.OriginalContent, useXmlTags));
+            
+            // Wait for glossary application
+            var (textToTranslate, segmentCount, payloadTemplate) = await glossaryTask;
+            var originalPrepared = await originalPreparedTask;
+            
             var glossaryApplied = textToTranslate != originalPrepared.PreparedText;
             context.Set("glossary.applied", glossaryApplied);
             context.Set("translation.payloadTemplate", payloadTemplate);
@@ -84,7 +95,9 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             
             Service.PluginLog.Debug($"Text segments for translation ({segmentCount}) [Provider: {translationService.ProviderName}, XML: {useXmlTags}, Glossary: {glossaryApplied}]: {textToTranslate}");
             
-            var (cacheFound, cacheEntry) = await dataService.TryGetCacheAsync(textToTranslate, sourceLanguage, targetLanguage);
+            // Start cache lookup in parallel
+            var cacheTask = dataService.TryGetCacheAsync(textToTranslate, sourceLanguage, targetLanguage);
+            var (cacheFound, cacheEntry) = await cacheTask;
             string? translatedText;
             
             if (cacheFound && cacheEntry != null)
@@ -111,6 +124,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 
                 if (!cacheFound)
                 {
+                    // Save to cache asynchronously without waiting
                     var cacheEntryToSave = new TranslationCacheEntry
                     {
                         OriginalText = textToTranslate,
@@ -123,8 +137,19 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                         CharacterCount = textToTranslate.Length,
                     };
                     
-                    await dataService.SetCacheAsync(cacheEntryToSave);
-                    Service.PluginLog.Debug($"Translation saved to cache: {cacheEntryToSave.Id}");
+                    // Fire and forget cache save to avoid blocking pipeline
+                    _ = Task.Run(async () => 
+                    {
+                        try
+                        {
+                            await dataService.SetCacheAsync(cacheEntryToSave);
+                            Service.PluginLog.Debug($"Translation saved to cache: {cacheEntryToSave.Id}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Service.PluginLog.Warning(ex, "Failed to save translation to cache");
+                        }
+                    });
                 }
                 
                 context.Set("translation.processed", true);

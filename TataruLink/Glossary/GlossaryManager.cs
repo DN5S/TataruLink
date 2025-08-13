@@ -36,7 +36,7 @@ public class GlossaryManager : IDisposable
         }
     }
 
-    public List<GlossaryDbEntry> GetCachedEntries() => new(cachedEntries);
+    public List<GlossaryDbEntry> GetCachedEntries() => [..cachedEntries];
 
     public async Task LoadFromDatabaseAsync()
     {
@@ -153,7 +153,7 @@ public class GlossaryManager : IDisposable
             // Add to memory cache
             cachedEntries.Add(added);
             
-            // Rebuild trie with new entry
+            // Rebuild trie with a new entry
             Build();
             
             Service.PluginLog.Information($"Added glossary entry: '{original}' -> '{replacement}'");
@@ -204,7 +204,7 @@ public class GlossaryManager : IDisposable
             var deleted = await repository.DeleteAsync(id);
             if (deleted)
             {
-                // Remove from memory cache
+                // Remove from the memory cache
                 cachedEntries.Remove(cached);
                 
                 // Rebuild trie without deleted entry
@@ -279,7 +279,7 @@ public class GlossaryManager : IDisposable
         {
             var added = await repository.AddBatchAsync(entries);
             
-            // Reload from database to get all entries with IDs
+            // Reload from the database to get all entries with IDs
             await LoadFromDatabaseAsync();
             
             Service.PluginLog.Information($"Imported {added} glossary entries");

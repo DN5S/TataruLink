@@ -12,6 +12,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
 {
     private readonly Dictionary<string, ITranslationProvider> providers = new();
     private readonly Dictionary<string, TranslationProviderStatus> providerStatuses = new();
+    private readonly Dictionary<string, CircuitBreaker> circuitBreakers = new();
     private readonly SemaphoreSlim providerLock = new(1, 1);
     private ITranslationProvider? activeProvider;
 
@@ -34,6 +35,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 IsConfigured = false,
                 IsHealthy = true
             };
+            
+            // Initialize circuit breaker for each provider
+            circuitBreakers[provider.Name] = new CircuitBreaker(
+                failureThreshold: 3,
+                openTimeoutSeconds: 30);
         }
         
         SelectProvider(configuration.Translation.Engine);
@@ -123,20 +129,56 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 ? configuration.Translation.MaxRetryAttempts 
                 : 0;
 
+            // Get circuit breaker for current provider
+            var circuitBreaker = circuitBreakers.TryGetValue(activeProvider.Name, out var cb) ? cb : null;
+            
             while (retryCount <= maxRetries)
             {
                 try
                 {
+                    // Check circuit breaker state
+                    if (circuitBreaker is { State: CircuitState.Open })
+                    {
+                        Service.PluginLog.Debug($"Circuit breaker OPEN for {activeProvider.Name}, skipping translation");
+                        UpdateProviderStatus(activeProvider.Name, success: false, 
+                            errorMessage: "Provider temporarily unavailable (circuit breaker open)");
+                        return null;
+                    }
+                    
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromMilliseconds(configuration.Translation.TimeoutMs));
                     
-                    var response = await activeProvider.TranslateAsync(
-                        text, 
-                        sourceLanguage, 
-                        targetLanguage, 
-                        cts.Token).ConfigureAwait(false);
+                    // Execute with circuit breaker protection
+                    TranslationResponse? response;
+                    if (circuitBreaker != null)
+                    {
+                        var (success, result) = await circuitBreaker.TryExecuteAsync(
+                            async () => await activeProvider.TranslateAsync(
+                                text, 
+                                sourceLanguage, 
+                                targetLanguage, 
+                                cts.Token),
+                            $"Translation-{activeProvider.Name}");
+                        
+                        if (!success && circuitBreaker.State == CircuitState.Open)
+                        {
+                            // Circuit opened during execution
+                            UpdateProviderStatus(activeProvider.Name, success: false,
+                                errorMessage: "Provider circuit breaker opened");
+                            return null;
+                        }
+                        response = result;
+                    }
+                    else
+                    {
+                        response = await activeProvider.TranslateAsync(
+                            text, 
+                            sourceLanguage, 
+                            targetLanguage, 
+                            cts.Token).ConfigureAwait(false);
+                    }
 
-                    if (response.Success)
+                    if (response?.Success == true)
                     {
                         Service.PluginLog.Debug($"Translation successful: {text[..Math.Min(20, text.Length)]}... -> " +
                                                 $"{response.TranslatedText?[..Math.Min(20, response.TranslatedText.Length)]}...");
@@ -144,11 +186,11 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                         return response.TranslatedText;
                     }
 
-                    Service.PluginLog.Warning($"Translation failed (attempt {retryCount + 1}/{maxRetries + 1}): {response.Error}");
+                    Service.PluginLog.Warning($"Translation failed (attempt {retryCount + 1}/{maxRetries + 1}): {response?.Error ?? "null response"}");
                     
                     if (retryCount >= maxRetries)
                     {
-                        UpdateProviderStatus(activeProvider.Name, success: false, errorMessage: response.Error);
+                        UpdateProviderStatus(activeProvider.Name, success: false, errorMessage: response?.Error);
                     }
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -197,6 +239,13 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     public void ChangeProvider(string providerName)
     { 
         Service.PluginLog.Information($"Changing translation provider from {ProviderName} to {providerName}");
+        
+        // Reset circuit breaker for the new provider
+        if (circuitBreakers.TryGetValue(providerName, out var circuitBreaker))
+        {
+            circuitBreaker.Reset();
+            Service.PluginLog.Debug($"Reset circuit breaker for provider {providerName}");
+        }
         
         configuration.Translation.Engine = providerName;
         Service.Configuration.Save();
@@ -323,6 +372,24 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         finally
         {
             providerLock.Release();
+        }
+    }
+    
+    public CircuitState? GetProviderCircuitState(string providerName)
+    {
+        if (circuitBreakers.TryGetValue(providerName, out var circuitBreaker))
+        {
+            return circuitBreaker.State;
+        }
+        return null;
+    }
+    
+    public void ResetProviderCircuitBreaker(string providerName)
+    {
+        if (circuitBreakers.TryGetValue(providerName, out var circuitBreaker))
+        {
+            circuitBreaker.Reset();
+            Service.PluginLog.Information($"Circuit breaker reset for provider {providerName}");
         }
     }
     
