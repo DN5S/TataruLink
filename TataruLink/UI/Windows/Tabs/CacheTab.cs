@@ -85,7 +85,7 @@ public class CacheTab(IDataService dataService)
             var config = Service.Configuration.Data.Cache;
             ImGui.TextUnformatted($"Pre-load Limit: {config.MaxHotCacheEntries} entries");
             ImGui.TextUnformatted($"Hot Threshold: {config.MinAccessCountForHot} accesses");
-            
+            ImGui.SameLine();
             ImGuiUtils.HelpMarker("Translations accessed this many times or more are considered 'hot' and get priority caching"u8);
         });
     }

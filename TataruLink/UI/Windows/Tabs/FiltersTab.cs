@@ -30,7 +30,7 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
                 configuration.Filter.EnableKeywordFilter = enableKeywordFilter;
                 Service.Configuration.Save();
             }
-            
+            ImGui.SameLine();
             ImGuiUtils.HelpMarker("When enabled, messages containing blocked keywords or from blocked senders will not be translated."u8);
             
             ImGui.Separator();
@@ -153,6 +153,7 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip in cutscene: {skipInCutscene}");
         }
+        ImGui.SameLine();
         ImGuiUtils.HelpMarker("When enabled, player messages are skipped during cutscenes.\nNPC dialogue will still be translated."u8);
         
         // Loading screen filter
@@ -163,6 +164,7 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip in loading: {skipInLoading}");
         }
+        ImGui.SameLine();
         ImGuiUtils.HelpMarker("When enabled, all translations are skipped while loading between areas."u8);
         
         // Retainer bell filter
@@ -173,6 +175,7 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip at retainer: {skipInRetainer}");
         }
+        ImGui.SameLine();
         ImGuiUtils.HelpMarker("When enabled, translations are skipped while accessing retainers."u8);
         
         ImGuiUtils.Spacing(2);
@@ -191,6 +194,7 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
             Service.Configuration.Save();
             Service.PluginLog.Information($"Skip auto-translate: {skipAutoTranslate}");
         }
+        ImGui.SameLine();
         ImGuiUtils.HelpMarker("When enabled, messages containing auto-translate terms are skipped.\\nAuto-translate terms are already localized game content (job names, actions, etc.)."u8);
         
         ImGuiUtils.Spacing(2);
@@ -205,6 +209,7 @@ public class FiltersTab(TataruConfig configuration, BlocklistManager blocklistMa
             configuration.Validation.DuplicateDetectionPeriodMs = dupePeriod;
             Service.Configuration.Save();
         }
+        ImGui.SameLine();
         ImGuiUtils.HelpMarker("Messages identical to recent ones within this time period will not be translated again."u8);
         
         ImGuiUtils.Spacing(2);
