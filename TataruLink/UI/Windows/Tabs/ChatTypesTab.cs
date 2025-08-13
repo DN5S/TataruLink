@@ -51,7 +51,7 @@ public class ChatTypesTab(TataruConfig configuration)
         {
             // Row 1: Public and Party
             ImGui.TableNextColumn();
-            if (ImGui.Button("Public Chat"u8))
+            if (ImGui.Button("Public"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.PublicChat, true);
             }
@@ -71,7 +71,7 @@ public class ChatTypesTab(TataruConfig configuration)
             }
             
             ImGui.TableNextColumn();
-            if (ImGui.Button("Party Chat"u8))
+            if (ImGui.Button("Party"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.PartyChat, true);
             }
@@ -92,7 +92,7 @@ public class ChatTypesTab(TataruConfig configuration)
             
             // Row 2: Private and Linkshells
             ImGui.TableNextColumn();
-            if (ImGui.Button("Private Chat"u8))
+            if (ImGui.Button("Tell"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.PrivateChat, true);
             }
@@ -102,7 +102,7 @@ public class ChatTypesTab(TataruConfig configuration)
             }
             
             ImGui.TableNextColumn();
-            if (ImGui.Button("[X] Private"u8))
+            if (ImGui.Button("[X] Tell"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.PrivateChat, false);
             }
@@ -122,7 +122,7 @@ public class ChatTypesTab(TataruConfig configuration)
             }
             
             ImGui.TableNextColumn();
-            if (ImGui.Button("[X] LS"u8))
+            if (ImGui.Button("[X] Linkshells"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.Linkshells, false);
             }
@@ -133,7 +133,7 @@ public class ChatTypesTab(TataruConfig configuration)
             
             // Row 3: CWLS and Community
             ImGui.TableNextColumn();
-            if (ImGui.Button("Cross-World LS"u8))
+            if (ImGui.Button("CWLS"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, true);
             }
@@ -174,7 +174,7 @@ public class ChatTypesTab(TataruConfig configuration)
             
             // Row 4: System and NPC
             ImGui.TableNextColumn();
-            if (ImGui.Button("System Msgs"u8))
+            if (ImGui.Button("System"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.System, true);
             }
@@ -194,7 +194,7 @@ public class ChatTypesTab(TataruConfig configuration)
             }
             
             ImGui.TableNextColumn();
-            if (ImGui.Button("NPC Dialogue"u8))
+            if (ImGui.Button("NPC"u8))
             {
                 TogglePreset(ChatTypeUtils.Presets.Npc, true);
             }

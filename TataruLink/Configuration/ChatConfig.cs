@@ -19,12 +19,7 @@ public class ChatConfig
             
         // NOTE: GM types fallback to parent type settings
         var parentType = ChatTypeUtils.GetParentType(chatTypeId);
-        if (parentType != chatTypeId)
-        {
-            return EnabledChatTypes.GetValueOrDefault(parentType, false);
-        }
-        
-        return false;
+        return parentType != chatTypeId && EnabledChatTypes.GetValueOrDefault(parentType, false);
     }
     
     public void SetChatTypeEnabled(ushort chatTypeId, bool enabled)
@@ -32,9 +27,6 @@ public class ChatConfig
         EnabledChatTypes[chatTypeId] = enabled;
     }
     
-    /// <summary>
-    /// Get the provider for a specific chat type
-    /// </summary>
     public string? GetProviderForChatType(ushort chatTypeId)
     {
         // First check if there's a specific provider for this exact type
@@ -53,10 +45,7 @@ public class ChatConfig
         
         return DefaultProvider;
     }
-    
-    /// <summary>
-    /// Set the provider for a specific chat type
-    /// </summary>
+
     public void SetProviderForChatType(ushort chatTypeId, string? provider)
     {
         if (provider == null)
@@ -69,9 +58,6 @@ public class ChatConfig
         }
     }
     
-    /// <summary>
-    /// Get all enabled chat type IDs
-    /// </summary>
     public IEnumerable<ushort> GetEnabledChatTypes()
     {
         return EnabledChatTypes.Where(kvp => kvp.Value).Select(kvp => kvp.Key);

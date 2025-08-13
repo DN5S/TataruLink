@@ -306,8 +306,17 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                         // Get color or use default if not set
                         if (!overlay.ChatTypeColors.TryGetValue(chatTypeValue, out var color))
                         {
-                            // Use default color if not in dictionary
-                            color = new Vector4(0.8f, 0.8f, 0.8f, 1.0f);
+                            // Try to get the default color from a new overlay config
+                            var defaultConfig = new OverlayWindowConfig();
+                            if (defaultConfig.ChatTypeColors.TryGetValue(chatTypeValue, out var defaultColor))
+                            {
+                                color = defaultColor;
+                            }
+                            else
+                            {
+                                // Use default gray color if not in defaults
+                                color = new Vector4(0.8f, 0.8f, 0.8f, 1.0f);
+                            }
                             overlay.ChatTypeColors[chatTypeValue] = color;
                         }
                         

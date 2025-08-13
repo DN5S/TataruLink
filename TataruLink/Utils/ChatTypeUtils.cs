@@ -39,6 +39,7 @@ public static class ChatTypeUtils
         XivChatType.CrossLinkShell6,
         XivChatType.CrossLinkShell7,
         XivChatType.CrossLinkShell8,
+        XivChatType.CrossParty,
         XivChatType.CustomEmote,
         XivChatType.StandardEmote,
         XivChatType.NoviceNetwork,
@@ -63,9 +64,12 @@ public static class ChatTypeUtils
     
     private static readonly HashSet<XivChatType> SystemChannels =
     [
+        XivChatType.Debug,
+        XivChatType.Urgent,
+        XivChatType.Notice,
+        XivChatType.Echo,
         XivChatType.SystemMessage,
         XivChatType.SystemError,
-        XivChatType.Notice,
         XivChatType.GatheringSystemMessage,
         XivChatType.RetainerSale
     ];
@@ -146,13 +150,15 @@ public static class ChatTypeUtils
         
         public static readonly ushort[] System = 
         [
+            (ushort)XivChatType.Debug,
+            (ushort)XivChatType.Urgent,
+            (ushort)XivChatType.Notice,
+            (ushort)XivChatType.Echo,
             (ushort)XivChatType.SystemMessage,
             (ushort)XivChatType.SystemError,
-            (ushort)XivChatType.Notice,
             (ushort)XivChatType.GatheringSystemMessage,
             (ushort)XivChatType.RetainerSale,
-            ChatType.Urgent, ChatType.Notice, ChatType.Alarm, ChatType.Echo, 
-            ChatType.System, ChatType.GatheringSystem, ChatType.Error, ChatType.RetainerSale
+            ChatType.Alarm  // 55 - not in XivChatType enum
         ];
         
         public static readonly ushort[] Gm = Enumerable.Range(80, 15).Select(i => (ushort)i).ToArray();
@@ -284,6 +290,9 @@ public static class ChatTypeUtils
     {
         return type switch
         {
+            XivChatType.Debug => "Debug",
+            XivChatType.Urgent => "Urgent",
+            XivChatType.Notice => "Notice",
             XivChatType.Say => "Say",
             XivChatType.Shout => "Shout",
             XivChatType.Yell => "Yell",
@@ -312,6 +321,11 @@ public static class ChatTypeUtils
             XivChatType.CrossLinkShell6 => "CWLS6",
             XivChatType.CrossLinkShell7 => "CWLS7",
             XivChatType.CrossLinkShell8 => "CWLS8",
+            XivChatType.Echo => "Echo",
+            XivChatType.SystemMessage => "System",
+            XivChatType.SystemError => "Error",
+            XivChatType.GatheringSystemMessage => "Gathering",
+            XivChatType.RetainerSale => "Retainer",
             _ => "Other"
         };
     }

@@ -35,6 +35,7 @@ public class OverlayManager : IDisposable
         if (configuration.Display.OverlayWindows.Count == 0)
         {
             CreateDefaultOverlay();
+            Service.Configuration.Save();
         }
     }
 
@@ -44,12 +45,11 @@ public class OverlayManager : IDisposable
         {
             Name = "Main Translation",
             IsEnabled = true,
-            EnabledChatTypes = new HashSet<ushort>()
+            EnabledChatTypes = []
         };
         
         configuration.Display.OverlayWindows.Add(defaultConfig);
         CreateOverlayWindow(defaultConfig);
-        Service.Configuration.Save();
     }
     
     private void CreateOverlayWindow(OverlayWindowConfig config)
