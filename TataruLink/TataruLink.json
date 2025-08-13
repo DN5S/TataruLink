@@ -1,6 +1,6 @@
 {
   "Author": "DN5S",
-  "Name": "TataruLink",
+  "Name": "Tataru Link",
   "Punchline": "Tataru Punch",
   "Description": "Chat Translator",
   "ApplicableVersion": "any",
@@ -8,5 +8,7 @@
     "Tataru",
     "Link",
     "Translator"
-  ]
+  ],
+  "RepoUrl": "https://github.com/DN5S/TataruLink",
+  "AcceptsFeedback": true
 }
