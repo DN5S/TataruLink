@@ -22,7 +22,7 @@ public interface ITranslationService : IDisposable, IAsyncDisposable
     
     void ChangeProvider(string providerName);
     
-    void UpdateApiKey(string providerName, string apiKey);
+    Task UpdateApiKeyAsync(string providerName, string apiKey);
 
     TranslationProviderStatus? GetActiveProviderStatus();
 }

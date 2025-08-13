@@ -43,7 +43,8 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 openTimeoutSeconds: 30);
         }
         
-        SelectProvider(configuration.Translation.Engine);
+        // Use GetAwaiter().GetResult() here since Initialize is synchronous
+        SelectProviderAsync(configuration.Translation.Engine).GetAwaiter().GetResult();
         
         Service.PluginLog.Information($"Translation service initialized with provider: {ProviderName}");
     }
@@ -54,9 +55,9 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         Service.PluginLog.Debug($"Registered translation provider: {provider.Name}");
     }
 
-    private void SelectProvider(string providerName)
+    private async Task SelectProviderAsync(string providerName)
     {
-        if (!providerLock.Wait(TimeSpan.FromSeconds(5)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(5)))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for SelectProvider");
             return;
@@ -253,17 +254,18 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         configuration.Translation.Engine = providerName;
         Service.Configuration.Save();
         
-        SelectProvider(providerName);
+        // Use GetAwaiter().GetResult() here since ChangeProvider is synchronous
+        SelectProviderAsync(providerName).GetAwaiter().GetResult();
     }
 
-    public void UpdateApiKey(string providerName, string apiKey)
+    public async Task UpdateApiKeyAsync(string providerName, string apiKey)
     {
         Service.PluginLog.Information($"Updating API key for provider: {providerName}");
 
         configuration.Translation.SetApiKey(providerName, apiKey);
         Service.Configuration.Save();
 
-        if (!providerLock.Wait(TimeSpan.FromSeconds(5)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(5)))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for UpdateApiKey");
             return;
@@ -339,9 +341,9 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         }
     }
     
-    public TranslationProviderStatus? GetProviderStatus(string providerName)
+    public async Task<TranslationProviderStatus?> GetProviderStatusAsync(string providerName)
     {
-        if (!providerLock.Wait(TimeSpan.FromSeconds(1)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(1)))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for GetProviderStatus");
             return null;
@@ -358,12 +360,33 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public TranslationProviderStatus? GetActiveProviderStatus()
     {
-        return activeProvider != null ? GetProviderStatus(activeProvider.Name) : null;
+        if (activeProvider == null) return null;
+        
+        // Try non-blocking read for performance
+        if (providerLock.Wait(0))
+        {
+            try
+            {
+                return providerStatuses.GetValueOrDefault(activeProvider.Name);
+            }
+            finally
+            {
+                providerLock.Release();
+            }
+        }
+        
+        // If the lock is busy, return a status without waiting
+        return new TranslationProviderStatus
+        {
+            ProviderName = activeProvider.Name,
+            IsConfigured = activeProvider.IsConfigured,
+            IsHealthy = true // Assume it healthy if we can't get lock
+        };
     }
     
-    public IReadOnlyDictionary<string, TranslationProviderStatus> GetAllProviderStatuses()
+    public async Task<IReadOnlyDictionary<string, TranslationProviderStatus>> GetAllProviderStatusesAsync()
     {
-        if (!providerLock.Wait(TimeSpan.FromSeconds(1)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(1)))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for GetAllProviderStatuses");
             return new Dictionary<string, TranslationProviderStatus>();

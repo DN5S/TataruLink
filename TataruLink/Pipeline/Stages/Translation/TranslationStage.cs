@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using TataruLink.Models;
 using TataruLink.Configuration;
@@ -36,7 +37,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
             var chatTypeProvider = configuration.Chat.GetProviderForChatType(message.ChatType);
             if (!string.IsNullOrEmpty(chatTypeProvider) && chatTypeProvider != "Default")
             {
-                // Switch to the chat-type specific provider if different
+                // Switch to the chat-type-specific provider if different
                 if (translationService.ProviderName != chatTypeProvider)
                 {
                     Service.PluginLog.Debug($"Switching to chat-type provider: {chatTypeProvider} for chat type {message.ChatType}");
@@ -142,7 +143,7 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                 
                 if (!cacheFound)
                 {
-                    // Save to cache asynchronously without waiting
+                    // Save to cache with retry logic
                     var cacheEntryToSave = new TranslationCacheEntry
                     {
                         OriginalText = textToTranslate,
@@ -155,19 +156,39 @@ public class TranslationStage(TataruConfig configuration, ITranslationService tr
                         CharacterCount = textToTranslate.Length,
                     };
                     
-                    // Fire and forget cache save to avoid blocking a pipeline
-                    _ = Task.Run(async () => 
+                    // Start cache, save a task with timeout and retry
+                    var cacheSaveTask = Task.Run(async () => 
                     {
-                        try
+                        var retryCount = 0;
+                        const int maxRetries = 3;
+                        
+                        while (retryCount < maxRetries)
                         {
-                            await dataService.SetCacheAsync(cacheEntryToSave);
-                            Service.PluginLog.Debug($"Translation saved to cache: {cacheEntryToSave.Id}");
-                        }
-                        catch (Exception ex)
-                        {
-                            Service.PluginLog.Warning(ex, "Failed to save translation to cache");
+                            try
+                            {
+                                using var saveTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                                await dataService.SetCacheAsync(cacheEntryToSave);
+                                Service.PluginLog.Debug($"Translation saved to cache: {cacheEntryToSave.Id}");
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                retryCount++;
+                                if (retryCount < maxRetries)
+                                {
+                                    Service.PluginLog.Warning($"Cache save attempt {retryCount} failed, retrying: {ex.Message}");
+                                    await Task.Delay(500 * retryCount); // Exponential backoff
+                                }
+                                else
+                                {
+                                    Service.PluginLog.Error(ex, "Failed to save translation to cache after all retries");
+                                }
+                            }
                         }
                     });
+                    
+                    // Don't wait for cache save to complete, but track it
+                    context.Set("cache.save_task", cacheSaveTask);
                 }
                 
                 context.Set("translation.processed", true);

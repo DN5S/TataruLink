@@ -170,7 +170,7 @@ public class TranslationTab
                 
                 // Show configuration status
                 ImGui.SameLine();
-                if (translationService.IsConfigured && translationService.ProviderName == "DeepL")
+                if (translationService is { IsConfigured: true, ProviderName: "DeepL" })
                 {
                     ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
                 }
@@ -190,11 +190,14 @@ public class TranslationTab
                 ImGui.SameLine();
                 if (ImGui.Button("Save Key"u8))
                 {
-                    translationService.UpdateApiKey(configuration.Translation.Engine, tempApiKey);
-                    Service.PluginLog.Information("API key saved and provider reinitialized");
-                    
-                    // Auto-test the connection after saving
-                    _ = TestProviderConnectionAsync();
+                    _ = Task.Run(async () =>
+                    {
+                        await translationService.UpdateApiKeyAsync(configuration.Translation.Engine, tempApiKey);
+                        Service.PluginLog.Information("API key saved and provider reinitialized");
+                        
+                        // Auto-test the connection after saving
+                        await TestProviderConnectionAsync();
+                    });
                 }
                 
                 ImGui.SameLine();
@@ -302,7 +305,7 @@ public class TranslationTab
         
         // Show configuration status
         ImGui.SameLine();
-        if (translationService.IsConfigured && translationService.ProviderName == "Gemini")
+        if (translationService is { IsConfigured: true, ProviderName: "Gemini" })
         {
             ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
         }
@@ -318,8 +321,11 @@ public class TranslationTab
         ImGui.SameLine();
         if (ImGui.Button("Save Key"u8))
         {
-            translationService.UpdateApiKey("Gemini", tempApiKey);
-            Service.PluginLog.Information("Gemini API key saved and provider reinitialized");
+            _ = Task.Run(async () =>
+            {
+                await translationService.UpdateApiKeyAsync("Gemini", tempApiKey);
+                Service.PluginLog.Information("Gemini API key saved and provider reinitialized");
+            });
             _ = LoadGeminiModelsAsync();
             
             // Auto-test the connection after saving

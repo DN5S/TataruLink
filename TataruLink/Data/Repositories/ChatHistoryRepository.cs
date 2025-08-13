@@ -9,18 +9,12 @@ using TataruLink.Models;
 
 namespace TataruLink.Data.Repositories;
 
-public class ChatHistoryRepository : IChatHistoryRepository
+public class ChatHistoryRepository(DatabaseContext context, CacheConfig config, SemaphoreSlim dbSemaphore)
+    : IChatHistoryRepository
 {
-    private readonly DatabaseContext context;
-    private readonly CacheConfig.ValidationLimits validation;
-    private readonly SemaphoreSlim dbSemaphore;
-
-    public ChatHistoryRepository(DatabaseContext context, CacheConfig config, SemaphoreSlim dbSemaphore)
-    {
-        this.context = context ?? throw new ArgumentNullException(nameof(context));
-        validation = config.Validation ?? throw new ArgumentNullException(nameof(config));
-        this.dbSemaphore = dbSemaphore ?? throw new ArgumentNullException(nameof(dbSemaphore));
-    }
+    private readonly DatabaseContext context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly CacheConfig.ValidationLimits validation = config.Validation ?? throw new ArgumentNullException(nameof(config));
+    private readonly SemaphoreSlim dbSemaphore = dbSemaphore ?? throw new ArgumentNullException(nameof(dbSemaphore));
 
     public async Task<ChatHistoryEntry> AddAsync(ChatHistoryEntry entry, CancellationToken cancellationToken = default)
     {
@@ -30,13 +24,13 @@ public class ChatHistoryRepository : IChatHistoryRepository
         await dbSemaphore.WaitAsync(cancellationToken);
         try
         {
-            // Check if entry with this MessageId already exists
+            // Check if the entry with this MessageId already exists
             var existing = await context.ChatHistory
                 .FirstOrDefaultAsync(e => e.MessageId == entry.MessageId, cancellationToken);
             
             if (existing != null)
             {
-                // Update existing entry instead of creating duplicate
+                // Update an existing entry instead of creating a duplicate
                 if (!string.IsNullOrEmpty(entry.TranslatedContent))
                     existing.TranslatedContent = entry.TranslatedContent;
                 if (!string.IsNullOrEmpty(entry.TranslationCacheId))
@@ -73,13 +67,13 @@ public class ChatHistoryRepository : IChatHistoryRepository
             var addedCount = 0;
             foreach (var entry in entriesList)
             {
-                // Check if entry with this MessageId already exists
+                // Check if the entry with this MessageId already exists
                 var existing = await context.ChatHistory
                     .FirstOrDefaultAsync(e => e.MessageId == entry.MessageId, cancellationToken);
                 
                 if (existing != null)
                 {
-                    // Update existing entry instead of creating duplicate
+                    // Update an existing entry instead of creating a duplicate
                     if (!string.IsNullOrEmpty(entry.TranslatedContent))
                         existing.TranslatedContent = entry.TranslatedContent;
                     if (!string.IsNullOrEmpty(entry.TranslationCacheId))
@@ -121,10 +115,10 @@ public class ChatHistoryRepository : IChatHistoryRepository
         }
     }
 
-    public async Task<ChatHistoryEntry?> GetByMessageIdAsync(Guid messageId, CancellationToken cancellationToken = default)
+    public async Task<ChatHistoryEntry?> GetByMessageIdAsync(long messageId, CancellationToken cancellationToken = default)
     {
-        if (messageId == Guid.Empty)
-            throw new ArgumentException("Message ID must not be empty", nameof(messageId));
+        if (messageId <= 0)
+            throw new ArgumentException("Message ID must be positive", nameof(messageId));
             
         await dbSemaphore.WaitAsync(cancellationToken);
         try
@@ -239,8 +233,8 @@ public class ChatHistoryRepository : IChatHistoryRepository
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        if (entry.MessageId == Guid.Empty)
-            throw new ArgumentException("Message ID must not be empty");
+        if (entry.MessageId <= 0)
+            throw new ArgumentException("Message ID must be positive");
             
         if (string.IsNullOrWhiteSpace(entry.OriginalContent))
             throw new ArgumentException("Original content cannot be null or empty");

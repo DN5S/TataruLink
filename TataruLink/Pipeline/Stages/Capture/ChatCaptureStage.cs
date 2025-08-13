@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -55,7 +55,8 @@ public class ChatCaptureStage : IPipelineStage
         Service.ChatGui.ChatMessage += OnChatMessage;
         isInitialized = true;
         
-        Service.PluginLog.Information($"{Name} stage initialized with queue size {configuration.Performance.MaxQueueSize}, max concurrent {MaxConcurrentProcessing}");
+        Service.PluginLog.Information($"{Name} stage initialized with queue size {configuration.Performance.MaxQueueSize}, " +
+                                      $"max concurrent {MaxConcurrentProcessing}");
     }
 
     // WARNING: Runs on game thread - must be fast to avoid game lag
@@ -88,46 +89,74 @@ public class ChatCaptureStage : IPipelineStage
         }
     }
 
-    // Background thread consumer with throttling
+    // Background thread consumer with proper task pooling
     private async Task RunConsumerAsync(CancellationToken cancellationToken)
     {
         Service.PluginLog.Information("Message consumer started");
         
         try
         {
-            var processingTasks = new List<Task>();
+            // Use a fixed-size array to track active tasks - prevents unbounded growth
+            var activeTasks = new Task[MaxConcurrentProcessing];
+            var activeTaskCount = 0;
             
             await foreach (var message in messageChannel.Reader.ReadAllAsync(cancellationToken))
             {
+                // Wait for a slot to become available
+                if (activeTaskCount >= MaxConcurrentProcessing)
+                {
+                    // Find and await the first completed task
+                    var completedIndex = -1;
+                    var completedTask = await Task.WhenAny(activeTasks.Take(activeTaskCount));
+                    
+                    for (var i = 0; i < activeTaskCount; i++)
+                    {
+                        if (activeTasks[i] == completedTask)
+                        {
+                            completedIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    // Shift remaining tasks if needed
+                    if (completedIndex >= 0 && completedIndex < activeTaskCount - 1)
+                    {
+                        Array.Copy(activeTasks, completedIndex + 1, activeTasks, completedIndex, activeTaskCount - completedIndex - 1);
+                    }
+                    activeTaskCount--;
+                }
+                
+                // Acquire throttle before starting a new task
                 await processingThrottle.WaitAsync(cancellationToken);
                 
-                var task = ProcessMessageAsync(message, cancellationToken).ContinueWith(t =>
+                // Start a new task in the pool
+                activeTasks[activeTaskCount] = Task.Run(async () =>
                 {
-                    processingThrottle.Release();
-                    
-                    if (t.IsFaulted)
+                    try
                     {
-                        Service.PluginLog.Error(t.Exception?.GetBaseException(), 
-                            $"Error processing message from {message.GetChannelName()}");
+                        await ProcessMessageAsync(message, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected during shutdown
+                    }
+                    catch (Exception ex)
+                    {
+                        Service.PluginLog.Error(ex, $"Error processing message from {message.GetChannelName()}");
+                    }
+                    finally
+                    {
+                        processingThrottle.Release();
                     }
                 }, cancellationToken);
                 
-                processingTasks.Add(task);
-                
-                // WARNING: Cleanup prevents unbounded list growth
-                processingTasks.RemoveAll(t => t.IsCompleted);
-                
-                // WARNING: Maintains message order while allowing controlled concurrency
-                if (processingTasks.Count >= MaxConcurrentProcessing)
-                {
-                    await Task.WhenAny(processingTasks);
-                    processingTasks.RemoveAll(t => t.IsCompleted);
-                }
+                activeTaskCount++;
             }
             
-            if (processingTasks.Count > 0)
+            // Wait for the remaining tasks to complete
+            if (activeTaskCount > 0)
             {
-                await Task.WhenAll(processingTasks);
+                await Task.WhenAll(activeTasks.Take(activeTaskCount));
             }
         }
         catch (OperationCanceledException)

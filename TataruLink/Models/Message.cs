@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Dalamud.Game.Text.SeStringHandling;
 using TataruLink.Utils;
 
@@ -6,7 +7,10 @@ namespace TataruLink.Models;
 
 public sealed class Message
 {
-    public Guid Id { get; }
+    // Sequential ID generation using Interlocked for thread safety
+    private static long NextId = 1;
+    
+    public long Id { get; }
     public DateTime Timestamp { get; }
     public ushort ChatType { get; }
     public string? SenderName { get; }
@@ -22,7 +26,8 @@ public sealed class Message
     
     public Message(ushort chatType, SeString sender, SeString content)
     {
-        Id = Guid.NewGuid();
+        // Thread-safe sequential ID generation
+        Id = Interlocked.Increment(ref NextId);
         Timestamp = DateTime.Now;
         ChatType = chatType;
         OriginalSender = sender;
