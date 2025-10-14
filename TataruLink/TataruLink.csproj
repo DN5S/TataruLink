@@ -11,9 +11,7 @@
     </PropertyGroup>
     <ItemGroup>
       <PackageReference Include="DeepL.net" Version="1.15.0" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.8" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.8" />
-      <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
-      <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.8" />
+      <PackageReference Update="DalamudPackager" Version="13.1.0" />
+      <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.39" />
     </ItemGroup>
 </Project>

@@ -22,7 +22,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
 
     private void RefreshDisplayEntries()
     {
-        displayEntries = glossaryManager.GetCachedEntries();
+        displayEntries = glossaryManager.GetEntries();
     }
 
     public void Draw()
@@ -41,8 +41,8 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         ImGui.Separator();
 
         // Statistics
-        var (total, enabledCount) = glossaryManager.GetStatistics();
-        ImGui.TextUnformatted($"Total Entries: {total} | Enabled: {enabledCount}");
+        var (total, enabledCount, remaining) = glossaryManager.GetStatistics();
+        ImGui.TextUnformatted($"Total Entries: {total} | Enabled: {enabledCount} | Remaining Capacity: {remaining}");
         
         ImGui.Separator();
 

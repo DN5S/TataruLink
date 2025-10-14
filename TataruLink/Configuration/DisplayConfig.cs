@@ -6,12 +6,14 @@ namespace TataruLink.Configuration;
 
 public class DisplayConfig
 {
-    public bool ShowInChat { get; set; } = true;
-    
+    public bool ShowInGameChat { get; set; } = true;
+
+    public string ChatFormat { get; set; } = "[{ChatType}] {Sender}: {Translation}";
+
     public List<OverlayWindowConfig> OverlayWindows { get; set; } = new();
-    
+
     public bool ShowSenderName { get; set; } = true;
-    
+
     public bool ShowChatType { get; set; }
     
     public IEnumerable<OverlayWindowConfig> GetActiveOverlays()

@@ -21,7 +21,6 @@ public sealed class Message
     public TranslationStatus Status { get; set; }
     public string? TranslationEngine { get; set; }
     public TimeSpan? TranslationTime { get; set; }
-    public bool IsFromCache { get; set; }
     public string? ErrorMessage { get; set; }
     
     public Message(ushort chatType, SeString sender, SeString content)
@@ -47,40 +46,22 @@ public sealed class Message
         TranslatedContent = reason;
     }
 
-    public void SetTranslation(string translatedText, string engine, TimeSpan translationTime, bool isFromCache = false)
+    public void SetTranslation(string translatedText, string engine, TimeSpan translationTime)
     {
         TranslatedContent = translatedText;
         TranslationEngine = engine;
         TranslationTime = translationTime;
-        IsFromCache = isFromCache;
-        Status = isFromCache ? TranslationStatus.Cached : TranslationStatus.Completed;
+        Status = TranslationStatus.Completed;
     }
 
     public string GetChannelName()
         => ChatTypeUtils.GetChannelName(ChatType);
-    
-    public bool ShouldSkip()
-    {
-        return string.IsNullOrWhiteSpace(PlainTextContent) || IsPureSymbols(PlainTextContent);
-    }
-    
-    private static bool IsPureSymbols(string text)
-    {
-        foreach (var c in text)
-        {
-            if (char.IsLetterOrDigit(c))
-                return false;
-        }
-        return true;
-    }
 }
 
 public enum TranslationStatus
 {
     Pending,
-    InProgress,
     Completed,
     Failed,
-    Skipped,
-    Cached
+    Skipped
 }

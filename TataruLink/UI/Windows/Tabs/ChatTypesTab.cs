@@ -316,12 +316,6 @@ public class ChatTypesTab(TataruConfig configuration)
         
         ImGui.Spacing();
         ImGui.TextWrapped("Note: Individual chat type provider settings override the default provider."u8);
-        
-        // Show the current active provider for debugging
-        if (configuration.DebugMode)
-        {
-            ImGui.TextDisabled($"Debug: Stored value = {configuration.Chat.DefaultProvider ?? "null"}");
-        }
     }
     
     private void TogglePreset(ushort[] chatTypes, bool enable)

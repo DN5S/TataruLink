@@ -11,17 +11,17 @@ public class DisplayTab(TataruConfig configuration)
     {
         // Chat Display Section
         ImGuiUtils.Section("Chat Display"u8);
-        
-        var showInChat = configuration.Display.ShowInChat;
+
+        var showInChat = configuration.Display.ShowInGameChat;
         if (ImGui.Checkbox("Enable Chat Display"u8, ref showInChat))
         {
-            configuration.Display.ShowInChat = showInChat;
+            configuration.Display.ShowInGameChat = showInChat;
             Service.Configuration.Save();
         }
         ImGui.SameLine();
         ImGuiUtils.HelpMarker("Show translated messages in the game's chat window"u8);
-        
-        if (configuration.Display.ShowInChat)
+
+        if (configuration.Display.ShowInGameChat)
         {
             ImGuiUtils.Indent(() =>
             {

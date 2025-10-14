@@ -31,7 +31,6 @@ public class DtrBarManager : IDisposable
             UpdateDisplay();
             dtrBarEntry.Shown = configuration.ShowDtrBar;
             
-            // Left-click opens settings, right-click toggles translation
             dtrBarEntry.OnClick = OnClick;
             
             Service.PluginLog.Info("DTR Bar entry initialized");

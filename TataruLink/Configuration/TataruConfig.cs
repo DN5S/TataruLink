@@ -8,10 +8,8 @@ public class TataruConfig : IPluginConfiguration
     public int Version { get; set; } = 1;
 
     public bool IsEnabled { get; set; } = true;
-    
+
     public bool ShowDtrBar { get; set; } = true;
-    
-    public bool DebugMode { get; set; }
 
     public ChatConfig Chat { get; set; } = new();
 
@@ -19,13 +17,11 @@ public class TataruConfig : IPluginConfiguration
 
     public DisplayConfig Display { get; set; } = new();
 
-    public PerformanceConfig Performance { get; set; } = new();
-
     public ValidationConfig Validation { get; set; } = new();
 
     public FilterConfig Filter { get; set; } = new();
 
     public GlossaryConfig Glossary { get; set; } = new();
-    
-    public CacheConfig Cache { get; set; } = new();
+
+    public OverlayWindowConfig OverlayWindow { get; set; } = new();
 }

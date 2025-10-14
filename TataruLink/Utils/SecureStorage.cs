@@ -1,18 +1,24 @@
 using System;
-using System.Buffers;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using TataruLink.Services;
 
 namespace TataruLink.Utils;
 
+/// <summary>
+/// Simple cross-platform encryption for API keys using AES-256-GCM.
+/// Uses machine/user-specific data to derive encryption key.
+/// </summary>
 public static class SecureStorage
 {
-    private const string DpapiPrefix = "dpapi_:";
-    
-    // WARNING: Machine/user-specific entropy prevents cross-user decryption
-    private static byte[] GetAdditionalEntropy()
+    private const string EncryptedPrefix = "enc_v1:";
+    private const int NonceSize = 12; // 96 bits for AES-GCM
+    private const int TagSize = 16;   // 128 bits authentication tag
+
+    /// <summary>
+    /// Derives a 256-bit encryption key from machine/user-specific data.
+    /// </summary>
+    private static byte[] DeriveKey()
     {
         try
         {
@@ -20,63 +26,59 @@ public static class SecureStorage
             var configDir = pluginInterface.GetPluginConfigDirectory();
             var machineId = Environment.MachineName;
             var userId = Environment.UserName;
-            var processId = Environment.ProcessId.ToString();
 
-            var uniqueString = $"TataruLink-{configDir}-{machineId}-{userId}-{processId}-APIKey";
-            
-            var byteCount = Encoding.UTF8.GetByteCount(uniqueString);
-            var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
-            try
-            {
-                var actualLength = Encoding.UTF8.GetBytes(uniqueString, 0, uniqueString.Length, buffer, 0);
-                return SHA256.HashData(buffer.AsSpan(0, actualLength));
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
-            }
+            // Combine machine and user-specific data
+            var keyMaterial = $"TataruLink-{configDir}-{machineId}-{userId}";
+            var keyBytes = Encoding.UTF8.GetBytes(keyMaterial);
+
+            // Use SHA256 to derive a consistent 256-bit key
+            return SHA256.HashData(keyBytes);
         }
         catch (Exception ex)
         {
-            Service.PluginLog.Warning(ex, "Failed to generate unique entropy, using fallback");
-            // WARNING: Fallback entropy still better than hardcoded
-            var fallback = $"TataruLink-{Environment.MachineName}-{DateTime.UtcNow.Year}";
-            
-            var byteCount = Encoding.UTF8.GetByteCount(fallback);
-            var buffer = ArrayPool<byte>.Shared.Rent(byteCount);
-            try
-            {
-                var actualLength = Encoding.UTF8.GetBytes(fallback, 0, fallback.Length, buffer, 0);
-                return SHA256.HashData(buffer.AsSpan(0, actualLength));
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
-            }
+            Service.PluginLog.Warning(ex, "Failed to generate encryption key, using fallback");
+
+            // Fallback: less secure but still better than plaintext
+            var fallback = $"TataruLink-{Environment.MachineName}-{Environment.UserName}";
+            var fallbackBytes = Encoding.UTF8.GetBytes(fallback);
+            return SHA256.HashData(fallbackBytes);
         }
     }
-    
+
+    /// <summary>
+    /// Encrypts plaintext using AES-256-GCM.
+    /// </summary>
     public static string? Protect(string? plainText)
     {
         if (string.IsNullOrEmpty(plainText))
             return plainText;
-            
+
         try
         {
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                throw new PlatformNotSupportedException("DPAPI encryption is only available on Windows.");
-            }
-            
             var plainBytes = Encoding.UTF8.GetBytes(plainText);
-            var entropy = GetAdditionalEntropy();
-            var encryptedBytes = ProtectedData.Protect(
-                plainBytes, 
-                entropy, 
-                DataProtectionScope.CurrentUser
-            );
-            
-            return DpapiPrefix + Convert.ToBase64String(encryptedBytes);
+            var key = DeriveKey();
+            var nonce = new byte[NonceSize];
+            var tag = new byte[TagSize];
+
+            // Generate random nonce
+            RandomNumberGenerator.Fill(nonce);
+
+            // Encrypt using AES-GCM
+            var cipherBytes = new byte[plainBytes.Length];
+            using var aes = new AesGcm(key, TagSize);
+            aes.Encrypt(nonce, plainBytes, cipherBytes, tag);
+
+            // Format: nonce + tag + ciphertext
+            var result = new byte[NonceSize + TagSize + cipherBytes.Length];
+            Buffer.BlockCopy(nonce, 0, result, 0, NonceSize);
+            Buffer.BlockCopy(tag, 0, result, NonceSize, TagSize);
+            Buffer.BlockCopy(cipherBytes, 0, result, NonceSize + TagSize, cipherBytes.Length);
+
+            // Clear sensitive data
+            Array.Clear(plainBytes, 0, plainBytes.Length);
+            Array.Clear(key, 0, key.Length);
+
+            return EncryptedPrefix + Convert.ToBase64String(result);
         }
         catch (Exception ex)
         {
@@ -85,56 +87,63 @@ public static class SecureStorage
         }
     }
 
+    /// <summary>
+    /// Decrypts ciphertext using AES-256-GCM.
+    /// </summary>
     public static string? Unprotect(string? protectedText)
     {
         if (string.IsNullOrEmpty(protectedText))
             return protectedText;
-            
+
+        // If not encrypted, return as-is (for backward compatibility)
+        if (!protectedText.StartsWith(EncryptedPrefix))
+        {
+            Service.PluginLog.Warning("Data is not encrypted. Returning as-is.");
+            return protectedText;
+        }
+
         try
         {
-            if (!protectedText.StartsWith(DpapiPrefix))
-            {
-                Service.PluginLog.Warning("Data is not DPAPI-protected. Returning as is.");
-                return protectedText;
-            }
-            
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Service.PluginLog.Error("DPAPI-protected data cannot be decrypted on non-Windows platforms.");
-                return null;
-            }
-            
-            var encryptedText = protectedText.Substring(DpapiPrefix.Length);
-            
-            byte[] encryptedBytes;
-            try
-            {
-                encryptedBytes = Convert.FromBase64String(encryptedText);
-            }
-            catch (FormatException)
+            var encryptedText = protectedText.Substring(EncryptedPrefix.Length);
+            var encryptedData = Convert.FromBase64String(encryptedText);
+
+            // Validate minimum length: nonce + tag + at least 1 byte
+            if (encryptedData.Length < NonceSize + TagSize + 1)
             {
                 Service.PluginLog.Error("Invalid encrypted data format.");
                 return null;
             }
-            
-            var entropy = GetAdditionalEntropy();
-            var plainBytes = ProtectedData.Unprotect(
-                encryptedBytes, 
-                entropy, 
-                DataProtectionScope.CurrentUser
-            );
-            
+
+            // Extract components
+            var nonce = new byte[NonceSize];
+            var tag = new byte[TagSize];
+            var cipherBytes = new byte[encryptedData.Length - NonceSize - TagSize];
+
+            Buffer.BlockCopy(encryptedData, 0, nonce, 0, NonceSize);
+            Buffer.BlockCopy(encryptedData, NonceSize, tag, 0, TagSize);
+            Buffer.BlockCopy(encryptedData, NonceSize + TagSize, cipherBytes, 0, cipherBytes.Length);
+
+            // Decrypt using AES-GCM
+            var key = DeriveKey();
+            var plainBytes = new byte[cipherBytes.Length];
+
+            using var aes = new AesGcm(key, TagSize);
+            aes.Decrypt(nonce, cipherBytes, tag, plainBytes);
+
+            // Clear sensitive data
+            Array.Clear(key, 0, key.Length);
+
             return Encoding.UTF8.GetString(plainBytes);
         }
         catch (CryptographicException ex)
         {
-            Service.PluginLog.Error(ex, "Failed to decrypt data. The data may be corrupted or from a different user account.");
+            Service.PluginLog.Error(ex, "Failed to decrypt data. The data may be corrupted or from a different machine/user.");
             return null;
         }
         catch (Exception ex)
         {
             Service.PluginLog.Error(ex, "Unexpected error during decryption.");
-            return protectedText;
+            return null;
         }
     }
 }

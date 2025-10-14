@@ -3,14 +3,13 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.DtrBar;
-using TataruLink.Filter;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class GeneralTab(TataruConfig configuration, ITranslationService translationService, BlocklistManager blocklistManager, DtrBarManager? dtrBarManager)
+public class GeneralTab(TataruConfig configuration, ITranslationService translationService, DtrBarManager? dtrBarManager)
 {
     public void Draw()
     {
@@ -100,8 +99,8 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Chat Display"u8);
                 ImGui.TableNextColumn();
-                ImGuiUtils.TextColored(configuration.Display.ShowInChat ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
-                    configuration.Display.ShowInChat ? "Enabled"u8 : "Disabled"u8);
+                ImGuiUtils.TextColored(configuration.Display.ShowInGameChat ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled,
+                    configuration.Display.ShowInGameChat ? "Enabled"u8 : "Disabled"u8);
                 
                 // Overlay Windows
                 ImGui.TableNextRow();
@@ -120,14 +119,6 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 {
                     ImGuiUtils.TextColored(ImGuiUtils.Colors.TextDisabled, "None Configured"u8);
                 }
-                
-                // Cache Status
-                ImGui.TableNextRow();
-                ImGui.TableNextColumn();
-                ImGui.TextUnformatted("Translation Cache"u8);
-                ImGui.TableNextColumn();
-                ImGuiUtils.TextColored(configuration.Performance.EnableCache ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
-                    configuration.Performance.EnableCache ? "Enabled"u8 : "Disabled"u8);
             }
         }
         
@@ -142,15 +133,7 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         // Enabled Chat Types
         var enabledChatTypes = configuration.Chat.GetEnabledChatTypes().Count();
         ImGui.TextUnformatted($"Enabled Chat Types: {enabledChatTypes}");
-        
-        // Filters
-        var (totalFilters, enabledFilters) = blocklistManager.GetStatistics();
-        ImGui.TextUnformatted($"Keyword Filters: {enabledFilters} active ({totalFilters} total)");
-        
-        // Performance
-        ImGui.TextUnformatted($"Translation Rate: {configuration.Performance.TranslationsPerSecond}/sec");
-        ImGui.TextUnformatted($"Max Queue Size: {configuration.Performance.MaxQueueSize}");
-        
+
         ImGuiUtils.Spacing(2);
         
         // Tips
