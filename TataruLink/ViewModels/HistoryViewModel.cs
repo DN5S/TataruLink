@@ -16,12 +16,10 @@ namespace TataruLink.ViewModels;
 public class HistoryViewModel : ViewModelBase
 {
     private readonly SessionHistoryManager historyManager;
-    private readonly UiDispatcher uiDispatcher;
 
-    public HistoryViewModel(SessionHistoryManager historyManager, UiDispatcher uiDispatcher)
+    public HistoryViewModel(SessionHistoryManager historyManager)
     {
         this.historyManager = historyManager;
-        this.uiDispatcher = uiDispatcher;
 
         DisplayedRecords = new ObservableList<TranslationRecord>();
         SelectedIds = new ObservableList<long>();
@@ -30,8 +28,8 @@ public class HistoryViewModel : ViewModelBase
         RefreshCommand = new RelayCommand(RefreshRecords);
         DeleteSelectedCommand = new RelayCommand(DeleteSelected, () => SelectedIds.Count > 0);
         ClearAllCommand = new AsyncRelayCommand(ClearAllAsync);
-        DeleteRecordCommand = new RelayCommand<long>(DeleteRecord);
-        SaveEditCommand = new RelayCommand<(long Id, string Translation)>(SaveTranslationEdit);
+        DeleteRecordCommand = new RelayCommand<long>(id => DeleteRecord(id));
+        SaveEditCommand = new RelayCommand<(long Id, string Translation)>(param => SaveTranslationEdit(param));
         CancelEditCommand = new RelayCommand(CancelEdit);
 
         // Subscribe to history events for incremental updates
@@ -73,12 +71,12 @@ public class HistoryViewModel : ViewModelBase
     public int DisplayedCount => DisplayedRecords.Count;
     public int SelectedCount => SelectedIds.Count;
 
-    // Commands
+    // Commands (exposed with specific types for SetParameter support)
     public ICommand RefreshCommand { get; }
     public ICommand DeleteSelectedCommand { get; }
     public ICommand ClearAllCommand { get; }
-    public ICommand DeleteRecordCommand { get; }
-    public ICommand SaveEditCommand { get; }
+    public RelayCommand<long> DeleteRecordCommand { get; }
+    public RelayCommand<(long Id, string Translation)> SaveEditCommand { get; }
     public ICommand CancelEditCommand { get; }
 
     // Methods
@@ -201,7 +199,7 @@ public class HistoryViewModel : ViewModelBase
         }
 
         // Add the new record incrementally (prepend to top)
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             // Insert at the beginning since history is typically newest-first
             var snapshot = DisplayedRecords.GetSnapshot();

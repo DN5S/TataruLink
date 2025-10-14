@@ -12,6 +12,7 @@ using TataruLink.Overlay;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.UI.Windows;
+using TataruLink.ViewModels;
 
 namespace TataruLink;
 
@@ -35,6 +36,11 @@ public sealed class Plugin : IDalamudPlugin
     private SettingsWindow? settingsWindow;
     private HistoryWindow? historyWindow;
     private DtrBarManager? dtrBarManager;
+
+    // ViewModels
+    private SettingsViewModel? settingsViewModel;
+    private HistoryViewModel? historyViewModel;
+
     private bool isDisposed;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
@@ -95,25 +101,53 @@ public sealed class Plugin : IDalamudPlugin
 
     private void InitializeUI()
     {
+        var configuration = Service.Configuration.Data;
         windowSystem = new WindowSystem("TataruLink");
-        overlayManager = new OverlayManager(Service.Configuration.Data, windowSystem);
+        overlayManager = new OverlayManager(configuration, windowSystem);
 
-        settingsWindow = new SettingsWindow(Service.Configuration.Data, translationService!, overlayManager, glossaryManager!, historyManager!);
+        // Create ViewModels
+        historyViewModel = new HistoryViewModel(historyManager!);
+
+        // Create all tab ViewModels
+        var generalTabViewModel = new GeneralTabViewModel(configuration, translationService!);
+        var translationViewModel = new TranslationViewModel(configuration, translationService!, Service.UiDispatcher);
+        var chatTypesViewModel = new ChatTypesViewModel(configuration);
+        var filtersViewModel = new FiltersViewModel(configuration);
+        var glossaryViewModel = new GlossaryViewModel(glossaryManager!);
+        var displayViewModel = new DisplayViewModel(configuration);
+        var overlayViewModel = new OverlayViewModel(configuration, overlayManager);
+
+        // Create composed SettingsViewModel
+        settingsViewModel = new SettingsViewModel(
+            generalTabViewModel,
+            translationViewModel,
+            chatTypesViewModel,
+            filtersViewModel,
+            glossaryViewModel,
+            displayViewModel,
+            overlayViewModel);
+
+        // Create windows with ViewModels (dtrBarManager will be set after creation)
+        settingsWindow = new SettingsWindow(settingsViewModel, configuration, null);
         windowSystem.AddWindow(settingsWindow);
 
-        historyWindow = new HistoryWindow(historyManager!);
+        historyWindow = new HistoryWindow(historyViewModel);
         windowSystem.AddWindow(historyWindow);
+
+        // Create DTR bar manager and update settings window
+        dtrBarManager = new DtrBarManager(configuration, settingsWindow);
+        settingsWindow.SetDtrBarManager(dtrBarManager);
 
         pluginInterface.UiBuilder.Draw += DrawUI;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
         pluginInterface.UiBuilder.OpenMainUi += OpenMainUi;
-
-        dtrBarManager = new DtrBarManager(Service.Configuration.Data, settingsWindow);
-        settingsWindow.SetDtrBarManager(dtrBarManager);
     }
 
     private void DrawUI()
     {
+        // Process queued UI updates from background threads
+        Service.UiDispatcher.ProcessQueue();
+
         windowSystem?.Draw();
     }
 
@@ -206,10 +240,31 @@ public sealed class Plugin : IDalamudPlugin
 
         try
         {
+            // Step 1: Stop capturing new chat messages first
+            chatCaptureHandler?.Dispose();
+
+            // Step 2: Unsubscribe all handlers from the event bus
+            if (eventBus != null)
+            {
+                if (validationHandler != null)
+                    eventBus.Unsubscribe<ChatMessageReceivedEvent>(validationHandler);
+                if (translationHandler != null)
+                    eventBus.Unsubscribe<TranslationRequestedEvent>(translationHandler);
+                if (displayHandler != null)
+                    eventBus.Unsubscribe<TranslationCompletedEvent>(displayHandler);
+                if (historyManager != null)
+                    eventBus.Unsubscribe<TranslationCompletedEvent>(historyManager);
+            }
+
+            // Step 3: Dispose event bus (now safe, all handlers unsubscribed)
+            eventBus?.Dispose();
+
+            // Step 4: Remove command handlers
             Service.CommandManager.RemoveHandler("/tatarulink");
             Service.CommandManager.RemoveHandler("/tataruhistory");
             Service.CommandManager.RemoveHandler("/tl");
 
+            // Step 5: Unregister UI callbacks
             if (windowSystem != null)
             {
                 pluginInterface.UiBuilder.Draw -= DrawUI;
@@ -217,22 +272,27 @@ public sealed class Plugin : IDalamudPlugin
                 pluginInterface.UiBuilder.OpenMainUi -= OpenMainUi;
             }
 
-            chatCaptureHandler?.Dispose();
-            eventBus?.Dispose();
-
-            windowSystem?.RemoveAllWindows();
-            settingsWindow?.Dispose();
-            historyWindow?.Dispose();
-
+            // Step 6: Dispose UI in reverse order of creation
             dtrBarManager?.Dispose();
-            overlayManager?.Dispose();
+            historyWindow?.Dispose();
+            settingsWindow?.Dispose();
+            windowSystem?.RemoveAllWindows();
 
+            // Step 7: Dispose ViewModels
+            historyViewModel?.Dispose();
+            settingsViewModel?.Dispose();
+
+            // Step 8: Dispose managers
+            overlayManager?.Dispose();
+            historyManager?.Dispose();
+
+            // Step 9: Save configuration before disposing services
             Service.Configuration.SaveImmediately();
 
+            // Step 10: Dispose core services
             translationService?.Dispose();
             glossaryManager?.Dispose();
             glossaryStorage?.Dispose();
-            historyManager?.Dispose();
         }
         finally
         {

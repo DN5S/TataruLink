@@ -6,35 +6,56 @@ using TataruLink.DtrBar;
 using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class GeneralTab(TataruConfig configuration, ITranslationService translationService, DtrBarManager? dtrBarManager)
+public class GeneralTab
 {
+    private readonly GeneralTabViewModel viewModel;
+    private readonly DtrBarManager? dtrBarManager;
+
+    // New MVVM constructor
+    public GeneralTab(GeneralTabViewModel viewModel, DtrBarManager? dtrBarManager)
+    {
+        this.viewModel = viewModel;
+        this.dtrBarManager = dtrBarManager;
+        viewModel.SetDtrBarManager(dtrBarManager);
+    }
+
+    // Temporary backward-compatible constructor for transition
+    public GeneralTab(TataruConfig configuration, ITranslationService translationService, DtrBarManager? dtrBarManager)
+    {
+        this.viewModel = new GeneralTabViewModel(configuration, translationService);
+        this.dtrBarManager = dtrBarManager;
+        viewModel.SetDtrBarManager(dtrBarManager);
+    }
+
     public void Draw()
     {
+        // Process queued UI updates from async commands
+        Services.Service.UiDispatcher.ProcessQueue();
+
         // Quick Controls Section
         using (var table = ImRaii.Table("QuickControls"u8, 2, ImGuiTableFlags.SizingStretchProp))
         {
             if (table)
             {
                 ImGui.TableNextColumn();
-                
+
                 // Main Enable/Disable
-                var enabled = configuration.IsEnabled;
+                var enabled = viewModel.IsEnabled;
                 if (ImGui.Checkbox("Enable TataruLink"u8, ref enabled))
                 {
-                    configuration.IsEnabled = enabled;
-                    Service.Configuration.Save();
+                    viewModel.IsEnabled = enabled;
                 }
-                
+
                 // DTR Bar toggle
-                var showDtrBar = configuration.ShowDtrBar;
+                var showDtrBar = viewModel.ShowDtrBar;
                 if (ImGui.Checkbox("Show DTR Bar"u8, ref showDtrBar))
                 {
-                    configuration.ShowDtrBar = showDtrBar;
+                    viewModel.ShowDtrBar = showDtrBar;
                     dtrBarManager?.SetVisible(showDtrBar);
-                    Service.Configuration.Save();
                 }
                 ImGui.SameLine();
                 ImGuiUtils.HelpMarker("Shows translation count in server info bar"u8);
@@ -66,53 +87,48 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Plugin"u8);
                 ImGui.TableNextColumn();
-                ImGuiUtils.TextColored(configuration.IsEnabled ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
-                    configuration.IsEnabled ? "Active"u8 : "Disabled"u8);
-                
+                ImGuiUtils.TextColored(viewModel.IsEnabled ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled,
+                    viewModel.IsEnabled ? "Active"u8 : "Disabled"u8);
+
                 // Translation Engine
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Translation Engine"u8);
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted($"{translationService.ProviderName}");
-                
+                ImGui.TextUnformatted($"{viewModel.ProviderName}");
+
                 // Engine Configuration
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Engine Configuration"u8);
                 ImGui.TableNextColumn();
-                ImGuiUtils.TextColored(translationService.IsConfigured ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.Warning, 
-                    translationService.IsConfigured ? "Configured"u8 : "Not Configured"u8);
-                
+                ImGuiUtils.TextColored(viewModel.IsConfigured ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.Warning,
+                    viewModel.IsConfigured ? "Configured"u8 : "Not Configured"u8);
+
                 // Translation Count
-                if (dtrBarManager != null)
-                {
-                    ImGui.TableNextRow();
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted("Translations Today"u8);
-                    ImGui.TableNextColumn();
-                    ImGui.TextUnformatted($"{dtrBarManager.GetTranslationCount():N0}");
-                }
-                
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted("Translations Today"u8);
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted($"{viewModel.TranslationCount:N0}");
+
                 // Chat Display
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Chat Display"u8);
                 ImGui.TableNextColumn();
-                ImGuiUtils.TextColored(configuration.Display.ShowInGameChat ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled,
-                    configuration.Display.ShowInGameChat ? "Enabled"u8 : "Disabled"u8);
-                
+                ImGuiUtils.TextColored(viewModel.ShowInGameChat ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled,
+                    viewModel.ShowInGameChat ? "Enabled"u8 : "Disabled"u8);
+
                 // Overlay Windows
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted("Overlay Windows"u8);
                 ImGui.TableNextColumn();
-                var activeOverlays = configuration.Display.GetActiveOverlays().Count();
-                var totalOverlays = configuration.Display.OverlayWindows.Count;
-                if (totalOverlays > 0)
+                if (viewModel.TotalOverlaysCount > 0)
                 {
-                    var overlayText = System.Text.Encoding.UTF8.GetBytes($"{activeOverlays}/{totalOverlays} Active");
-                    ImGuiUtils.TextColored(activeOverlays > 0 ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled, 
+                    var overlayText = System.Text.Encoding.UTF8.GetBytes($"{viewModel.ActiveOverlaysCount}/{viewModel.TotalOverlaysCount} Active");
+                    ImGuiUtils.TextColored(viewModel.ActiveOverlaysCount > 0 ? ImGuiUtils.Colors.Success : ImGuiUtils.Colors.TextDisabled,
                         overlayText);
                 }
                 else
@@ -126,23 +142,22 @@ public class GeneralTab(TataruConfig configuration, ITranslationService translat
         
         // Configuration Summary
         ImGuiUtils.Section("Configuration Summary"u8);
-        
+
         // Languages
-        ImGui.TextUnformatted($"Languages: {configuration.Translation.SourceLanguage} -> {configuration.Translation.TargetLanguage}");
-        
+        ImGui.TextUnformatted($"Languages: {viewModel.SourceLanguage} -> {viewModel.TargetLanguage}");
+
         // Enabled Chat Types
-        var enabledChatTypes = configuration.Chat.GetEnabledChatTypes().Count();
-        ImGui.TextUnformatted($"Enabled Chat Types: {enabledChatTypes}");
+        ImGui.TextUnformatted($"Enabled Chat Types: {viewModel.EnabledChatTypesCount}");
 
         ImGuiUtils.Spacing(2);
-        
+
         // Tips
         ImGuiUtils.SectionSmall("Tips"u8);
         ImGui.BulletText("Use /tatarulink to open settings"u8);
         ImGui.BulletText("Use /tataruhistory to view translation history"u8);
         ImGui.BulletText("Configure overlay windows for custom translation displays"u8);
-        
-        if (!translationService.IsConfigured)
+
+        if (!viewModel.IsConfigured)
         {
             ImGuiUtils.Spacing();
             ImGuiUtils.TextColored(ImGuiUtils.Colors.Warning, "Note: Translation engine needs configuration. Go to Translation tab."u8);

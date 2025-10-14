@@ -67,14 +67,14 @@ public class EventBus : IDisposable
             .OfType<IEventHandler<TEvent>>()
             .Select(handler => SafeHandleAsync(handler, @event));
 
-        await Task.WhenAll(tasks);
+        await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
     private async Task SafeHandleAsync<TEvent>(IEventHandler<TEvent> handler, TEvent @event) where TEvent : class
     {
         try
         {
-            await handler.HandleAsync(@event);
+            await handler.HandleAsync(@event).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

@@ -44,7 +44,7 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
 
             if (!translationService.IsConfigured)
             {
-                await PublishFailure(message, "Translation service not configured", "Please configure a translation provider in settings");
+                await PublishFailure(message, "Translation service not configured", "Please configure a translation provider in settings").ConfigureAwait(false);
                 return;
             }
 
@@ -62,7 +62,7 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
                 return text;
             });
 
-            var textToTranslate = await glossaryTask;
+            var textToTranslate = await glossaryTask.ConfigureAwait(false);
 
             Service.PluginLog.Debug($"Text prepared for translation: {textToTranslate}");
 
@@ -70,7 +70,7 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
             var translatedText = await translationService.TranslateAsync(
                 textToTranslate,
                 @event.SourceLanguage,
-                @event.TargetLanguage);
+                @event.TargetLanguage).ConfigureAwait(false);
 
             if (translatedText != null)
             {
@@ -95,7 +95,7 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
                     TranslationTime = stopwatch.Elapsed
                 };
 
-                await eventBus.PublishAsync(completedEvent);
+                await eventBus.PublishAsync(completedEvent).ConfigureAwait(false);
             }
             else
             {
@@ -103,14 +103,14 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
                 var errorMessage = providerStatus?.LastError?.Message ?? "Translation returned null";
                 var userFriendlyError = providerStatus?.LastError?.UserFriendlyMessage;
 
-                await PublishFailure(message, errorMessage, userFriendlyError);
+                await PublishFailure(message, errorMessage, userFriendlyError).ConfigureAwait(false);
                 dtrBarManager?.UpdateStatus(false);
             }
         }
         catch (OperationCanceledException)
         {
             Service.PluginLog.Debug($"Translation cancelled for message {message.Id}");
-            await PublishFailure(message, "Translation cancelled or timed out", "Translation took too long. Try increasing the timeout in settings.");
+            await PublishFailure(message, "Translation cancelled or timed out", "Translation took too long. Try increasing the timeout in settings.").ConfigureAwait(false);
             dtrBarManager?.UpdateStatus(false);
         }
         catch (Exception ex)
@@ -118,7 +118,7 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
             Service.PluginLog.Error(ex, $"Error in translation handler for message {message.Id}");
 
             var error = TranslationError.FromException(ex, translationService.ProviderName);
-            await PublishFailure(message, error.Message, error.UserFriendlyMessage);
+            await PublishFailure(message, error.Message, error.UserFriendlyMessage).ConfigureAwait(false);
             dtrBarManager?.UpdateStatus(false);
         }
     }
@@ -137,6 +137,6 @@ public class TranslationHandler : IEventHandler<TranslationRequestedEvent>
         };
 
         Service.PluginLog.Warning($"Translation failed for message {message.Id}: {error}");
-        await eventBus.PublishAsync(failureEvent);
+        await eventBus.PublishAsync(failureEvent).ConfigureAwait(false);
     }
 }

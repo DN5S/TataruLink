@@ -8,32 +8,41 @@ using TataruLink.Glossary;
 using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class GlossaryTab(GlossaryManager glossaryManager)
+public class GlossaryTab
 {
-    private string newOriginal = string.Empty;
-    private string newReplacement = string.Empty;
-    private string searchFilter = string.Empty;
-    private string? errorMessage;
-    private DateTime errorMessageTime = DateTime.MinValue;
-    private List<GlossaryEntry> displayEntries = [];
+    private readonly GlossaryViewModel viewModel;
 
-    private void RefreshDisplayEntries()
+    // New MVVM constructor
+    public GlossaryTab(GlossaryViewModel viewModel)
     {
-        displayEntries = glossaryManager.GetEntries();
+        this.viewModel = viewModel;
+        viewModel.RefreshEntries(); // Initial load
+    }
+
+    // Temporary backward-compatible constructor for transition
+    public GlossaryTab(GlossaryManager glossaryManager)
+    {
+        this.viewModel = new GlossaryViewModel(glossaryManager);
+        viewModel.RefreshEntries(); // Initial load
     }
 
     public void Draw()
     {
-        RefreshDisplayEntries();
-        
+        // CRITICAL: Process queued UI updates from background threads
+        Services.Service.UiDispatcher.ProcessQueue();
+
+        // PERFORMANCE FIX: No longer calling RefreshEntries() every frame!
+        // ViewModel maintains cached entries and only refreshes on data changes
+
         // Enable/Disable checkbox
-        var isEnabled = glossaryManager.IsEnabled;
+        var isEnabled = viewModel.IsEnabled;
         if (ImGui.Checkbox("Enable Glossary"u8, ref isEnabled))
         {
-            glossaryManager.IsEnabled = isEnabled;
+            viewModel.IsEnabled = isEnabled;
         }
         ImGui.SameLine();
         ImGuiUtils.HelpMarker("Applies user-defined text replacements BEFORE translation"u8);
@@ -41,8 +50,7 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         ImGui.Separator();
 
         // Statistics
-        var (total, enabledCount, remaining) = glossaryManager.GetStatistics();
-        ImGui.TextUnformatted($"Total Entries: {total} | Enabled: {enabledCount} | Remaining Capacity: {remaining}");
+        ImGui.TextUnformatted($"Total Entries: {viewModel.TotalCount} | Enabled: {viewModel.EnabledCount} | Remaining Capacity: {viewModel.RemainingCapacity}");
         
         ImGui.Separator();
 
@@ -50,59 +58,46 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         if (ImGui.CollapsingHeader("Add New Entry"u8, ImGuiTreeNodeFlags.DefaultOpen))
         {
             ImGui.Columns(2, "AddEntryColumns"u8);
-            
+
             ImGui.SetNextItemWidth(-1);
-            ImGuiUtils.InputTextWithHint("##OriginalText"u8, "Original text to replace"u8, ref newOriginal);
-            
+            var newOriginal = viewModel.NewOriginal;
+            if (ImGuiUtils.InputTextWithHint("##OriginalText"u8, "Original text to replace"u8, ref newOriginal))
+            {
+                viewModel.NewOriginal = newOriginal;
+            }
+
             ImGui.NextColumn();
-            
+
             ImGui.SetNextItemWidth(-1);
-            ImGuiUtils.InputTextWithHint("##ReplacementText"u8, "Text to replace with"u8, ref newReplacement);
-            
+            var newReplacement = viewModel.NewReplacement;
+            if (ImGuiUtils.InputTextWithHint("##ReplacementText"u8, "Text to replace with"u8, ref newReplacement))
+            {
+                viewModel.NewReplacement = newReplacement;
+            }
+
             ImGui.Columns();
-            
-            // Add button
-            var canAdd = !string.IsNullOrWhiteSpace(newOriginal) && !string.IsNullOrWhiteSpace(newReplacement);
-            if (!canAdd) ImGui.BeginDisabled();
-            
+
+            // Add button (using command pattern)
+            if (!viewModel.AddEntryCommand.CanExecute()) ImGui.BeginDisabled();
+
             if (ImGui.Button("Add Entry"u8, new Vector2(-1, 0)))
             {
-                // Check for duplicates
-                var duplicate = displayEntries.Any(e => 
-                    e.Original.Equals(newOriginal, StringComparison.OrdinalIgnoreCase));
-                
-                if (!duplicate)
-                {
-                    _ = glossaryManager.AddEntryAsync(newOriginal, newReplacement);
-                    
-                    // Clear inputs and error
-                    newOriginal = string.Empty;
-                    newReplacement = string.Empty;
-                    errorMessage = null;
-                }
-                else
-                {
-                    errorMessage = $"Entry '{newOriginal}' already exists";
-                    errorMessageTime = DateTime.Now;
-                    Service.PluginLog.Warning($"Glossary entry '{newOriginal}' already exists");
-                }
+                _ = viewModel.AddEntryCommand.ExecuteAsync();
             }
-            
-            if (!canAdd) ImGui.EndDisabled();
-            
-            // Display an error message if present
-            if (!string.IsNullOrEmpty(errorMessage))
+
+            if (!viewModel.AddEntryCommand.CanExecute()) ImGui.EndDisabled();
+
+            // Display command error
+            if (!string.IsNullOrEmpty(viewModel.ErrorMessage))
             {
-                // Auto-clear error message after 3 seconds
-                if ((DateTime.Now - errorMessageTime).TotalSeconds > 3)
-                {
-                    errorMessage = null;
-                }
-                else
-                {
-                    var errorText = System.Text.Encoding.UTF8.GetBytes(errorMessage);
-                    ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorText);
-                }
+                var errorText = System.Text.Encoding.UTF8.GetBytes(viewModel.ErrorMessage);
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorText);
+            }
+
+            // Display command execution status
+            if (viewModel.AddEntryCommand.IsExecuting)
+            {
+                ImGui.TextUnformatted("Adding entry...");
             }
         }
 
@@ -110,48 +105,46 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         
         // Search filter
         ImGui.SetNextItemWidth(200);
-        ImGui.InputText("Search"u8, ref searchFilter, 100);
+        var searchFilter = viewModel.SearchFilter;
+        if (ImGui.InputText("Search"u8, ref searchFilter, 100))
+        {
+            viewModel.SearchFilter = searchFilter;
+        }
         ImGui.SameLine();
         if (ImGui.Button("Clear"u8))
         {
-            searchFilter = string.Empty;
+            viewModel.SearchFilter = string.Empty;
         }
 
         // Quick actions
         ImGui.SameLine();
         ImGui.Dummy(new Vector2(20, 0));
         ImGui.SameLine();
-        
+
         if (ImGui.Button("Enable All"u8))
         {
-            foreach (var entry in displayEntries.Where(e => !e.IsEnabled))
-            {
-                _ = glossaryManager.ToggleEntryAsync(entry.Id);
-            }
+            _ = viewModel.EnableAllCommand.ExecuteAsync();
         }
-        
+
         ImGui.SameLine();
         if (ImGui.Button("Disable All"u8))
         {
-            foreach (var entry in displayEntries.Where(e => e.IsEnabled))
-            {
-                _ = glossaryManager.ToggleEntryAsync(entry.Id);
-            }
+            _ = viewModel.DisableAllCommand.ExecuteAsync();
         }
-        
+
         ImGui.SameLine();
         if (ImGuiUtils.ConfirmationButton("Remove All"u8, "Are you sure you want to remove all glossary entries?\nThis action cannot be undone."u8))
         {
-            _ = glossaryManager.ClearAllAsync();
+            _ = viewModel.ClearAllCommand.ExecuteAsync();
         }
 
         ImGui.Separator();
 
         // Glossary entries table
         ImGuiUtils.SectionSmall("Glossary Entries"u8);
-        
-        if (ImGui.BeginTable("GlossaryTable"u8, 4, 
-            ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
+
+        if (ImGui.BeginTable("GlossaryTable"u8, 4,
+            ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable |
             ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp,
             new Vector2(0, 400)))
         {
@@ -162,16 +155,10 @@ public class GlossaryTab(GlossaryManager glossaryManager)
             ImGui.TableSetupScrollFreeze(0, 1);
             ImGui.TableHeadersRow();
 
-            // Filter entries
-            var filteredEntries = string.IsNullOrWhiteSpace(searchFilter) 
-                ? displayEntries
-                : displayEntries.Where(e => 
-                    e.Original.Contains(searchFilter, StringComparison.OrdinalIgnoreCase) ||
-                    e.Replacement.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
+            // Use entries from ViewModel (already filtered by SearchFilter)
+            var filteredEntries = viewModel.Entries.GetSnapshot();
             long? entryToRemove = null;
-            
+
             foreach (var entry in filteredEntries)
             {
                 ImGui.PushID(entry.GetHashCode());
@@ -182,7 +169,8 @@ public class GlossaryTab(GlossaryManager glossaryManager)
                 var entryEnabled = entry.IsEnabled;
                 if (ImGui.Checkbox("##Enabled"u8, ref entryEnabled))
                 {
-                    _ = glossaryManager.ToggleEntryAsync(entry.Id);
+                    viewModel.ToggleEntryCommand.SetParameter(entry.Id);
+                    _ = viewModel.ToggleEntryCommand.ExecuteAsync();
                 }
 
                 // Original text
@@ -197,26 +185,28 @@ public class GlossaryTab(GlossaryManager glossaryManager)
                 {
                     if (!string.IsNullOrWhiteSpace(replacement) && replacement.Trim() != entry.Replacement)
                     {
-                        _ = glossaryManager.UpdateEntryAsync(entry.Id, replacement);
+                        viewModel.UpdateEntryCommand.SetParameter((entry.Id, replacement));
+                        _ = viewModel.UpdateEntryCommand.ExecuteAsync();
                     }
                 }
-                
+
                 // Delete button
                 ImGui.TableNextColumn();
                 if (ImGui.Button("Delete"u8))
                 {
                     entryToRemove = entry.Id;
                 }
-                
+
                 ImGui.PopID();
             }
-            
+
             ImGui.EndTable();
 
-            // Remove entry outside iteration
+            // Remove entry outside iteration (using command pattern)
             if (entryToRemove.HasValue)
             {
-                _ = glossaryManager.DeleteEntryAsync(entryToRemove.Value);
+                viewModel.DeleteEntryCommand.SetParameter(entryToRemove.Value);
+                _ = viewModel.DeleteEntryCommand.ExecuteAsync();
             }
         }
 
@@ -228,117 +218,34 @@ public class GlossaryTab(GlossaryManager glossaryManager)
         {
             ImGui.TextUnformatted("Share your glossary with others or backup your entries."u8);
             ImGui.Spacing();
-            
+
             if (ImGui.Button("Export to Clipboard"u8))
             {
-                ExportToClipboard();
+                _ = viewModel.ExportToClipboardCommand.ExecuteAsync();
             }
-            
+
             ImGui.SameLine();
-            
+
             if (ImGui.Button("Import from Clipboard"u8))
             {
-                ImportFromClipboard();
+                _ = viewModel.ImportFromClipboardCommand.ExecuteAsync();
             }
-            
+
             ImGui.Spacing();
             ImGui.TextWrapped("Format: JSON array of {Original, Replacement, IsEnabled} objects"u8);
-        }
-    }
 
-    private void ExportToClipboard()
-    {
-        try
-        {
-            var exportData = displayEntries.Select(e => new
+            // Show export/import feedback
+            if (!string.IsNullOrEmpty(viewModel.ExportToClipboardCommand.LastError))
             {
-                e.Original,
-                e.Replacement,
-                e.IsEnabled
-            });
-            
-            var json = JsonSerializer.Serialize(exportData, new JsonSerializerOptions { WriteIndented = true });
-            
-            ImGui.SetClipboardText(json);
-            Service.PluginLog.Information($"Exported {displayEntries.Count} glossary entries to clipboard");
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Failed to export glossary to clipboard");
-        }
-    }
-
-    private void ImportFromClipboard()
-    {
-        try
-        {
-            var json = ImGui.GetClipboardText();
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                Service.PluginLog.Warning("Clipboard is empty");
-                return;
+                var errorText = System.Text.Encoding.UTF8.GetBytes(viewModel.ExportToClipboardCommand.LastError);
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorText);
             }
 
-            var importedEntries = new List<GlossaryEntry>();
-            
-            try
+            if (!string.IsNullOrEmpty(viewModel.ImportFromClipboardCommand.LastError))
             {
-                // Try a new format first
-                var newFormat = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json);
-                if (newFormat != null)
-                {
-                    foreach (var item in newFormat)
-                    {
-                        if (item.TryGetValue("Original", out var orig) && 
-                            item.TryGetValue("Replacement", out var repl))
-                        {
-                            var entry = new GlossaryEntry
-                            {
-                                Original = orig.GetString() ?? string.Empty,
-                                Replacement = repl.GetString() ?? string.Empty,
-                                IsEnabled = item.TryGetValue("IsEnabled", out var enabled) && enabled.GetBoolean()
-                            };
-                            
-                            if (!string.IsNullOrWhiteSpace(entry.Original) && 
-                                !string.IsNullOrWhiteSpace(entry.Replacement))
-                            {
-                                importedEntries.Add(entry);
-                            }
-                        }
-                    }
-                }
+                var errorText = System.Text.Encoding.UTF8.GetBytes(viewModel.ImportFromClipboardCommand.LastError);
+                ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, errorText);
             }
-            catch
-            {
-                Service.PluginLog.Warning("Failed to parse glossary import data");
-                return;
-            }
-
-            if (importedEntries.Count == 0)
-            {
-                Service.PluginLog.Warning("No valid glossary entries found in clipboard");
-                return;
-            }
-
-            // Filter out duplicates
-            var toImport = importedEntries.Where(e => 
-                !displayEntries.Any(existing => 
-                    existing.Original.Equals(e.Original, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            if (toImport.Count > 0)
-            {
-                _ = glossaryManager.ImportEntriesAsync(toImport);
-                Service.PluginLog.Information($"Imported {toImport.Count} new glossary entries from clipboard");
-            }
-            else
-            {
-                Service.PluginLog.Information("No new entries imported (all duplicates)");
-            }
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Failed to import glossary from clipboard");
         }
     }
 }

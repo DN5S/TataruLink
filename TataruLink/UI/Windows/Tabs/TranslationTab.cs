@@ -9,18 +9,18 @@ using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Translation.Providers;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows.Tabs;
 
 public class TranslationTab
 {
-    private readonly TataruConfig configuration;
-    private readonly ITranslationService translationService;
-    
+    private readonly TranslationViewModel viewModel;
+
+    // Local UI state (not in ViewModel - view-specific)
     private string tempApiKey = string.Empty;
     private GeminiProvider.ModelInfo[] geminiModels = [];
     private bool isLoadingModels;
-    private bool isTestingConnection;
     
     // Language settings
     private readonly string[] languageNames = 
@@ -42,16 +42,31 @@ public class TranslationTab
         "en", "ja", "de", "fr", "zh", "ko", "es", "pt", "ru", "it", "nl", "pl"
     ];
 
-    public TranslationTab(TataruConfig configuration, ITranslationService translationService)
+    // New MVVM constructor
+    public TranslationTab(TranslationViewModel viewModel)
     {
-        this.configuration = configuration;
-        this.translationService = translationService;
-        
+        this.viewModel = viewModel;
+
         // Load API key for the current engine
         LoadCurrentApiKey();
-        
+
         // Load Gemini models if Gemini is selected
-        if (configuration.Translation.Engine == "Gemini")
+        if (viewModel.SelectedEngine == "Gemini")
+        {
+            _ = LoadGeminiModelsAsync();
+        }
+    }
+
+    // Temporary backward-compatible constructor for transition
+    public TranslationTab(TataruConfig configuration, ITranslationService translationService)
+    {
+        this.viewModel = new TranslationViewModel(configuration, translationService, Services.Service.UiDispatcher);
+
+        // Load API key for the current engine
+        LoadCurrentApiKey();
+
+        // Load Gemini models if Gemini is selected
+        if (viewModel.SelectedEngine == "Gemini")
         {
             _ = LoadGeminiModelsAsync();
         }
@@ -59,25 +74,26 @@ public class TranslationTab
 
     public void Draw()
     {
+        // CRITICAL: Process queued UI updates from background threads
+        Services.Service.UiDispatcher.ProcessQueue();
+
         // Language Settings Section
         ImGui.TextUnformatted("Language Settings"u8);
         ImGui.Separator();
         ImGui.Spacing();
         
         ImGuiUtils.AlignedLabel("Source Language"u8, 150);
-        var sourceIndex = GetLanguageIndex(configuration.Translation.SourceLanguage);
+        var sourceIndex = viewModel.SourceLanguageIndex;
         if (ImGui.Combo("##SourceLang"u8, ref sourceIndex, languageNames, languageNames.Length))
         {
-            configuration.Translation.SourceLanguage = languageCodes[sourceIndex];
-            Service.Configuration.Save();
+            viewModel.SourceLanguageIndex = sourceIndex;
         }
-        
+
         ImGuiUtils.AlignedLabel("Target Language"u8, 150);
-        var targetIndex = GetLanguageIndexNoAuto(configuration.Translation.TargetLanguage);
+        var targetIndex = viewModel.TargetLanguageIndex;
         if (ImGui.Combo("##TargetLang"u8, ref targetIndex, languageNamesNoAuto, languageNamesNoAuto.Length))
         {
-            configuration.Translation.TargetLanguage = languageCodesNoAuto[targetIndex];
-            Service.Configuration.Save();
+            viewModel.TargetLanguageIndex = targetIndex;
         }
         
         ImGuiUtils.TextColored(ImGuiUtils.Colors.TextMuted, "Tip: Select 'Auto-Detect' as source language to automatically detect the language of incoming messages."u8);
@@ -88,9 +104,9 @@ public class TranslationTab
         
         // Translation Engine Section
         ImGui.TextUnformatted("Translation Engine"u8);
-        
+
         // Show the current provider status with detailed error information
-        var status = translationService.GetActiveProviderStatus();
+        var status = viewModel.ActiveProviderStatus;
         ImGui.SameLine();
         if (status != null)
         {
@@ -132,30 +148,19 @@ public class TranslationTab
         // Get available provider types
         var providerTypes = Enum.GetValues<TranslationProviderType>();
         var providerNames = providerTypes.Select(p => p.ToString()).ToArray();
-        
-        // Calculate index based on the current configuration
-        var currentEngine = configuration.Translation.Engine;
-        var currentProviderType = Enum.TryParse<TranslationProviderType>(currentEngine, out var type) 
-            ? type 
-            : TranslationProviderType.Mock;
-        var selectedEngineIndex = (int)currentProviderType;
-        
+
+        var selectedEngineIndex = viewModel.SelectedEngineIndex;
+
         if (ImGui.Combo("##Engine"u8, ref selectedEngineIndex, providerNames, providerNames.Length))
         {
-            var newProviderType = (TranslationProviderType)selectedEngineIndex;
-            var newEngine = newProviderType.ToString();
-            configuration.Translation.Engine = newEngine;
-            translationService.ChangeProvider(newEngine);
-            LoadCurrentApiKey();
-            Service.Configuration.Save();
-            
-            Service.PluginLog.Information($"Translation engine changed to: {newEngine}");
+            viewModel.SelectedEngineIndex = selectedEngineIndex;
+            LoadCurrentApiKey(); // Reload API key for new engine
         }
         
         ImGui.Spacing();
 
-        var engineType = Enum.TryParse<TranslationProviderType>(configuration.Translation.Engine, out var providerType) 
-            ? providerType 
+        var engineType = Enum.TryParse<TranslationProviderType>(viewModel.SelectedEngine, out var providerType)
+            ? providerType
             : TranslationProviderType.Mock;
             
         switch (engineType)
@@ -170,7 +175,7 @@ public class TranslationTab
                 
                 // Show configuration status
                 ImGui.SameLine();
-                if (translationService is { IsConfigured: true, ProviderName: "DeepL" })
+                if (viewModel.IsConfigured && viewModel.ProviderName == "DeepL")
                 {
                     ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
                 }
@@ -186,22 +191,23 @@ public class TranslationTab
                 {
                     ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "[Not Configured]"u8);
                 }
-                
+
                 ImGui.SameLine();
+                if (viewModel.SaveApiKeyCommand.IsExecuting) ImGui.BeginDisabled();
                 if (ImGui.Button("Save Key"u8))
                 {
-                    _ = Task.Run(async () =>
-                    {
-                        await translationService.UpdateApiKeyAsync(configuration.Translation.Engine, tempApiKey);
-                        Service.PluginLog.Information("API key saved and provider reinitialized");
-                        
-                        // Auto-test the connection after saving
-                        await TestProviderConnectionAsync();
-                    });
+                    viewModel.SaveApiKeyCommand.SetParameter(tempApiKey);
+                    _ = viewModel.SaveApiKeyCommand.ExecuteAsync();
                 }
-                
+                if (viewModel.SaveApiKeyCommand.IsExecuting)
+                {
+                    ImGui.EndDisabled();
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Saving...");
+                }
+
                 ImGui.SameLine();
-                if (isTestingConnection)
+                if (viewModel.TestConnectionCommand.IsExecuting)
                 {
                     ImGui.BeginDisabled();
                     ImGui.Button("Testing..."u8);
@@ -209,7 +215,7 @@ public class TranslationTab
                 }
                 else if (ImGui.Button("Test Connection"u8))
                 {
-                    _ = TestProviderConnectionAsync();
+                    _ = viewModel.TestConnectionCommand.ExecuteAsync();
                 }
 
                 break;
@@ -233,66 +239,31 @@ public class TranslationTab
         ImGui.Spacing();
         
         // Translation options
-        var retryFailed = configuration.Translation.RetryFailedTranslations;
+        var retryFailed = viewModel.RetryFailedTranslations;
         if (ImGui.Checkbox("Retry failed translations"u8, ref retryFailed))
         {
-            configuration.Translation.RetryFailedTranslations = retryFailed;
-            Service.Configuration.Save();
+            viewModel.RetryFailedTranslations = retryFailed;
         }
-        
+
         if (retryFailed)
         {
-            var maxRetries = configuration.Translation.MaxRetryAttempts;
+            var maxRetries = viewModel.MaxRetryAttempts;
             if (ImGui.SliderInt("Max retry attempts"u8, ref maxRetries, 1, 5))
             {
-                configuration.Translation.MaxRetryAttempts = maxRetries;
-                Service.Configuration.Save();
+                viewModel.MaxRetryAttempts = maxRetries;
             }
         }
-        
-        var timeout = configuration.Translation.TimeoutMs;
+
+        var timeout = viewModel.TimeoutMs;
         if (ImGui.SliderInt("Timeout (ms)"u8, ref timeout, 1000, 10000))
         {
-            configuration.Translation.TimeoutMs = timeout;
-            Service.Configuration.Save();
+            viewModel.TimeoutMs = timeout;
         }
     }
 
     private void LoadCurrentApiKey()
     {
-        tempApiKey = configuration.Translation.GetApiKey(configuration.Translation.Engine) ?? string.Empty;
-    }
-    
-    private async Task TestProviderConnectionAsync()
-    {
-        if (isTestingConnection) return;
-        
-        isTestingConnection = true;
-        try
-        {
-            var result = await translationService.TranslateAsync(
-                "Test", 
-                "auto", 
-                configuration.Translation.TargetLanguage
-            );
-            
-            if (!string.IsNullOrEmpty(result))
-            {
-                Service.PluginLog.Information($"Provider test successful: 'Test' -> '{result}'");
-            }
-            else
-            {
-                Service.PluginLog.Warning("Provider test failed: No translation returned");
-            }
-        }
-        catch (Exception ex)
-        {
-            Service.PluginLog.Error(ex, "Provider test failed");
-        }
-        finally
-        {
-            isTestingConnection = false;
-        }
+        tempApiKey = viewModel.GetApiKey(viewModel.SelectedEngine) ?? string.Empty;
     }
     
     private void DrawGeminiSettings()
@@ -305,7 +276,7 @@ public class TranslationTab
         
         // Show configuration status
         ImGui.SameLine();
-        if (translationService is { IsConfigured: true, ProviderName: "Gemini" })
+        if (viewModel.IsConfigured && viewModel.ProviderName == "Gemini")
         {
             ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
         }
@@ -317,19 +288,20 @@ public class TranslationTab
         {
             ImGuiUtils.TextColored(ImGuiUtils.Colors.Error, "[Not Configured]"u8);
         }
-        
+
         ImGui.SameLine();
+        if (viewModel.SaveApiKeyCommand.IsExecuting) ImGui.BeginDisabled();
         if (ImGui.Button("Save Key"u8))
         {
-            _ = Task.Run(async () =>
-            {
-                await translationService.UpdateApiKeyAsync("Gemini", tempApiKey);
-                Service.PluginLog.Information("Gemini API key saved and provider reinitialized");
-            });
+            viewModel.SaveApiKeyCommand.SetParameter(tempApiKey);
+            _ = viewModel.SaveApiKeyCommand.ExecuteAsync();
             _ = LoadGeminiModelsAsync();
-            
-            // Auto-test the connection after saving
-            _ = TestProviderConnectionAsync();
+        }
+        if (viewModel.SaveApiKeyCommand.IsExecuting)
+        {
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            ImGui.TextUnformatted("Saving...");
         }
         
         ImGui.Separator();
@@ -345,17 +317,15 @@ public class TranslationTab
         }
         else
         {
-            var currentModel = configuration.Translation.Gemini.SelectedModel;
+            var currentModel = viewModel.GeminiSelectedModel;
             var selectedIndex = Array.FindIndex(geminiModels, m => m.Name == currentModel);
             if (selectedIndex < 0) selectedIndex = 0;
-            
+
             var modelNames = geminiModels.Select(m => m.DisplayName).ToArray();
-            
+
             if (ImGui.Combo("##GeminiModel"u8, ref selectedIndex, modelNames, modelNames.Length))
             {
-                configuration.Translation.Gemini.SelectedModel = geminiModels[selectedIndex].Name;
-                Service.Configuration.Save();
-                Service.PluginLog.Information($"Gemini model changed to: {geminiModels[selectedIndex].Name}");
+                viewModel.GeminiSelectedModel = geminiModels[selectedIndex].Name;
             }
             
             if (selectedIndex >= 0 && selectedIndex < geminiModels.Length)
@@ -371,44 +341,43 @@ public class TranslationTab
         
         ImGui.Separator();
         ImGui.TextUnformatted("Advanced Settings"u8);
-        
-        var temperature = configuration.Translation.Gemini.Temperature;
+
+        var temperature = viewModel.GeminiTemperature;
         if (ImGui.SliderFloat("Temperature"u8, ref temperature, 0.0f, 2.0f, "%.2f"))
         {
-            configuration.Translation.Gemini.Temperature = temperature;
-            Service.Configuration.Save();
+            viewModel.GeminiTemperature = temperature;
         }
         ImGui.SameLine();
         ImGuiUtils.HelpMarker("Controls randomness in responses. Lower = more focused, higher = more creative"u8);
-        
-        var maxTokens = configuration.Translation.Gemini.MaxOutputTokens;
+
+        var maxTokens = viewModel.GeminiMaxOutputTokens;
         if (ImGui.SliderInt("Max Output Tokens"u8, ref maxTokens, 50, 1024))
         {
-            configuration.Translation.Gemini.MaxOutputTokens = maxTokens;
-            Service.Configuration.Save();
+            viewModel.GeminiMaxOutputTokens = maxTokens;
         }
-        
+
+        if (viewModel.LoadGeminiModelsCommand.IsExecuting) ImGui.BeginDisabled();
         if (ImGui.Button("Refresh Models"u8))
         {
+            // Use local method for model loading since it updates local UI state
             _ = LoadGeminiModelsAsync();
         }
-        
+        if (viewModel.LoadGeminiModelsCommand.IsExecuting) ImGui.EndDisabled();
+
         ImGui.SameLine();
         if (ImGuiUtils.ConfirmationButton("Reset to Defaults"u8, "This will reset all Gemini settings to their default values."u8))
         {
-            configuration.Translation.Gemini.ResetToDefaults();
-            Service.Configuration.Save();
-            Service.PluginLog.Information("Gemini settings reset to defaults");
+            _ = viewModel.ResetGeminiDefaultsCommand.ExecuteAsync();
         }
     }
     
     private async Task LoadGeminiModelsAsync()
     {
         if (isLoadingModels) return;
-        
-        var apiKey = configuration.Translation.GetApiKey("Gemini");
+
+        var apiKey = viewModel.GetApiKey("Gemini");
         if (string.IsNullOrEmpty(apiKey)) return;
-        
+
         isLoadingModels = true;
         try
         {

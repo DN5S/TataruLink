@@ -1,42 +1,56 @@
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
-using TataruLink.Services;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class DisplayTab(TataruConfig configuration)
+public class DisplayTab
 {
+    private readonly DisplayViewModel viewModel;
+
+    // New MVVM constructor
+    public DisplayTab(DisplayViewModel viewModel)
+    {
+        this.viewModel = viewModel;
+    }
+
+    // Temporary backward-compatible constructor for transition
+    public DisplayTab(TataruConfig configuration)
+    {
+        this.viewModel = new DisplayViewModel(configuration);
+    }
+
     public void Draw()
     {
+        // Process queued UI updates from async commands
+        Services.Service.UiDispatcher.ProcessQueue();
+
         // Chat Display Section
         ImGuiUtils.Section("Chat Display"u8);
 
-        var showInChat = configuration.Display.ShowInGameChat;
+        var showInChat = viewModel.ShowInGameChat;
         if (ImGui.Checkbox("Enable Chat Display"u8, ref showInChat))
         {
-            configuration.Display.ShowInGameChat = showInChat;
-            Service.Configuration.Save();
+            viewModel.ShowInGameChat = showInChat;
         }
         ImGui.SameLine();
         ImGuiUtils.HelpMarker("Show translated messages in the game's chat window"u8);
 
-        if (configuration.Display.ShowInGameChat)
+        if (viewModel.ShowInGameChat)
         {
             ImGuiUtils.Indent(() =>
             {
-                var showSenderName = configuration.Display.ShowSenderName;
+                var showSenderName = viewModel.ShowSenderName;
                 if (ImGui.Checkbox("Show sender name"u8, ref showSenderName))
                 {
-                    configuration.Display.ShowSenderName = showSenderName;
-                    Service.Configuration.Save();
+                    viewModel.ShowSenderName = showSenderName;
                 }
-                
-                var showChatType = configuration.Display.ShowChatType;
+
+                var showChatType = viewModel.ShowChatType;
                 if (ImGui.Checkbox("Show chat type"u8, ref showChatType))
                 {
-                    configuration.Display.ShowChatType = showChatType;
-                    Service.Configuration.Save();
+                    viewModel.ShowChatType = showChatType;
                 }
             });
         }

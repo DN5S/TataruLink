@@ -22,8 +22,8 @@ public class MockTranslationProvider : ITranslationProvider
         CancellationToken cancellationToken = default)
     {
         // NOTE: Simulate network delay
-        await Task.Delay(100, cancellationToken);
-        
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+
         // NOTE: Mock auto-detection always returns Japanese
         var detectedSource = sourceLanguage == "auto" ? "ja" : sourceLanguage;
         

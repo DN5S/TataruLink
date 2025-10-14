@@ -43,9 +43,9 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 openTimeoutSeconds: 30);
         }
         
-        // Use GetAwaiter().GetResult() here since Initialize is synchronous
-        SelectProviderAsync(configuration.Translation.Engine).GetAwaiter().GetResult();
-        
+        // Initialize with default provider
+        SelectProvider(configuration.Translation.Engine);
+
         Service.PluginLog.Information($"Translation service initialized with provider: {ProviderName}");
     }
 
@@ -55,9 +55,10 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         Service.PluginLog.Debug($"Registered translation provider: {provider.Name}");
     }
 
-    private async Task SelectProviderAsync(string providerName)
+    private void SelectProvider(string providerName)
     {
-        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(5)))
+        // Use synchronous lock acquisition - safe because provider.Initialize() is synchronous
+        if (!providerLock.Wait(TimeSpan.FromSeconds(5)))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for SelectProvider");
             return;
@@ -68,7 +69,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
             {
                 var apiKey = configuration.Translation.GetApiKey(providerName);
                 provider.Initialize(apiKey);
-                
+
                 if (providerStatuses.TryGetValue(providerName, out var status))
                 {
                     status.IsConfigured = provider.IsConfigured;
@@ -76,19 +77,19 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     status.LastError = null;
                     status.ConsecutiveFailures = 0;
                 }
-                
+
                 activeProvider = provider;
                 Service.PluginLog.Information($"Selected translation provider: {providerName}");
             }
             else
             {
                 Service.PluginLog.Warning($"Translation provider not found: {providerName}");
-                
+
                 if (providers.TryGetValue("Mock", out var mockProvider))
                 {
                     activeProvider = mockProvider;
                     activeProvider.Initialize();
-                    
+
                     if (providerStatuses.TryGetValue("Mock", out var status))
                     {
                         status.IsConfigured = true;
@@ -211,7 +212,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                     retryCount++;
                     // Exponential backoff between retries
                     var delayMs = (int)(500 * Math.Pow(2, retryCount - 1));
-                    await AsyncUtils.CancellableDelay(delayMs, cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
                     if (cancellationToken.IsCancellationRequested) return null;
                 }
                 else
@@ -241,21 +242,21 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     }
 
     public void ChangeProvider(string providerName)
-    { 
+    {
         Service.PluginLog.Information($"Changing translation provider from {ProviderName} to {providerName}");
-        
+
         // Reset circuit breaker for the new provider
         if (circuitBreakers.TryGetValue(providerName, out var circuitBreaker))
         {
             circuitBreaker.Reset();
             Service.PluginLog.Debug($"Reset circuit breaker for provider {providerName}");
         }
-        
+
         configuration.Translation.Engine = providerName;
         Service.Configuration.Save();
-        
-        // Use GetAwaiter().GetResult() here since ChangeProvider is synchronous
-        SelectProviderAsync(providerName).GetAwaiter().GetResult();
+
+        // Switch to new provider
+        SelectProvider(providerName);
     }
 
     public async Task UpdateApiKeyAsync(string providerName, string apiKey)
@@ -265,7 +266,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
         configuration.Translation.SetApiKey(providerName, apiKey);
         Service.Configuration.Save();
 
-        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(5)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for UpdateApiKey");
             return;
@@ -343,7 +344,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public async Task<TranslationProviderStatus?> GetProviderStatusAsync(string providerName)
     {
-        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(1)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for GetProviderStatus");
             return null;
@@ -386,7 +387,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
     
     public async Task<IReadOnlyDictionary<string, TranslationProviderStatus>> GetAllProviderStatusesAsync()
     {
-        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(1)))
+        if (!await providerLock.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false))
         {
             Service.PluginLog.Warning("Failed to acquire provider lock for GetAllProviderStatuses");
             return new Dictionary<string, TranslationProviderStatus>();

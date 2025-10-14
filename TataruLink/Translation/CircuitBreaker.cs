@@ -53,7 +53,7 @@ public class CircuitBreaker
         
         try
         {
-            var result = await operation();
+            var result = await operation().ConfigureAwait(false);
             OnSuccess();
             return (result != null, result);
         }

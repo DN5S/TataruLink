@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using TataruLink.Configuration;
@@ -50,7 +51,18 @@ public class ChatCaptureHandler : IDisposable
             };
 
             // Fire and forget - event processing happens asynchronously
-            _ = eventBus.PublishAsync(@event);
+            // Wrap in Task.Run to prevent unobserved task exceptions
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await eventBus.PublishAsync(@event).ConfigureAwait(false);
+                }
+                catch (Exception eventEx)
+                {
+                    Service.PluginLog.Error(eventEx, "Unhandled error in event publishing");
+                }
+            });
         }
         catch (Exception ex)
         {

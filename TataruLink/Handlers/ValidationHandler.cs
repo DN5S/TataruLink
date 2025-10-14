@@ -27,27 +27,27 @@ public class ValidationHandler : IEventHandler<ChatMessageReceivedEvent>
         // Basic validation
         if (string.IsNullOrWhiteSpace(@event.PlainTextContent))
         {
-            await PublishFailure(@event, "Empty or whitespace content");
+            await PublishFailure(@event, "Empty or whitespace content").ConfigureAwait(false);
             return;
         }
 
         if (IsPureSymbols(@event.PlainTextContent))
         {
-            await PublishFailure(@event, "Pure symbols content");
+            await PublishFailure(@event, "Pure symbols content").ConfigureAwait(false);
             return;
         }
 
         // Minimum content length check
         if (@event.PlainTextContent.Length < configuration.Validation.MinContentLength)
         {
-            await PublishFailure(@event, $"Content too short (min: {configuration.Validation.MinContentLength})");
+            await PublishFailure(@event, $"Content too short (min: {configuration.Validation.MinContentLength})").ConfigureAwait(false);
             return;
         }
 
         // Deduplication check
         if (configuration.Validation.EnableDeduplication && IsDuplicate(@event.MessageId, @event.PlainTextContent))
         {
-            await PublishFailure(@event, "Duplicate message");
+            await PublishFailure(@event, "Duplicate message").ConfigureAwait(false);
             return;
         }
 
@@ -62,7 +62,7 @@ public class ValidationHandler : IEventHandler<ChatMessageReceivedEvent>
             TargetLanguage = configuration.Translation.TargetLanguage
         };
 
-        await eventBus.PublishAsync(translationEvent);
+        await eventBus.PublishAsync(translationEvent).ConfigureAwait(false);
     }
 
     private async Task PublishFailure(ChatMessageReceivedEvent @event, string reason)
@@ -78,7 +78,7 @@ public class ValidationHandler : IEventHandler<ChatMessageReceivedEvent>
         };
 
         Service.PluginLog.Debug($"Message validation failed: {reason}");
-        await eventBus.PublishAsync(failureEvent);
+        await eventBus.PublishAsync(failureEvent).ConfigureAwait(false);
     }
 
     private bool IsPureSymbols(string text)

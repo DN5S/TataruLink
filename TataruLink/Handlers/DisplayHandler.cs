@@ -54,7 +54,7 @@ public class DisplayHandler : IEventHandler<TranslationCompletedEvent>
             DisplayedInOverlay = displayedInOverlay
         };
 
-        await eventBus.PublishAsync(displayEvent);
+        await eventBus.PublishAsync(displayEvent).ConfigureAwait(false);
     }
 
     private string FormatTranslation(Models.Message message)

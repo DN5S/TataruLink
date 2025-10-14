@@ -7,11 +7,21 @@ using TataruLink.Configuration;
 using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class ChatTypesTab(TataruConfig configuration)
+public class ChatTypesTab
 {
+    private readonly ChatTypesViewModel viewModel;
+    private readonly TataruConfig configuration; // Keep for direct config access in UI
+
+    public ChatTypesTab(ChatTypesViewModel viewModel, TataruConfig configuration)
+    {
+        this.viewModel = viewModel;
+        this.configuration = configuration;
+    }
+
     private static HashSet<ushort> GetAllPresetChatTypes()
     {
         var allPresetChatTypes = new HashSet<ushort>();
@@ -29,6 +39,9 @@ public class ChatTypesTab(TataruConfig configuration)
     
     public void Draw()
     {
+        // Process queued UI updates from async commands
+        Services.Service.UiDispatcher.ProcessQueue();
+
         ImGui.TextUnformatted("Configure which chat types to translate and which provider to use for each type."u8);
         ImGui.Spacing();
         
@@ -61,113 +74,131 @@ public class ChatTypesTab(TataruConfig configuration)
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("Public"u8, "Enable: Say, Yell, Shout"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.PublicChat, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.PublicChat);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] Public"u8, "Disable: Say, Yell, Shout"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.PublicChat, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.PublicChat);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
             
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("Party"u8, "Enable: Party, Alliance, Cross-Party"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.PartyChat, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.PartyChat);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] Party"u8, "Disable: Party, Alliance, Cross-Party"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.PartyChat, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.PartyChat);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             // Row 2: Private and Linkshells
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("Tell"u8, "Enable: Tell (Incoming/Outgoing)"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.PrivateChat, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.PrivateChat);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] Tell"u8, "Disable: Tell (Incoming/Outgoing)"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.PrivateChat, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.PrivateChat);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("Linkshells"u8, "Enable: Linkshells 1-8"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Linkshells, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.Linkshells);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] Linkshells"u8, "Disable: Linkshells 1-8"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Linkshells, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.Linkshells);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             // Row 3: CWLS and Community
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("CWLS"u8, "Enable: Cross-World Linkshells 1-8"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.CrossWorldLinkshells);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] CWLS"u8, "Disable: Cross-World Linkshells 1-8"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.CrossWorldLinkshells, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.CrossWorldLinkshells);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("Community"u8, "Enable: Free Company, Novice Network, PvP Team"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Community, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.Community);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] Community"u8, "Disable: Free Company, Novice Network, PvP Team"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Community, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.Community);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             // Row 4: System and NPC
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("System"u8, "Enable: System messages"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.System, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.System);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] System"u8, "Disable: System messages"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.System, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.System);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("NPC"u8, "Enable: NPC dialogue"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Npc, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.Npc);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] NPC"u8, "Disable: NPC dialogue"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Npc, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.Npc);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
-            
+
             // Row 5: Emotes only
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("Emotes"u8, "Enable: Emote messages"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Emotes, true);
+                viewModel.EnablePresetCommand.SetParameter(ChatTypeUtils.Presets.Emotes);
+                _ = viewModel.EnablePresetCommand.ExecuteAsync();
             }
-            
+
             ImGui.TableNextColumn();
             if (ImGuiUtils.ButtonWithTooltip("[X] Emotes"u8, "Disable: Emote messages"u8))
             {
-                TogglePreset(ChatTypeUtils.Presets.Emotes, false);
+                viewModel.DisablePresetCommand.SetParameter(ChatTypeUtils.Presets.Emotes);
+                _ = viewModel.DisablePresetCommand.ExecuteAsync();
             }
             
             ImGui.TableNextColumn();
@@ -178,21 +209,16 @@ public class ChatTypesTab(TataruConfig configuration)
         }
         
         ImGui.Spacing();
-        
+
         // Master controls
         if (ImGui.Button("Enable All"u8))
         {
-            foreach (var chatType in GetAllPresetChatTypes())
-            {
-                configuration.Chat.SetChatTypeEnabled(chatType, true);
-            }
-            Service.Configuration.Save();
+            _ = viewModel.EnableAllCommand.ExecuteAsync();
         }
         ImGui.SameLine();
         if (ImGui.Button("Disable All"u8))
         {
-            configuration.Chat.EnabledChatTypes.Clear();
-            Service.Configuration.Save();
+            _ = viewModel.DisableAllCommand.ExecuteAsync();
         }
     }
     
@@ -223,8 +249,8 @@ public class ChatTypesTab(TataruConfig configuration)
                 var isEnabled = configuration.Chat.IsChatTypeEnabled(chatType);
                 if (ImGui.Checkbox($"##Enabled{chatType}", ref isEnabled))
                 {
-                    configuration.Chat.SetChatTypeEnabled(chatType, isEnabled);
-                    Service.Configuration.Save();
+                    viewModel.ToggleChatTypeCommand.SetParameter(chatType);
+                    _ = viewModel.ToggleChatTypeCommand.ExecuteAsync();
                 }
                 
                 ImGui.TableNextColumn();
@@ -240,7 +266,7 @@ public class ChatTypesTab(TataruConfig configuration)
                 if (isEnabled)
                 {
                     var currentProvider = configuration.Chat.GetProviderForChatType(chatType) ?? "Default";
-                    
+
                     ImGui.SetNextItemWidth(-1);
                     if (ImGui.BeginCombo($"##Provider{chatType}", currentProvider))
                     {
@@ -249,8 +275,8 @@ public class ChatTypesTab(TataruConfig configuration)
                             var isSelected = provider == currentProvider;
                             if (ImGui.Selectable(provider, isSelected))
                             {
-                                configuration.Chat.SetProviderForChatType(chatType, provider == "Default" ? null : provider);
-                                Service.Configuration.Save();
+                                viewModel.SetProviderCommand.SetParameter((chatType, provider == "Default" ? null : provider));
+                                _ = viewModel.SetProviderCommand.ExecuteAsync();
                             }
                             if (isSelected)
                             {
@@ -316,14 +342,5 @@ public class ChatTypesTab(TataruConfig configuration)
         
         ImGui.Spacing();
         ImGui.TextWrapped("Note: Individual chat type provider settings override the default provider."u8);
-    }
-    
-    private void TogglePreset(ushort[] chatTypes, bool enable)
-    {
-        foreach (var chatType in chatTypes)
-        {
-            configuration.Chat.SetChatTypeEnabled(chatType, enable);
-        }
-        Service.Configuration.Save();
     }
 }

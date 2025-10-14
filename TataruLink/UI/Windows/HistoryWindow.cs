@@ -9,37 +9,32 @@ using TataruLink.History;
 using TataruLink.Models;
 using TataruLink.Services;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows;
 
 public class HistoryWindow : Window, IDisposable
 {
-    private readonly SessionHistoryManager historyManager;
-    private List<TranslationRecord> displayedRecords = [];
-    private string searchText = string.Empty;
-    private List<long> selectedIds = [];
-    private long? editingId;
-    private string editingText = string.Empty;
+    private readonly HistoryViewModel viewModel;
 
     private const ImGuiTableFlags TableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg |
                                                ImGuiTableFlags.Resizable | ImGuiTableFlags.Sortable |
                                                ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY |
                                                ImGuiTableFlags.Hideable;
 
-    public HistoryWindow(SessionHistoryManager historyManager)
+    public HistoryWindow(HistoryViewModel viewModel)
         : base("Translation History###TataruHistoryWindow")
     {
-        this.historyManager = historyManager;
+        this.viewModel = viewModel;
         Size = new Vector2(1200, 800);
         SizeCondition = ImGuiCond.FirstUseEver;
-
-        historyManager.RecordAdded += OnRecordAdded;
-
-        RefreshRecords();
     }
 
     public override void Draw()
     {
+        // CRITICAL: Process incremental updates from HistoryViewModel
+        Services.Service.UiDispatcher.ProcessQueue();
+
         DrawControls();
         ImGui.Separator();
         DrawHistoryTable();
@@ -48,25 +43,25 @@ public class HistoryWindow : Window, IDisposable
     private void DrawControls()
     {
         ImGui.SetNextItemWidth(300f);
+        var searchText = viewModel.SearchText;
         if (ImGui.InputTextWithHint("##search"u8, "Search..."u8, ref searchText, 256))
         {
-            RefreshRecords();
+            viewModel.SearchText = searchText;
         }
 
         ImGui.SameLine();
         if (ImGui.Button("Refresh"u8))
         {
-            RefreshRecords();
+            _ = viewModel.RefreshCommand.ExecuteAsync();
         }
 
         ImGui.SameLine();
-        using (ImRaii.Disabled(selectedIds.Count == 0))
+        if (!viewModel.DeleteSelectedCommand.CanExecute()) ImGui.BeginDisabled();
+        if (ImGui.Button($"Delete Selected ({viewModel.SelectedCount})"))
         {
-            if (ImGui.Button($"Delete Selected ({selectedIds.Count})"))
-            {
-                DeleteSelected();
-            }
+            _ = viewModel.DeleteSelectedCommand.ExecuteAsync();
         }
+        if (!viewModel.DeleteSelectedCommand.CanExecute()) ImGui.EndDisabled();
 
         ImGui.SameLine();
         if (ImGui.Button("Clear All"u8))
@@ -83,7 +78,7 @@ public class HistoryWindow : Window, IDisposable
 
             if (ImGui.Button("Yes, Delete All"u8))
             {
-                ClearAll();
+                _ = viewModel.ClearAllCommand.ExecuteAsync();
                 ImGui.CloseCurrentPopup();
             }
 
@@ -96,8 +91,7 @@ public class HistoryWindow : Window, IDisposable
             ImGui.EndPopup();
         }
 
-        var totalCount = historyManager.GetRecordCount();
-        ImGui.TextUnformatted($"Total entries: {totalCount} | Displayed: {displayedRecords.Count} | Selected: {selectedIds.Count}");
+        ImGui.TextUnformatted($"Total entries: {viewModel.TotalCount} | Displayed: {viewModel.DisplayedCount} | Selected: {viewModel.SelectedCount}");
     }
 
     private void DrawHistoryTable()
@@ -116,7 +110,8 @@ public class HistoryWindow : Window, IDisposable
 
         ImGui.TableHeadersRow();
 
-        foreach (var record in displayedRecords)
+        // Use ViewModel's DisplayedRecords (already filtered and limited)
+        foreach (var record in viewModel.DisplayedRecords.GetSnapshot())
         {
             DrawHistoryRow(record);
         }
@@ -129,13 +124,10 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TableNextRow();
 
         ImGui.TableNextColumn();
-        var isSelected = selectedIds.Contains(record.Id);
+        var isSelected = viewModel.IsSelected(record.Id);
         if (ImGui.Checkbox($"##select_{record.Id}", ref isSelected))
         {
-            if (isSelected)
-                selectedIds.Add(record.Id);
-            else
-                selectedIds.Remove(record.Id);
+            viewModel.ToggleSelection(record.Id);
         }
 
         ImGui.TableNextColumn();
@@ -151,24 +143,25 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TextWrapped(record.OriginalContent);
 
         ImGui.TableNextColumn();
-        if (editingId == record.Id)
+        if (viewModel.EditingId == record.Id)
         {
+            var editingText = viewModel.EditingText;
             ImGui.SetNextItemWidth(-1);
             if (ImGui.InputTextMultiline($"##edit_{record.Id}", ref editingText, 1000, new Vector2(-1, 60)))
             {
-                // Text is being edited
+                viewModel.EditingText = editingText;
             }
 
             if (ImGui.Button($"Save##save_{record.Id}"))
             {
-                SaveTranslationEdit(record.Id, editingText);
-                editingId = null;
+                viewModel.SaveEditCommand.SetParameter((record.Id, viewModel.EditingText));
+                _ = viewModel.SaveEditCommand.ExecuteAsync();
             }
 
             ImGui.SameLine();
             if (ImGui.Button($"Cancel##cancel_{record.Id}"))
             {
-                editingId = null;
+                _ = viewModel.CancelEditCommand.ExecuteAsync();
             }
         }
         else
@@ -177,8 +170,7 @@ public class HistoryWindow : Window, IDisposable
 
             if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
             {
-                editingId = record.Id;
-                editingText = record.TranslatedContent;
+                viewModel.StartEdit(record.Id, record.TranslatedContent);
             }
 
             if (ImGui.IsItemHovered())
@@ -193,7 +185,8 @@ public class HistoryWindow : Window, IDisposable
         ImGui.TableNextColumn();
         if (ImGui.Button($"Delete##del_{record.Id}"))
         {
-            DeleteRecord(record.Id);
+            viewModel.DeleteRecordCommand.SetParameter(record.Id);
+            _ = viewModel.DeleteRecordCommand.ExecuteAsync();
         }
 
         if (ImGui.BeginPopupContextItem($"context_{record.Id}"))
@@ -211,74 +204,17 @@ public class HistoryWindow : Window, IDisposable
             ImGui.Separator();
             if (ImGui.Selectable("Delete"u8))
             {
-                DeleteRecord(record.Id);
+                viewModel.DeleteRecordCommand.SetParameter(record.Id);
+                _ = viewModel.DeleteRecordCommand.ExecuteAsync();
             }
 
             ImGui.EndPopup();
         }
     }
 
-    private void RefreshRecords()
-    {
-        if (string.IsNullOrWhiteSpace(searchText))
-        {
-            displayedRecords = historyManager.GetRecords(1000);
-        }
-        else
-        {
-            displayedRecords = historyManager.SearchRecords(searchText, 1000);
-        }
-    }
-
-    private void DeleteRecord(long id)
-    {
-        historyManager.DeleteRecord(id);
-        selectedIds.Remove(id);
-        RefreshRecords();
-        Service.PluginLog.Debug($"Deleted record {id}");
-    }
-
-    private void DeleteSelected()
-    {
-        if (selectedIds.Count == 0) return;
-
-        historyManager.DeleteRecords(selectedIds.ToArray());
-        Service.PluginLog.Information($"Deleted {selectedIds.Count} records");
-        selectedIds.Clear();
-        RefreshRecords();
-    }
-
-    private void ClearAll()
-    {
-        var count = historyManager.Clear();
-        selectedIds.Clear();
-        RefreshRecords();
-        Service.PluginLog.Information($"Cleared all history: {count} records deleted");
-    }
-
-    private void SaveTranslationEdit(long id, string newTranslation)
-    {
-        if (historyManager.UpdateTranslation(id, newTranslation))
-        {
-            RefreshRecords();
-            Service.PluginLog.Information($"Updated translation for record {id}");
-        }
-        else
-        {
-            Service.PluginLog.Warning($"Failed to update translation for record {id}");
-        }
-    }
-
-    private void OnRecordAdded(object? sender, TranslationRecord record)
-    {
-        if (!IsOpen) return;
-        RefreshRecords();
-        Service.PluginLog.Debug($"History auto-updated with new record: {record.Id}");
-    }
-
     public void Dispose()
     {
-        historyManager.RecordAdded -= OnRecordAdded;
+        viewModel?.Dispose();
         GC.SuppressFinalize(this);
     }
 }

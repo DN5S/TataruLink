@@ -7,16 +7,42 @@ using TataruLink.Configuration;
 using TataruLink.Overlay;
 using TataruLink.Services;
 using TataruLink.Utils;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows.Tabs;
 
-public class OverlayTab(TataruConfig configuration, OverlayManager overlayManager)
+public class OverlayTab
 {
-    private string newOverlayName = "New Overlay";
-    private OverlayWindowConfig? selectedOverlay = configuration.Display.OverlayWindows.FirstOrDefault();
+    private readonly OverlayViewModel viewModel;
+
+    // New MVVM constructor
+    public OverlayTab(OverlayViewModel viewModel)
+    {
+        this.viewModel = viewModel;
+        // Initialize selected overlay if none selected
+        if (viewModel.SelectedOverlay == null && viewModel.Overlays.Count > 0)
+        {
+            viewModel.SelectedOverlay = viewModel.Overlays.FirstOrDefault();
+        }
+    }
+
+    // Temporary backward-compatible constructor for transition
+    public OverlayTab(TataruConfig configuration, OverlayManager overlayManager)
+    {
+        this.viewModel = new OverlayViewModel(configuration, overlayManager);
+        // Initialize selected overlay if none selected
+        if (viewModel.SelectedOverlay == null && viewModel.Overlays.Count > 0)
+        {
+            viewModel.SelectedOverlay = viewModel.Overlays.FirstOrDefault();
+        }
+    }
 
     public void Draw()
     {
+        // CRITICAL: Process queued UI updates from background threads
+        Services.Service.UiDispatcher.ProcessQueue();
+
+
         // Left panel - Overlay list
         const float leftPanelWidth = 200f;
         using (var child = ImRaii.Child("OverlayList", new Vector2(leftPanelWidth, 0), true))
@@ -24,94 +50,60 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             if (!child) return;
             ImGui.TextUnformatted("Overlay Windows"u8);
             ImGui.Separator();
-            
+
             // Add a new overlay section
-            ImGuiUtils.InputTextWithHint("##NewOverlayName"u8, "Enter overlay name"u8, ref newOverlayName, 50);
+            var newName = viewModel.NewOverlayName;
+            if (ImGuiUtils.InputTextWithHint("##NewOverlayName"u8, "Enter overlay name"u8, ref newName, 50))
+            {
+                viewModel.NewOverlayName = newName;
+            }
             ImGui.SameLine();
+            if (!viewModel.AddOverlayCommand.CanExecute()) ImGui.BeginDisabled();
             if (ImGui.Button("Add"u8))
             {
-                if (!string.IsNullOrWhiteSpace(newOverlayName))
-                {
-                    var newOverlay = configuration.Display.AddOverlayWindow(newOverlayName);
-                    overlayManager.CreateOverlay(newOverlay);
-                    selectedOverlay = newOverlay;
-                    newOverlayName = "New Overlay";
-                    Service.Configuration.Save();
-                    Service.PluginLog.Info($"Created new overlay: {newOverlay.Name}");
-                }
+                _ = viewModel.AddOverlayCommand.ExecuteAsync();
             }
+            if (!viewModel.AddOverlayCommand.CanExecute()) ImGui.EndDisabled();
             
             ImGui.Separator();
             
             // List existing overlays
-            var overlays = configuration.Display.OverlayWindows.ToList();
+            var overlays = viewModel.Overlays;
             foreach (var overlay in overlays)
             {
-                var isSelected = selectedOverlay?.Id == overlay.Id;
-                
+                var isSelected = viewModel.SelectedOverlay?.Id == overlay.Id;
+
                 // Show the enabled status
                 var enabled = overlay.IsEnabled;
                 if (ImGui.Checkbox($"##Enabled{overlay.Id}", ref enabled))
                 {
-                    overlay.IsEnabled = enabled;
-                    if (enabled)
-                    {
-                        overlayManager.ShowOverlay(overlay.Id);
-                    }
-                    else
-                    {
-                        overlayManager.HideOverlay(overlay.Id);
-                    }
-                    Service.Configuration.Save();
+                    viewModel.ToggleOverlayCommand.SetParameter(overlay);
+                    _ = viewModel.ToggleOverlayCommand.ExecuteAsync();
                 }
-                
+
                 ImGui.SameLine();
-                
+
                 // Selectable overlay name
                 if (ImGui.Selectable($"{overlay.Name}###{overlay.Id}", isSelected))
                 {
-                    selectedOverlay = overlay;
+                    viewModel.SelectedOverlay = overlay;
                 }
-                
-                // Right-click the context menu
+
+                // Right-click context menu
                 if (ImGui.BeginPopupContextItem($"OverlayContext{overlay.Id}"))
                 {
                     if (ImGui.MenuItem("Delete"u8))
                     {
-                        overlayManager.RemoveOverlay(overlay.Id);
-                        if (selectedOverlay?.Id == overlay.Id)
-                        {
-                            selectedOverlay = configuration.Display.OverlayWindows.FirstOrDefault();
-                        }
-                        Service.PluginLog.Info($"Deleted overlay: {overlay.Name}");
+                        viewModel.DeleteOverlayCommand.SetParameter(overlay);
+                        _ = viewModel.DeleteOverlayCommand.ExecuteAsync();
                     }
-                    
+
                     if (ImGui.MenuItem("Duplicate"u8))
                     {
-                        var duplicate = configuration.Display.AddOverlayWindow($"{overlay.Name} (Copy)");
-                        duplicate.Opacity = overlay.Opacity;
-                        duplicate.BackgroundColor = overlay.BackgroundColor;
-                        duplicate.IsClickThrough = overlay.IsClickThrough;
-                        duplicate.AutoScroll = overlay.AutoScroll;
-                        duplicate.MaxMessages = overlay.MaxMessages;
-                        duplicate.ShowTimestamp = overlay.ShowTimestamp;
-                        duplicate.ShowSenderName = overlay.ShowSenderName;
-                        duplicate.ShowChatType = overlay.ShowChatType;
-                        duplicate.ShowOriginalText = overlay.ShowOriginalText;
-                        duplicate.ShowBorder = overlay.ShowBorder;
-                        duplicate.WindowRounding = overlay.WindowRounding;
-                        duplicate.WindowPadding = overlay.WindowPadding;
-                        duplicate.MessageSpacing = overlay.MessageSpacing;
-                        duplicate.EnabledChatTypes = new HashSet<ushort>(overlay.EnabledChatTypes);
-                        duplicate.ChatTypeColors = new Dictionary<ushort, Vector4>(overlay.ChatTypeColors);
-                        duplicate.EnsureDefaultColors(); // Ensure all colors are present
-                        
-                        overlayManager.CreateOverlay(duplicate);
-                        selectedOverlay = duplicate;
-                        Service.Configuration.Save();
-                        Service.PluginLog.Info($"Duplicated overlay: {overlay.Name} -> {duplicate.Name}");
+                        viewModel.DuplicateOverlayCommand.SetParameter(overlay);
+                        _ = viewModel.DuplicateOverlayCommand.ExecuteAsync();
                     }
-                    
+
                     ImGui.EndPopup();
                 }
             }
@@ -123,9 +115,9 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
         using (var child = ImRaii.Child("OverlayConfig", new Vector2(0, 0), true))
         {
             if (!child) return;
-            if (selectedOverlay != null)
+            if (viewModel.SelectedOverlay != null)
             {
-                DrawOverlayConfig(selectedOverlay);
+                DrawOverlayConfig(viewModel.SelectedOverlay);
             }
             else
             {
@@ -149,26 +141,19 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                 // Temporarily update the local name for display
                 overlay.Name = name;
             }
-            
+
             // Only trigger rename when user finishes editing (Enter key or loses focus)
             if (ImGui.IsItemDeactivatedAfterEdit())
             {
-                overlayManager.RenameOverlay(overlay.Id, name);
+                viewModel.RenameOverlayCommand.SetParameter((overlay, name));
+                _ = viewModel.RenameOverlayCommand.ExecuteAsync();
             }
-            
+
             var enabled = overlay.IsEnabled;
             if (ImGui.Checkbox("Enabled"u8, ref enabled))
             {
-                overlay.IsEnabled = enabled;
-                if (enabled)
-                {
-                    overlayManager.ShowOverlay(overlay.Id);
-                }
-                else
-                {
-                    overlayManager.HideOverlay(overlay.Id);
-                }
-                Service.Configuration.Save();
+                viewModel.ToggleOverlayCommand.SetParameter(overlay);
+                _ = viewModel.ToggleOverlayCommand.ExecuteAsync();
             }
             
             var clickThrough = overlay.IsClickThrough;
@@ -284,9 +269,9 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
             ImGui.TextUnformatted("Select which chat types to display in this overlay:"u8);
             ImGui.TextUnformatted("(Only showing chat types enabled for translation)"u8);
             ImGui.Spacing();
-            
+
             // Only show chat types that are enabled in the main configuration
-            var enabledChatTypes = configuration.Chat.GetEnabledChatTypes().ToList();
+            var enabledChatTypes = viewModel.GetEnabledChatTypes();
             
             if (enabledChatTypes.Count == 0)
             {
@@ -347,17 +332,14 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
                 // Quick actions
                 if (ImGui.Button("Select All Available"u8))
                 {
-                    foreach (var chatType in enabledChatTypes)
-                    {
-                        overlay.EnabledChatTypes.Add(chatType);
-                    }
-                    Service.Configuration.Save();
+                    viewModel.SelectAllChatTypesCommand.SetParameter(overlay);
+                    _ = viewModel.SelectAllChatTypesCommand.ExecuteAsync();
                 }
                 ImGui.SameLine();
                 if (ImGui.Button("Clear All"u8))
                 {
-                    overlay.EnabledChatTypes.Clear();
-                    Service.Configuration.Save();
+                    viewModel.ClearAllChatTypesCommand.SetParameter(overlay);
+                    _ = viewModel.ClearAllChatTypesCommand.ExecuteAsync();
                 }
             }
         }
@@ -367,51 +349,22 @@ public class OverlayTab(TataruConfig configuration, OverlayManager overlayManage
         {
             if (ImGui.Button("Send Test Message"u8))
             {
-                SendTestMessage(overlay);
+                viewModel.SendTestMessageCommand.SetParameter(overlay);
+                _ = viewModel.SendTestMessageCommand.ExecuteAsync();
             }
-            
+
             ImGui.SameLine();
             if (ImGui.Button("Clear Messages"u8))
             {
-                overlayManager.ClearOverlay(overlay.Id);
+                viewModel.ClearOverlayCommand.SetParameter(overlay);
+                _ = viewModel.ClearOverlayCommand.ExecuteAsync();
             }
-            
+
             if (ImGui.Button("Toggle Visibility"u8))
             {
-                if (overlay.IsEnabled)
-                {
-                    overlayManager.HideOverlay(overlay.Id);
-                    overlay.IsEnabled = false;
-                }
-                else
-                {
-                    overlayManager.ShowOverlay(overlay.Id);
-                    overlay.IsEnabled = true;
-                }
-                Service.Configuration.Save();
+                viewModel.ToggleOverlayCommand.SetParameter(overlay);
+                _ = viewModel.ToggleOverlayCommand.ExecuteAsync();
             }
         }
-    }
-    
-    private void SendTestMessage(OverlayWindowConfig overlay)
-    {
-        // Create a test message using a proper constructor
-        var senderBuilder = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder();
-        senderBuilder.AddText("Test Player");
-        var senderString = senderBuilder.Build();
-        
-        var contentBuilder = new Dalamud.Game.Text.SeStringHandling.SeStringBuilder();
-        contentBuilder.AddText("This is a test message");
-        var contentString = contentBuilder.Build();
-        
-        var testMessage = new Models.Message((ushort)Dalamud.Game.Text.XivChatType.Say, senderString, contentString)
-        {
-            TranslatedContent = "This is a translated test message",
-            Status = Models.TranslationStatus.Completed
-        };
-        
-        // Send it only to the selected overlay
-        overlayManager.SendMessageToOverlay(overlay.Id, testMessage);
-        Service.PluginLog.Info($"Sent test message to overlay: {overlay.Name}");
     }
 }

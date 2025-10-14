@@ -5,47 +5,43 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.DtrBar;
-using TataruLink.Glossary;
-using TataruLink.History;
-using TataruLink.Overlay;
-using TataruLink.Translation;
 using TataruLink.UI.Windows.Tabs;
+using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows;
 
 public class SettingsWindow : Window, IDisposable
 {
-    private GeneralTab generalTab;
+    private readonly SettingsViewModel viewModel;
+    private readonly GeneralTab generalTab;
     private readonly TranslationTab translationTab;
     private readonly ChatTypesTab chatTypesTab;
     private readonly FiltersTab filtersTab;
     private readonly GlossaryTab glossaryTab;
     private readonly DisplayTab displayTab;
     private readonly OverlayTab overlayTab;
-    private readonly TataruConfig configuration;
-    private readonly ITranslationService translationService;
 
-    public SettingsWindow(TataruConfig configuration, ITranslationService translationService, OverlayManager overlayManager, GlossaryManager glossaryManager, SessionHistoryManager historyManager)
+    public SettingsWindow(SettingsViewModel viewModel, TataruConfig configuration, DtrBarManager? dtrBarManager)
         : base("TataruLink Settings###TataruLinkSettings")
     {
-        this.configuration = configuration;
-        this.translationService = translationService;
+        this.viewModel = viewModel;
 
         Size = new Vector2(600, 400);
         SizeCondition = ImGuiCond.FirstUseEver;
 
-        generalTab = new GeneralTab(configuration, translationService, null);
-        translationTab = new TranslationTab(configuration, translationService);
-        chatTypesTab = new ChatTypesTab(configuration);
-        filtersTab = new FiltersTab(configuration);
-        glossaryTab = new GlossaryTab(glossaryManager);
-        displayTab = new DisplayTab(configuration);
-        overlayTab = new OverlayTab(configuration, overlayManager);
+        // Initialize tabs with ViewModels from SettingsViewModel
+        generalTab = new GeneralTab(viewModel.GeneralTab, dtrBarManager);
+        translationTab = new TranslationTab(viewModel.TranslationTab);
+        chatTypesTab = new ChatTypesTab(viewModel.ChatTypesTab, configuration);
+        filtersTab = new FiltersTab(viewModel.FiltersTab);
+        glossaryTab = new GlossaryTab(viewModel.GlossaryTab);
+        displayTab = new DisplayTab(viewModel.DisplayTab);
+        overlayTab = new OverlayTab(viewModel.OverlayTab);
     }
 
     public void SetDtrBarManager(DtrBarManager? dtrBarManager)
     {
-        generalTab = new GeneralTab(configuration, translationService, dtrBarManager);
+        viewModel.GeneralTab.SetDtrBarManager(dtrBarManager);
     }
 
     public override void Draw()

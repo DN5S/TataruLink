@@ -104,6 +104,9 @@ public class AsyncRelayCommand<T> : ICommand
 
     public async Task ExecuteAsync()
     {
+        // Capture parameter immediately to avoid race conditions
+        var capturedParameter = parameter;
+
         if (!CanExecute())
             return;
 
@@ -112,7 +115,7 @@ public class AsyncRelayCommand<T> : ICommand
 
         try
         {
-            await execute(parameter);
+            await execute(capturedParameter);
             LastError = null;
         }
         catch (Exception ex)

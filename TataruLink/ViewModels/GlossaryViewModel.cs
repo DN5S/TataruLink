@@ -16,12 +16,10 @@ namespace TataruLink.ViewModels;
 public class GlossaryViewModel : ViewModelBase
 {
     private readonly GlossaryManager glossaryManager;
-    private readonly UiDispatcher uiDispatcher;
 
-    public GlossaryViewModel(GlossaryManager glossaryManager, UiDispatcher uiDispatcher)
+    public GlossaryViewModel(GlossaryManager glossaryManager)
     {
         this.glossaryManager = glossaryManager;
-        this.uiDispatcher = uiDispatcher;
 
         Entries = new ObservableList<GlossaryEntry>();
 
@@ -32,17 +30,17 @@ public class GlossaryViewModel : ViewModelBase
             onError: OnCommandError);
 
         DeleteEntryCommand = new AsyncRelayCommand<long>(
-            execute: DeleteEntryAsync,
+            execute: async (id) => await DeleteEntryAsync(id),
             canExecute: _ => true,
             onError: OnCommandError);
 
         UpdateEntryCommand = new AsyncRelayCommand<(long Id, string Replacement)>(
-            execute: UpdateEntryAsync,
+            execute: async (param) => await UpdateEntryAsync(param),
             canExecute: _ => true,
             onError: OnCommandError);
 
         ToggleEntryCommand = new AsyncRelayCommand<long>(
-            execute: ToggleEntryAsync,
+            execute: async (id) => await ToggleEntryAsync(id),
             canExecute: _ => true,
             onError: OnCommandError);
 
@@ -120,9 +118,9 @@ public class GlossaryViewModel : ViewModelBase
 
     // Commands
     public ICommand AddEntryCommand { get; }
-    public ICommand DeleteEntryCommand { get; }
-    public ICommand UpdateEntryCommand { get; }
-    public ICommand ToggleEntryCommand { get; }
+    public AsyncRelayCommand<long> DeleteEntryCommand { get; }
+    public AsyncRelayCommand<(long Id, string Replacement)> UpdateEntryCommand { get; }
+    public AsyncRelayCommand<long> ToggleEntryCommand { get; }
     public ICommand ClearAllCommand { get; }
     public ICommand EnableAllCommand { get; }
     public ICommand DisableAllCommand { get; }
@@ -153,7 +151,7 @@ public class GlossaryViewModel : ViewModelBase
         await glossaryManager.AddEntryAsync(NewOriginal.Trim(), NewReplacement.Trim());
 
         // Update UI on main thread
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             NewOriginal = string.Empty;
             NewReplacement = string.Empty;
@@ -170,7 +168,7 @@ public class GlossaryViewModel : ViewModelBase
 
         await glossaryManager.DeleteEntryAsync(id.Value);
 
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             RefreshEntries();
         });
@@ -187,7 +185,7 @@ public class GlossaryViewModel : ViewModelBase
 
         await glossaryManager.UpdateEntryAsync(id, replacement.Trim());
 
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             RefreshEntries();
         });
@@ -201,7 +199,7 @@ public class GlossaryViewModel : ViewModelBase
 
         await glossaryManager.ToggleEntryAsync(id.Value);
 
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             RefreshEntries();
         });
@@ -211,7 +209,7 @@ public class GlossaryViewModel : ViewModelBase
     {
         await glossaryManager.ClearAllAsync();
 
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             RefreshEntries();
         });
@@ -226,7 +224,7 @@ public class GlossaryViewModel : ViewModelBase
             await glossaryManager.ToggleEntryAsync(entry.Id);
         }
 
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             RefreshEntries();
         });
@@ -239,7 +237,7 @@ public class GlossaryViewModel : ViewModelBase
             await glossaryManager.ToggleEntryAsync(entry.Id);
         }
 
-        uiDispatcher.Invoke(() =>
+        Services.Service.UiDispatcher.Invoke(() =>
         {
             RefreshEntries();
         });
@@ -329,7 +327,7 @@ public class GlossaryViewModel : ViewModelBase
             {
                 await glossaryManager.ImportEntriesAsync(toImport);
 
-                uiDispatcher.Invoke(() =>
+                Services.Service.UiDispatcher.Invoke(() =>
                 {
                     RefreshEntries();
                 });
@@ -373,7 +371,7 @@ public class GlossaryViewModel : ViewModelBase
         // Auto-clear error after 3 seconds
         Task.Delay(3000).ContinueWith(_ =>
         {
-            uiDispatcher.Invoke(() =>
+            Services.Service.UiDispatcher.Invoke(() =>
             {
                 if (ErrorMessage == ex.Message) // Only clear if it's still the same error
                 {

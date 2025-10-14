@@ -71,11 +71,11 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-            var response = await HttpClient.SendAsync(request, cancellationToken);
-            
+            var response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 Service.PluginLog.Warning($"Gemini API error: {response.StatusCode} - {errorContent}");
                 
                 return new TranslationResponse
@@ -85,7 +85,7 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
                 };
             }
 
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
             
             stopwatch.Stop();
@@ -139,15 +139,15 @@ public class GeminiProvider(GeminiConfig config) : ITranslationProvider, IAsyncD
         try
         {
             var url = string.Format(ModelsApiUrl, apiKey);
-            var response = await HttpClient.GetAsync(url, cancellationToken);
-            
+            var response = await HttpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
             {
                 Service.PluginLog.Warning($"Failed to fetch models: {response.StatusCode}");
                 return [];
             }
             
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
             
             if (doc.RootElement.TryGetProperty("models", out var modelsArray))
