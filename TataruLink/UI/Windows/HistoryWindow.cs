@@ -1,14 +1,8 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using TataruLink.History;
 using TataruLink.Models;
-using TataruLink.Services;
-using TataruLink.Utils;
 using TataruLink.ViewModels;
 
 namespace TataruLink.UI.Windows;
@@ -33,7 +27,7 @@ public class HistoryWindow : Window, IDisposable
     public override void Draw()
     {
         // CRITICAL: Process incremental updates from HistoryViewModel
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
         DrawControls();
         ImGui.Separator();
@@ -214,7 +208,7 @@ public class HistoryWindow : Window, IDisposable
 
     public void Dispose()
     {
-        viewModel?.Dispose();
+        viewModel.Dispose();
         GC.SuppressFinalize(this);
     }
 }

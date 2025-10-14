@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Models;
-using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Translation.Providers;
 using TataruLink.Utils;
@@ -60,7 +59,7 @@ public class TranslationTab
     // Temporary backward-compatible constructor for transition
     public TranslationTab(TataruConfig configuration, ITranslationService translationService)
     {
-        this.viewModel = new TranslationViewModel(configuration, translationService, Services.Service.UiDispatcher);
+        this.viewModel = new TranslationViewModel(configuration, translationService, Service.UiDispatcher);
 
         // Load API key for the current engine
         LoadCurrentApiKey();
@@ -75,7 +74,7 @@ public class TranslationTab
     public void Draw()
     {
         // CRITICAL: Process queued UI updates from background threads
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
         // Language Settings Section
         ImGui.TextUnformatted("Language Settings"u8);
@@ -175,7 +174,7 @@ public class TranslationTab
                 
                 // Show configuration status
                 ImGui.SameLine();
-                if (viewModel.IsConfigured && viewModel.ProviderName == "DeepL")
+                if (viewModel is { IsConfigured: true, ProviderName: "DeepL" })
                 {
                     ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
                 }
@@ -276,7 +275,7 @@ public class TranslationTab
         
         // Show configuration status
         ImGui.SameLine();
-        if (viewModel.IsConfigured && viewModel.ProviderName == "Gemini")
+        if (viewModel is { IsConfigured: true, ProviderName: "Gemini" })
         {
             ImGuiUtils.TextColored(ImGuiUtils.Colors.Success, "[Configured]"u8);
         }

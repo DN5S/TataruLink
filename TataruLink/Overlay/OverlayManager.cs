@@ -4,7 +4,6 @@ using System.Linq;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Models;
-using TataruLink.Services;
 using TataruLink.UI.Windows;
 
 namespace TataruLink.Overlay;

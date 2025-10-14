@@ -37,7 +37,7 @@ public class ChatTypesViewModel : ViewModelBase
             if (configuration.Chat.DefaultProvider != value)
             {
                 configuration.Chat.DefaultProvider = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(DefaultProvider));
             }
         }
@@ -92,7 +92,7 @@ public class ChatTypesViewModel : ViewModelBase
         {
             configuration.Chat.SetChatTypeEnabled(chatType, true);
         }
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     private void DisablePreset(ushort[]? chatTypes)
@@ -103,7 +103,7 @@ public class ChatTypesViewModel : ViewModelBase
         {
             configuration.Chat.SetChatTypeEnabled(chatType, false);
         }
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     private void EnableAll()
@@ -112,13 +112,13 @@ public class ChatTypesViewModel : ViewModelBase
         {
             configuration.Chat.SetChatTypeEnabled(chatType, true);
         }
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     private void DisableAll()
     {
         configuration.Chat.EnabledChatTypes.Clear();
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     private void ToggleChatType(ushort? chatType)
@@ -127,7 +127,7 @@ public class ChatTypesViewModel : ViewModelBase
 
         var isEnabled = configuration.Chat.IsChatTypeEnabled(chatType.Value);
         configuration.Chat.SetChatTypeEnabled(chatType.Value, !isEnabled);
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     private void SetProvider((ushort ChatType, string? Provider)? param)
@@ -136,6 +136,6 @@ public class ChatTypesViewModel : ViewModelBase
 
         var (chatType, provider) = param.Value;
         configuration.Chat.SetProviderForChatType(chatType, provider == "Default" ? null : provider);
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 }

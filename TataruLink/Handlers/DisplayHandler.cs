@@ -2,7 +2,6 @@ using System.Threading.Tasks;
 using TataruLink.Configuration;
 using TataruLink.Events;
 using TataruLink.Overlay;
-using TataruLink.Services;
 
 namespace TataruLink.Handlers;
 

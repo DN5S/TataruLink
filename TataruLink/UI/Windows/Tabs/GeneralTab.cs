@@ -1,9 +1,7 @@
-using System.Linq;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.DtrBar;
-using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
 using TataruLink.ViewModels;
@@ -34,7 +32,7 @@ public class GeneralTab
     public void Draw()
     {
         // Process queued UI updates from async commands
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
         // Quick Controls Section
         using (var table = ImRaii.Table("QuickControls"u8, 2, ImGuiTableFlags.SizingStretchProp))

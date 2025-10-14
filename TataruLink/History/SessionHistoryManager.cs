@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using TataruLink.Events;
 using TataruLink.Models;
-using TataruLink.Services;
 
 namespace TataruLink.History;
 
@@ -14,7 +13,7 @@ public class SessionHistoryManager : IDisposable, IEventHandler<TranslationCompl
     private readonly ReaderWriterLockSlim @lock = new();
     private const int MaxRecords = 1000;
 
-    public event EventHandler<TranslationRecord>? RecordAdded;
+    public event EventHandler<TranslationRecord>? OnRecordAdded;
 
     public void AddRecord(TranslationRecord record)
     {
@@ -38,7 +37,7 @@ public class SessionHistoryManager : IDisposable, IEventHandler<TranslationCompl
             @lock.ExitWriteLock();
         }
 
-        RecordAdded?.Invoke(this, record);
+        OnRecordAdded?.Invoke(this, record);
     }
 
     public List<TranslationRecord> GetRecords(int limit = 100, int offset = 0)

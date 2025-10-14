@@ -53,7 +53,7 @@ public class UiDispatcher
             catch (Exception ex)
             {
                 // Log but don't crash the UI thread
-                Services.Service.PluginLog.Error(ex, "Error processing UI dispatcher action");
+                Service.PluginLog.Error(ex, "Error processing UI dispatcher action");
             }
         }
     }

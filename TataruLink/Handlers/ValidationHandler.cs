@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using TataruLink.Configuration;
 using TataruLink.Events;
 using TataruLink.Models;
-using TataruLink.Services;
 
 namespace TataruLink.Handlers;
 

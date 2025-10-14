@@ -2,14 +2,12 @@ using System;
 using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Interface.Windowing;
-using TataruLink.Configuration;
 using TataruLink.DtrBar;
 using TataruLink.Events;
 using TataruLink.Glossary;
 using TataruLink.Handlers;
 using TataruLink.History;
 using TataruLink.Overlay;
-using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.UI.Windows;
 using TataruLink.ViewModels;
@@ -86,10 +84,10 @@ public sealed class Plugin : IDalamudPlugin
         displayHandler = new DisplayHandler(eventBus, configuration, overlayManager);
 
         // Subscribe handlers to events
-        eventBus.Subscribe<ChatMessageReceivedEvent>(validationHandler);
-        eventBus.Subscribe<TranslationRequestedEvent>(translationHandler);
-        eventBus.Subscribe<TranslationCompletedEvent>(displayHandler);
-        eventBus.Subscribe<TranslationCompletedEvent>(historyManager);
+        eventBus.Subscribe(validationHandler);
+        eventBus.Subscribe(translationHandler);
+        eventBus.Subscribe(displayHandler);
+        eventBus.Subscribe(historyManager);
 
         // Initialize chat capture (starts listening to game events)
         chatCaptureHandler.Initialize();
@@ -247,13 +245,13 @@ public sealed class Plugin : IDalamudPlugin
             if (eventBus != null)
             {
                 if (validationHandler != null)
-                    eventBus.Unsubscribe<ChatMessageReceivedEvent>(validationHandler);
+                    eventBus.Unsubscribe(validationHandler);
                 if (translationHandler != null)
-                    eventBus.Unsubscribe<TranslationRequestedEvent>(translationHandler);
+                    eventBus.Unsubscribe(translationHandler);
                 if (displayHandler != null)
-                    eventBus.Unsubscribe<TranslationCompletedEvent>(displayHandler);
+                    eventBus.Unsubscribe(displayHandler);
                 if (historyManager != null)
-                    eventBus.Unsubscribe<TranslationCompletedEvent>(historyManager);
+                    eventBus.Unsubscribe(historyManager);
             }
 
             // Step 3: Dispose event bus (now safe, all handlers unsubscribed)

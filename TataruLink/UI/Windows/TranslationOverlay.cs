@@ -7,7 +7,6 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using TataruLink.Configuration;
 using TataruLink.Models;
-using TataruLink.Services;
 using TataruLink.Utils;
 
 namespace TataruLink.UI.Windows;

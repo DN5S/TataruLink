@@ -5,7 +5,6 @@ using TataruLink.Configuration;
 using TataruLink.DtrBar;
 using TataruLink.Events;
 using TataruLink.Glossary;
-using TataruLink.Services;
 using TataruLink.Translation;
 using TataruLink.Utils;
 

@@ -8,7 +8,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using TataruLink.Configuration;
-using TataruLink.Services;
 
 namespace TataruLink.Translation.Providers;
 

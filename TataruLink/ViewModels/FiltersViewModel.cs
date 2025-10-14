@@ -23,7 +23,7 @@ public class FiltersViewModel : ViewModelBase
             if (configuration.Filter.SkipInCutscene != value)
             {
                 configuration.Filter.SkipInCutscene = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(SkipInCutscene));
             }
         }
@@ -37,7 +37,7 @@ public class FiltersViewModel : ViewModelBase
             if (configuration.Filter.SkipInLoading != value)
             {
                 configuration.Filter.SkipInLoading = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(SkipInLoading));
             }
         }
@@ -51,7 +51,7 @@ public class FiltersViewModel : ViewModelBase
             if (configuration.Filter.SkipInRetainer != value)
             {
                 configuration.Filter.SkipInRetainer = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(SkipInRetainer));
             }
         }
@@ -66,7 +66,7 @@ public class FiltersViewModel : ViewModelBase
             if (configuration.Filter.SkipAutoTranslate != value)
             {
                 configuration.Filter.SkipAutoTranslate = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(SkipAutoTranslate));
             }
         }
@@ -81,7 +81,7 @@ public class FiltersViewModel : ViewModelBase
             if (configuration.Validation.DuplicateDetectionPeriodMs != value)
             {
                 configuration.Validation.DuplicateDetectionPeriodMs = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(DuplicateDetectionPeriodMs));
             }
         }

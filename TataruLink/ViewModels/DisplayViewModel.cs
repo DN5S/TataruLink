@@ -22,7 +22,7 @@ public class DisplayViewModel : ViewModelBase
             if (configuration.Display.ShowInGameChat != value)
             {
                 configuration.Display.ShowInGameChat = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(ShowInGameChat));
             }
         }
@@ -36,7 +36,7 @@ public class DisplayViewModel : ViewModelBase
             if (configuration.Display.ShowSenderName != value)
             {
                 configuration.Display.ShowSenderName = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(ShowSenderName));
             }
         }
@@ -50,7 +50,7 @@ public class DisplayViewModel : ViewModelBase
             if (configuration.Display.ShowChatType != value)
             {
                 configuration.Display.ShowChatType = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(ShowChatType));
             }
         }

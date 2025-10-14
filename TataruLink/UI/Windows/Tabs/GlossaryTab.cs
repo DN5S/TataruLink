@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Glossary;
-using TataruLink.Models;
-using TataruLink.Services;
 using TataruLink.Utils;
 using TataruLink.ViewModels;
 
@@ -33,7 +27,7 @@ public class GlossaryTab
     public void Draw()
     {
         // CRITICAL: Process queued UI updates from background threads
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
         // PERFORMANCE FIX: No longer calling RefreshEntries() every frame!
         // ViewModel maintains cached entries and only refreshes on data changes

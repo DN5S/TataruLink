@@ -4,7 +4,6 @@ using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using TataruLink.Configuration;
 using TataruLink.Events;
-using TataruLink.Services;
 using TataruLink.Utils;
 
 namespace TataruLink.Handlers;
@@ -70,10 +69,10 @@ public class ChatCaptureHandler : IDisposable
         }
     }
 
-    private static long messageIdCounter = 1;
+    private static long MessageIdCounter = 1;
     private static long GenerateMessageId()
     {
-        return System.Threading.Interlocked.Increment(ref messageIdCounter);
+        return System.Threading.Interlocked.Increment(ref MessageIdCounter);
     }
 
     public void Dispose()

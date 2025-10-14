@@ -5,7 +5,6 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using TataruLink.Configuration;
 using TataruLink.Models;
-using TataruLink.Services;
 using TataruLink.Utils;
 using TataruLink.ViewModels;
 
@@ -40,7 +39,7 @@ public class ChatTypesTab
     public void Draw()
     {
         // Process queued UI updates from async commands
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
         ImGui.TextUnformatted("Configure which chat types to translate and which provider to use for each type."u8);
         ImGui.Spacing();

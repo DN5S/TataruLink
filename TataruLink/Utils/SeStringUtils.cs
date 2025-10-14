@@ -236,7 +236,7 @@ public static partial class SeStringUtils
         if (!structureIntact)
         {
             // WARNING: Structure corrupted - use safe fallback
-            Services.Service.PluginLog.Warning($"Translation structure corrupted. Expected {originalSegmentCount} segments, got {translatedSegments.Count}. Using fallback.");
+            Service.PluginLog.Warning($"Translation structure corrupted. Expected {originalSegmentCount} segments, got {translatedSegments.Count}. Using fallback.");
             
             // NOTE: Clean remaining XML artifacts using source-generated regex
             var cleanText = XmlTagRemover().Replace(translatedText, "").Trim();

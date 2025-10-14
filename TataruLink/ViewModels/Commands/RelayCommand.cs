@@ -32,7 +32,7 @@ public class RelayCommand : ICommand
         catch (Exception ex)
         {
             LastError = ex.Message;
-            Services.Service.PluginLog.Error(ex, "Error executing command");
+            Service.PluginLog.Error(ex, "Error executing command");
             // Don't re-throw - would crash UI thread
         }
 
@@ -85,7 +85,7 @@ public class RelayCommand<T> : ICommand
         catch (Exception ex)
         {
             LastError = ex.Message;
-            Services.Service.PluginLog.Error(ex, "Error executing command with parameter");
+            Service.PluginLog.Error(ex, "Error executing command with parameter");
             // Don't re-throw - would crash UI thread
         }
 

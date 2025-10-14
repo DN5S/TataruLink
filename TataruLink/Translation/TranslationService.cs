@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Dalamud.Utility;
 using TataruLink.Configuration;
-using TataruLink.Services;
 using TataruLink.Translation.Providers;
 
 namespace TataruLink.Translation;
@@ -133,7 +131,7 @@ public class TranslationService(TataruConfig configuration) : ITranslationServic
                 : 0;
 
             // Get circuit breaker for current provider
-            var circuitBreaker = circuitBreakers.TryGetValue(activeProvider.Name, out var cb) ? cb : null;
+            var circuitBreaker = circuitBreakers.GetValueOrDefault(activeProvider.Name);
             
             while (retryCount <= maxRetries)
             {

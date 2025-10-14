@@ -84,22 +84,22 @@ public class GlossaryViewModel : ViewModelBase
 
     public string NewOriginal
     {
-        get => Get<string>(nameof(NewOriginal)) ?? string.Empty;
-        set => Set(value, nameof(NewOriginal));
+        get => Get<string>() ?? string.Empty;
+        set => Set(value);
     }
 
     public string NewReplacement
     {
-        get => Get<string>(nameof(NewReplacement)) ?? string.Empty;
-        set => Set(value, nameof(NewReplacement));
+        get => Get<string>() ?? string.Empty;
+        set => Set(value);
     }
 
     public string SearchFilter
     {
-        get => Get<string>(nameof(SearchFilter)) ?? string.Empty;
+        get => Get<string>() ?? string.Empty;
         set
         {
-            if (Set(value, nameof(SearchFilter)))
+            if (Set(value))
             {
                 ApplySearchFilter();
             }
@@ -108,8 +108,8 @@ public class GlossaryViewModel : ViewModelBase
 
     public string? ErrorMessage
     {
-        get => Get<string?>(nameof(ErrorMessage));
-        set => Set(value, nameof(ErrorMessage));
+        get => Get<string?>();
+        set => Set(value);
     }
 
     public int TotalCount => glossaryManager.GetStatistics().TotalEntries;
@@ -151,7 +151,7 @@ public class GlossaryViewModel : ViewModelBase
         await glossaryManager.AddEntryAsync(NewOriginal.Trim(), NewReplacement.Trim());
 
         // Update UI on main thread
-        Services.Service.UiDispatcher.Invoke(() =>
+        Service.UiDispatcher.Invoke(() =>
         {
             NewOriginal = string.Empty;
             NewReplacement = string.Empty;
@@ -159,7 +159,7 @@ public class GlossaryViewModel : ViewModelBase
             RefreshEntries();
         });
 
-        Services.Service.PluginLog.Information($"Added glossary entry: {NewOriginal} -> {NewReplacement}");
+        Service.PluginLog.Information($"Added glossary entry: {NewOriginal} -> {NewReplacement}");
     }
 
     private async Task DeleteEntryAsync(long? id)
@@ -168,12 +168,9 @@ public class GlossaryViewModel : ViewModelBase
 
         await glossaryManager.DeleteEntryAsync(id.Value);
 
-        Services.Service.UiDispatcher.Invoke(() =>
-        {
-            RefreshEntries();
-        });
+        Service.UiDispatcher.Invoke(RefreshEntries);
 
-        Services.Service.PluginLog.Information($"Deleted glossary entry: {id.Value}");
+        Service.PluginLog.Information($"Deleted glossary entry: {id.Value}");
     }
 
     private async Task UpdateEntryAsync((long Id, string Replacement)? param)
@@ -185,12 +182,9 @@ public class GlossaryViewModel : ViewModelBase
 
         await glossaryManager.UpdateEntryAsync(id, replacement.Trim());
 
-        Services.Service.UiDispatcher.Invoke(() =>
-        {
-            RefreshEntries();
-        });
+        Service.UiDispatcher.Invoke(RefreshEntries);
 
-        Services.Service.PluginLog.Information($"Updated glossary entry: {id}");
+        Service.PluginLog.Information($"Updated glossary entry: {id}");
     }
 
     private async Task ToggleEntryAsync(long? id)
@@ -199,22 +193,16 @@ public class GlossaryViewModel : ViewModelBase
 
         await glossaryManager.ToggleEntryAsync(id.Value);
 
-        Services.Service.UiDispatcher.Invoke(() =>
-        {
-            RefreshEntries();
-        });
+        Service.UiDispatcher.Invoke(RefreshEntries);
     }
 
     private async Task ClearAllAsync()
     {
         await glossaryManager.ClearAllAsync();
 
-        Services.Service.UiDispatcher.Invoke(() =>
-        {
-            RefreshEntries();
-        });
+        Service.UiDispatcher.Invoke(RefreshEntries);
 
-        Services.Service.PluginLog.Information("Cleared all glossary entries");
+        Service.PluginLog.Information("Cleared all glossary entries");
     }
 
     private async Task EnableAllAsync()
@@ -224,10 +212,7 @@ public class GlossaryViewModel : ViewModelBase
             await glossaryManager.ToggleEntryAsync(entry.Id);
         }
 
-        Services.Service.UiDispatcher.Invoke(() =>
-        {
-            RefreshEntries();
-        });
+        Service.UiDispatcher.Invoke(RefreshEntries);
     }
 
     private async Task DisableAllAsync()
@@ -237,10 +222,7 @@ public class GlossaryViewModel : ViewModelBase
             await glossaryManager.ToggleEntryAsync(entry.Id);
         }
 
-        Services.Service.UiDispatcher.Invoke(() =>
-        {
-            RefreshEntries();
-        });
+        Service.UiDispatcher.Invoke(RefreshEntries);
     }
 
     private void ExportToClipboard()
@@ -257,11 +239,11 @@ public class GlossaryViewModel : ViewModelBase
             var json = System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
 
             Dalamud.Bindings.ImGui.ImGui.SetClipboardText(json);
-            Services.Service.PluginLog.Information($"Exported {Entries.Count} glossary entries to clipboard");
+            Service.PluginLog.Information($"Exported {Entries.Count} glossary entries to clipboard");
         }
         catch (Exception ex)
         {
-            Services.Service.PluginLog.Error(ex, "Failed to export glossary to clipboard");
+            Service.PluginLog.Error(ex, "Failed to export glossary to clipboard");
             ErrorMessage = $"Export failed: {ex.Message}";
         }
     }
@@ -327,12 +309,9 @@ public class GlossaryViewModel : ViewModelBase
             {
                 await glossaryManager.ImportEntriesAsync(toImport);
 
-                Services.Service.UiDispatcher.Invoke(() =>
-                {
-                    RefreshEntries();
-                });
+                Service.UiDispatcher.Invoke(RefreshEntries);
 
-                Services.Service.PluginLog.Information($"Imported {toImport.Count} new glossary entries from clipboard");
+                Service.PluginLog.Information($"Imported {toImport.Count} new glossary entries from clipboard");
             }
             else
             {
@@ -341,7 +320,7 @@ public class GlossaryViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Services.Service.PluginLog.Error(ex, "Failed to import glossary from clipboard");
+            Service.PluginLog.Error(ex, "Failed to import glossary from clipboard");
             ErrorMessage = $"Import failed: {ex.Message}";
         }
     }
@@ -371,7 +350,7 @@ public class GlossaryViewModel : ViewModelBase
         // Auto-clear error after 3 seconds
         Task.Delay(3000).ContinueWith(_ =>
         {
-            Services.Service.UiDispatcher.Invoke(() =>
+            Service.UiDispatcher.Invoke(() =>
             {
                 if (ErrorMessage == ex.Message) // Only clear if it's still the same error
                 {

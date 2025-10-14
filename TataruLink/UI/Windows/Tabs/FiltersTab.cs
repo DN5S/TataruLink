@@ -24,7 +24,7 @@ public class FiltersTab
     public void Draw()
     {
         // Process queued UI updates from async commands
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
         ImGuiUtils.Section("Chat Filters"u8);
 

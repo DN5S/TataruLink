@@ -31,7 +31,7 @@ public class MainViewModel : ViewModelBase
             if (configuration.IsEnabled != value)
             {
                 configuration.IsEnabled = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(IsEnabled));
             }
         }
@@ -45,7 +45,7 @@ public class MainViewModel : ViewModelBase
             if (configuration.ShowDtrBar != value)
             {
                 configuration.ShowDtrBar = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(ShowDtrBar));
             }
         }
@@ -54,14 +54,14 @@ public class MainViewModel : ViewModelBase
     // Window visibility
     public bool IsSettingsOpen
     {
-        get => Get<bool>(nameof(IsSettingsOpen));
-        set => Set(value, nameof(IsSettingsOpen));
+        get => Get<bool>();
+        set => Set(value);
     }
 
     public bool IsHistoryOpen
     {
-        get => Get<bool>(nameof(IsHistoryOpen));
-        set => Set(value, nameof(IsHistoryOpen));
+        get => Get<bool>();
+        set => Set(value);
     }
 
     protected override void Dispose(bool disposing)

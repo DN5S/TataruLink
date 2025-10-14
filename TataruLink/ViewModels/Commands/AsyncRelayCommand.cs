@@ -51,7 +51,7 @@ public class AsyncRelayCommand : ICommand
         catch (Exception ex)
         {
             LastError = ex.Message;
-            Services.Service.PluginLog.Error(ex, "Error executing async command");
+            Service.PluginLog.Error(ex, "Error executing async command");
             onError?.Invoke(ex);
         }
         finally
@@ -121,7 +121,7 @@ public class AsyncRelayCommand<T> : ICommand
         catch (Exception ex)
         {
             LastError = ex.Message;
-            Services.Service.PluginLog.Error(ex, "Error executing async command with parameter");
+            Service.PluginLog.Error(ex, "Error executing async command with parameter");
             onError?.Invoke(ex);
         }
         finally

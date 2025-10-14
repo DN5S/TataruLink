@@ -36,7 +36,7 @@ public class GeneralTabViewModel : ViewModelBase
             if (configuration.IsEnabled != value)
             {
                 configuration.IsEnabled = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(IsEnabled));
             }
         }
@@ -51,7 +51,7 @@ public class GeneralTabViewModel : ViewModelBase
             {
                 configuration.ShowDtrBar = value;
                 dtrBarManager?.SetVisible(value);
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(ShowDtrBar));
             }
         }
@@ -93,6 +93,6 @@ public class GeneralTabViewModel : ViewModelBase
 
     private void OpenHistory()
     {
-        Services.Service.CommandManager.ProcessCommand("/tataruhistory");
+        Service.CommandManager.ProcessCommand("/tataruhistory");
     }
 }

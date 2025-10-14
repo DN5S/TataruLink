@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using TataruLink.History;
@@ -33,7 +32,7 @@ public class HistoryViewModel : ViewModelBase
         CancelEditCommand = new RelayCommand(CancelEdit);
 
         // Subscribe to history events for incremental updates
-        historyManager.RecordAdded += OnRecordAddedIncremental;
+        historyManager.OnRecordAdded += OnRecordAddedIncremental;
 
         // Load initial data
         RefreshRecords();
@@ -45,10 +44,10 @@ public class HistoryViewModel : ViewModelBase
 
     public string SearchText
     {
-        get => Get<string>(nameof(SearchText)) ?? string.Empty;
+        get => Get<string>() ?? string.Empty;
         set
         {
-            if (Set(value, nameof(SearchText)))
+            if (Set(value))
             {
                 RefreshRecords();
             }
@@ -57,14 +56,14 @@ public class HistoryViewModel : ViewModelBase
 
     public long? EditingId
     {
-        get => Get<long?>(nameof(EditingId));
-        set => Set(value, nameof(EditingId));
+        get => Get<long?>();
+        set => Set(value);
     }
 
     public string EditingText
     {
-        get => Get<string>(nameof(EditingText)) ?? string.Empty;
-        set => Set(value, nameof(EditingText));
+        get => Get<string>() ?? string.Empty;
+        set => Set(value);
     }
 
     public int TotalCount => historyManager.GetRecordCount();
@@ -104,7 +103,7 @@ public class HistoryViewModel : ViewModelBase
         historyManager.DeleteRecord(id.Value);
         SelectedIds.Remove(id.Value);
         RefreshRecords();
-        Services.Service.PluginLog.Debug($"Deleted record {id.Value}");
+        Service.PluginLog.Debug($"Deleted record {id.Value}");
     }
 
     private void DeleteSelected()
@@ -112,7 +111,7 @@ public class HistoryViewModel : ViewModelBase
         if (SelectedIds.Count == 0) return;
 
         historyManager.DeleteRecords(SelectedIds.ToArray());
-        Services.Service.PluginLog.Information($"Deleted {SelectedIds.Count} records");
+        Service.PluginLog.Information($"Deleted {SelectedIds.Count} records");
         SelectedIds.Clear();
         RefreshRecords();
 
@@ -126,7 +125,7 @@ public class HistoryViewModel : ViewModelBase
         RefreshRecords();
 
         OnPropertyChanged(nameof(SelectedCount));
-        Services.Service.PluginLog.Information($"Cleared all history: {count} records deleted");
+        Service.PluginLog.Information($"Cleared all history: {count} records deleted");
 
         await Task.CompletedTask;
     }
@@ -141,11 +140,11 @@ public class HistoryViewModel : ViewModelBase
         {
             RefreshRecords();
             EditingId = null;
-            Services.Service.PluginLog.Information($"Updated translation for record {id}");
+            Service.PluginLog.Information($"Updated translation for record {id}");
         }
         else
         {
-            Services.Service.PluginLog.Warning($"Failed to update translation for record {id}");
+            Service.PluginLog.Warning($"Failed to update translation for record {id}");
         }
     }
 
@@ -199,7 +198,7 @@ public class HistoryViewModel : ViewModelBase
         }
 
         // Add the new record incrementally (prepend to top)
-        Services.Service.UiDispatcher.Invoke(() =>
+        Service.UiDispatcher.Invoke(() =>
         {
             // Insert at the beginning since history is typically newest-first
             var snapshot = DisplayedRecords.GetSnapshot();
@@ -217,7 +216,7 @@ public class HistoryViewModel : ViewModelBase
             OnPropertyChanged(nameof(DisplayedCount));
         });
 
-        Services.Service.PluginLog.Debug($"History incrementally updated with new record: {record.Id}");
+        Service.PluginLog.Debug($"History incrementally updated with new record: {record.Id}");
     }
 
     protected override void Dispose(bool disposing)
@@ -225,7 +224,7 @@ public class HistoryViewModel : ViewModelBase
         if (disposing)
         {
             // Unsubscribe from events to prevent memory leak
-            historyManager.RecordAdded -= OnRecordAddedIncremental;
+            historyManager.OnRecordAdded -= OnRecordAddedIncremental;
             DisplayedRecords.Clear();
             SelectedIds.Clear();
         }

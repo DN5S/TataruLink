@@ -3,7 +3,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using TataruLink.ViewModels;
 
-namespace TataruLink.Services;
+namespace TataruLink;
 
 public class Service
 {

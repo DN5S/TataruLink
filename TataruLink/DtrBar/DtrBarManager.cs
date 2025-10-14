@@ -1,7 +1,6 @@
 using System;
 using Dalamud.Game.Gui.Dtr;
 using TataruLink.Configuration;
-using TataruLink.Services;
 using TataruLink.UI.Windows;
 
 namespace TataruLink.DtrBar;

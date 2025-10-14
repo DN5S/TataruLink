@@ -38,14 +38,14 @@ public class OverlayViewModel : ViewModelBase
 
     public OverlayWindowConfig? SelectedOverlay
     {
-        get => Get<OverlayWindowConfig?>(nameof(SelectedOverlay));
-        set => Set(value, nameof(SelectedOverlay));
+        get => Get<OverlayWindowConfig?>();
+        set => Set(value);
     }
 
     public string NewOverlayName
     {
-        get => Get<string>(nameof(NewOverlayName)) ?? "New Overlay";
-        set => Set(value, nameof(NewOverlayName));
+        get => Get<string>() ?? "New Overlay";
+        set => Set(value);
     }
 
     // Commands (exposed with specific types for SetParameter support)
@@ -74,10 +74,10 @@ public class OverlayViewModel : ViewModelBase
         SelectedOverlay = newOverlay;
         NewOverlayName = "New Overlay";
 
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
         RefreshOverlays();
 
-        Services.Service.PluginLog.Info($"Created new overlay: {newOverlay.Name}");
+        Service.PluginLog.Info($"Created new overlay: {newOverlay.Name}");
     }
 
     private void DeleteOverlay(OverlayWindowConfig? overlay)
@@ -92,7 +92,7 @@ public class OverlayViewModel : ViewModelBase
         }
 
         RefreshOverlays();
-        Services.Service.PluginLog.Info($"Deleted overlay: {overlay.Name}");
+        Service.PluginLog.Info($"Deleted overlay: {overlay.Name}");
     }
 
     private void DuplicateOverlay(OverlayWindowConfig? overlay)
@@ -122,10 +122,10 @@ public class OverlayViewModel : ViewModelBase
         overlayManager.CreateOverlay(duplicate);
         SelectedOverlay = duplicate;
 
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
         RefreshOverlays();
 
-        Services.Service.PluginLog.Info($"Duplicated overlay: {overlay.Name} -> {duplicate.Name}");
+        Service.PluginLog.Info($"Duplicated overlay: {overlay.Name} -> {duplicate.Name}");
     }
 
     private void RenameOverlay((OverlayWindowConfig Overlay, string NewName)? param)
@@ -153,7 +153,7 @@ public class OverlayViewModel : ViewModelBase
             overlayManager.HideOverlay(overlay.Id);
         }
 
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
         RefreshOverlays();
     }
 
@@ -177,7 +177,7 @@ public class OverlayViewModel : ViewModelBase
         };
 
         overlayManager.SendMessageToOverlay(overlay.Id, testMessage);
-        Services.Service.PluginLog.Info($"Sent test message to overlay: {overlay.Name}");
+        Service.PluginLog.Info($"Sent test message to overlay: {overlay.Name}");
     }
 
     private void ClearOverlay(OverlayWindowConfig? overlay)
@@ -185,7 +185,7 @@ public class OverlayViewModel : ViewModelBase
         if (overlay == null) return;
 
         overlayManager.ClearOverlay(overlay.Id);
-        Services.Service.PluginLog.Info($"Cleared overlay: {overlay.Name}");
+        Service.PluginLog.Info($"Cleared overlay: {overlay.Name}");
     }
 
     private void SelectAllChatTypes(OverlayWindowConfig? overlay)
@@ -198,7 +198,7 @@ public class OverlayViewModel : ViewModelBase
             overlay.EnabledChatTypes.Add(chatType);
         }
 
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     private void ClearAllChatTypes(OverlayWindowConfig? overlay)
@@ -206,7 +206,7 @@ public class OverlayViewModel : ViewModelBase
         if (overlay == null) return;
 
         overlay.EnabledChatTypes.Clear();
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
     }
 
     // Property helpers for binding

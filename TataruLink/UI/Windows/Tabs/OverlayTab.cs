@@ -5,7 +5,6 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using TataruLink.Configuration;
 using TataruLink.Overlay;
-using TataruLink.Services;
 using TataruLink.Utils;
 using TataruLink.ViewModels;
 
@@ -40,7 +39,7 @@ public class OverlayTab
     public void Draw()
     {
         // CRITICAL: Process queued UI updates from background threads
-        Services.Service.UiDispatcher.ProcessQueue();
+        Service.UiDispatcher.ProcessQueue();
 
 
         // Left panel - Overlay list

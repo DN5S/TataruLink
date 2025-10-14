@@ -50,8 +50,8 @@ public class TranslationViewModel : ViewModelBase
 
         // Initialize commands
         SaveApiKeyCommand = new AsyncRelayCommand<string>(
-            async (apiKey) => await SaveApiKeyAsync(apiKey),
-            (apiKey) => !string.IsNullOrWhiteSpace(apiKey),
+            async apiKey => await SaveApiKeyAsync(apiKey),
+            apiKey => !string.IsNullOrWhiteSpace(apiKey),
             OnCommandError);
 
         TestConnectionCommand = new AsyncRelayCommand(
@@ -89,7 +89,7 @@ public class TranslationViewModel : ViewModelBase
             if (value >= 0 && value < languageCodes.Length)
             {
                 configuration.Translation.SourceLanguage = languageCodes[value];
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(SourceLanguageIndex));
             }
         }
@@ -103,7 +103,7 @@ public class TranslationViewModel : ViewModelBase
             if (value >= 0 && value < languageCodesNoAuto.Length)
             {
                 configuration.Translation.TargetLanguage = languageCodesNoAuto[value];
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(TargetLanguageIndex));
             }
         }
@@ -132,12 +132,12 @@ public class TranslationViewModel : ViewModelBase
                 configuration.Translation.Engine = newEngine;
                 translationService.ChangeProvider(newEngine);
                 LoadCurrentApiKey();
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
 
                 OnPropertyChanged(nameof(SelectedEngineIndex));
                 OnPropertyChanged(nameof(CurrentEngineType));
 
-                Services.Service.PluginLog.Information($"Translation engine changed to: {newEngine}");
+                Service.PluginLog.Information($"Translation engine changed to: {newEngine}");
 
                 // Load Gemini models if switching to Gemini
                 if (newEngine == "Gemini")
@@ -148,47 +148,42 @@ public class TranslationViewModel : ViewModelBase
         }
     }
 
-    public TranslationProviderType CurrentEngineType
-    {
-        get
-        {
-            return Enum.TryParse<TranslationProviderType>(configuration.Translation.Engine, out var type)
-                ? type
-                : TranslationProviderType.Mock;
-        }
-    }
+    public TranslationProviderType CurrentEngineType =>
+        Enum.TryParse<TranslationProviderType>(configuration.Translation.Engine, out var type)
+            ? type
+            : TranslationProviderType.Mock;
 
     // Properties - API Key
     public string TempApiKey
     {
-        get => Get<string>(nameof(TempApiKey)) ?? string.Empty;
-        set => Set(value, nameof(TempApiKey));
+        get => Get<string>() ?? string.Empty;
+        set => Set(value);
     }
 
     // Properties - Status
     public bool IsTestingConnection
     {
-        get => Get<bool>(nameof(IsTestingConnection));
-        private set => Set(value, nameof(IsTestingConnection));
+        get => Get<bool>();
+        private set => Set(value);
     }
 
     public bool IsLoadingModels
     {
-        get => Get<bool>(nameof(IsLoadingModels));
-        private set => Set(value, nameof(IsLoadingModels));
+        get => Get<bool>();
+        private set => Set(value);
     }
 
     public string? ErrorMessage
     {
-        get => Get<string?>(nameof(ErrorMessage));
-        private set => Set(value, nameof(ErrorMessage));
+        get => Get<string?>();
+        private set => Set(value);
     }
 
     // Properties - Gemini
     public GeminiProvider.ModelInfo[] GeminiModels
     {
-        get => Get<GeminiProvider.ModelInfo[]>(nameof(GeminiModels)) ?? [];
-        private set => Set(value, nameof(GeminiModels));
+        get => Get<GeminiProvider.ModelInfo[]>() ?? [];
+        private set => Set(value);
     }
 
     public int SelectedGeminiModelIndex
@@ -204,9 +199,9 @@ public class TranslationViewModel : ViewModelBase
             if (value >= 0 && value < GeminiModels.Length)
             {
                 configuration.Translation.Gemini.SelectedModel = GeminiModels[value].Name;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(SelectedGeminiModelIndex));
-                Services.Service.PluginLog.Information($"Gemini model changed to: {GeminiModels[value].Name}");
+                Service.PluginLog.Information($"Gemini model changed to: {GeminiModels[value].Name}");
             }
         }
     }
@@ -219,7 +214,7 @@ public class TranslationViewModel : ViewModelBase
             if (Math.Abs(configuration.Translation.Gemini.Temperature - value) > 0.01f)
             {
                 configuration.Translation.Gemini.Temperature = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(GeminiTemperature));
             }
         }
@@ -233,7 +228,7 @@ public class TranslationViewModel : ViewModelBase
             if (configuration.Translation.Gemini.MaxOutputTokens != value)
             {
                 configuration.Translation.Gemini.MaxOutputTokens = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(GeminiMaxTokens));
             }
         }
@@ -248,7 +243,7 @@ public class TranslationViewModel : ViewModelBase
             if (configuration.Translation.RetryFailedTranslations != value)
             {
                 configuration.Translation.RetryFailedTranslations = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(RetryFailedTranslations));
             }
         }
@@ -262,7 +257,7 @@ public class TranslationViewModel : ViewModelBase
             if (configuration.Translation.MaxRetryAttempts != value)
             {
                 configuration.Translation.MaxRetryAttempts = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(MaxRetryAttempts));
             }
         }
@@ -276,7 +271,7 @@ public class TranslationViewModel : ViewModelBase
             if (configuration.Translation.TimeoutMs != value)
             {
                 configuration.Translation.TimeoutMs = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(TimeoutMs));
             }
         }
@@ -299,7 +294,7 @@ public class TranslationViewModel : ViewModelBase
             if (configuration.Translation.Gemini.SelectedModel != value)
             {
                 configuration.Translation.Gemini.SelectedModel = value;
-                Services.Service.Configuration.Save();
+                Service.Configuration.Save();
                 OnPropertyChanged(nameof(GeminiSelectedModel));
                 OnPropertyChanged(nameof(SelectedGeminiModelIndex));
             }
@@ -337,7 +332,7 @@ public class TranslationViewModel : ViewModelBase
         // Update TempApiKey to match
         uiDispatcher.Invoke(() => TempApiKey = apiKey);
 
-        Services.Service.PluginLog.Information("API key saved and provider reinitialized");
+        Service.PluginLog.Information("API key saved and provider reinitialized");
 
         // Auto-test after saving
         await TestConnectionAsync();
@@ -363,19 +358,19 @@ public class TranslationViewModel : ViewModelBase
 
             if (!string.IsNullOrEmpty(result))
             {
-                Services.Service.PluginLog.Information($"Provider test successful: 'Test' -> '{result}'");
+                Service.PluginLog.Information($"Provider test successful: 'Test' -> '{result}'");
                 ErrorMessage = null;
             }
             else
             {
                 ErrorMessage = "Provider test failed: No translation returned";
-                Services.Service.PluginLog.Warning(ErrorMessage);
+                Service.PluginLog.Warning(ErrorMessage);
             }
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Provider test failed: {ex.Message}";
-            Services.Service.PluginLog.Error(ex, "Provider test failed");
+            Service.PluginLog.Error(ex, "Provider test failed");
         }
         finally
         {
@@ -400,11 +395,11 @@ public class TranslationViewModel : ViewModelBase
                 OnPropertyChanged(nameof(SelectedGeminiModelIndex));
             });
 
-            Services.Service.PluginLog.Information($"Loaded {GeminiModels.Length} Gemini models");
+            Service.PluginLog.Information($"Loaded {GeminiModels.Length} Gemini models");
         }
         catch (Exception ex)
         {
-            Services.Service.PluginLog.Error(ex, "Failed to load Gemini models");
+            Service.PluginLog.Error(ex, "Failed to load Gemini models");
             uiDispatcher.Invoke(() => GeminiModels = []);
         }
         finally
@@ -416,13 +411,13 @@ public class TranslationViewModel : ViewModelBase
     private void ResetGeminiDefaults()
     {
         configuration.Translation.Gemini.ResetToDefaults();
-        Services.Service.Configuration.Save();
+        Service.Configuration.Save();
 
         OnPropertyChanged(nameof(GeminiTemperature));
         OnPropertyChanged(nameof(GeminiMaxTokens));
         OnPropertyChanged(nameof(SelectedGeminiModelIndex));
 
-        Services.Service.PluginLog.Information("Gemini settings reset to defaults");
+        Service.PluginLog.Information("Gemini settings reset to defaults");
     }
 
     private int GetLanguageIndex(string code)

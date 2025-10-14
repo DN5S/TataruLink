@@ -8,7 +8,7 @@ using Dalamud.Plugin;
 using Dalamud.Utility;
 using TataruLink.Configuration;
 
-namespace TataruLink.Services;
+namespace TataruLink;
 
 public class Config : IDisposable
 {

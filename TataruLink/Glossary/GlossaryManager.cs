@@ -6,7 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using TataruLink.Configuration;
 using TataruLink.Models;
-using TataruLink.Services;
 
 namespace TataruLink.Glossary;
 
